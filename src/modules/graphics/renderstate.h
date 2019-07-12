@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include "common/int.h"
+
 #include <vector>
 #include <string>
 
@@ -28,8 +30,61 @@ namespace love
 namespace graphics
 {
 
+enum BlendMode // High level wrappers
+{
+	BLEND_ALPHA,
+	BLEND_ADD,
+	BLEND_SUBTRACT,
+	BLEND_MULTIPLY,
+	BLEND_LIGHTEN,
+	BLEND_DARKEN,
+	BLEND_SCREEN,
+	BLEND_REPLACE,
+	BLEND_NONE,
+	BLEND_MAX_ENUM
+};
+
+enum BlendAlpha // High level wrappers
+{
+	BLENDALPHA_MULTIPLY,
+	BLENDALPHA_PREMULTIPLIED,
+	BLENDALPHA_MAX_ENUM
+};
+
+enum BlendFactor : uint8
+{
+	BLENDFACTOR_ZERO,
+	BLENDFACTOR_ONE,
+	BLENDFACTOR_SRC_COLOR,
+	BLENDFACTOR_ONE_MINUS_SRC_COLOR,
+	BLENDFACTOR_SRC_ALPHA,
+	BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+	BLENDFACTOR_DST_COLOR,
+	BLENDFACTOR_ONE_MINUS_DST_COLOR,
+	BLENDFACTOR_DST_ALPHA,
+	BLENDFACTOR_ONE_MINUS_DST_ALPHA,
+	BLENDFACTOR_SRC_ALPHA_SATURATED,
+	BLENDFACTOR_SRC1_COLOR,
+	BLENDFACTOR_ONE_MINUS_SRC1_COLOR,
+	BLENDFACTOR_SRC1_ALPHA,
+	BLENDFACTOR_ONE_MINUS_SRC1_ALPHA,
+	BLENDFACTOR_MAX_ENUM
+};
+
+enum BlendOperation : uint8
+{
+	BLENDOP_ADD,
+	BLENDOP_SUBTRACT,
+	BLENDOP_REVERSE_SUBTRACT,
+	BLENDOP_MIN,
+	BLENDOP_MAX,
+	BLENDOP_MAX_ENUM
+};
+
 enum StencilAction
 {
+	STENCIL_KEEP,
+	STENCIL_ZERO,
 	STENCIL_REPLACE,
 	STENCIL_INCREMENT,
 	STENCIL_DECREMENT,
@@ -52,6 +107,42 @@ enum CompareMode
 	COMPARE_MAX_ENUM
 };
 
+struct BlendState
+{
+	bool enable = false;
+	BlendOperation operationRGB = BLENDOP_ADD;
+	BlendOperation operationA = BLENDOP_ADD;
+	BlendFactor srcFactorRGB = BLENDFACTOR_ONE;
+	BlendFactor srcFactorA = BLENDFACTOR_ONE;
+	BlendFactor dstFactorRGB = BLENDFACTOR_ZERO;
+	BlendFactor dstFactorA = BLENDFACTOR_ZERO;
+};
+
+struct DepthState
+{
+	CompareMode compare = COMPARE_ALWAYS;
+	bool write = false;
+};
+
+struct StencilState
+{
+	CompareMode compare = COMPARE_ALWAYS;
+	StencilAction action = STENCIL_KEEP;
+	int value = 0;
+	uint32 readMask = 0xFFFFFFFF;
+	uint32 writeMask = 0xFFFFFFFF;
+};
+
+struct ColorChannelMask
+{
+	bool r = true;
+	bool g = true;
+	bool b = true;
+	bool a = true;
+};
+
+BlendState getBlendState(BlendMode mode, BlendAlpha alphamode);
+
 /**
  * GPU APIs do the comparison in the opposite way of what makes sense for some
  * of love's APIs. For example in OpenGL if the compare function is GL_GREATER,
@@ -61,6 +152,14 @@ enum CompareMode
  * stencil buffer has a value greater than 4.
  **/
 CompareMode getReversedCompareMode(CompareMode mode);
+
+bool getConstant(const char *in, BlendMode &out);
+bool getConstant(BlendMode in, const char *&out);
+std::vector<std::string> getConstants(BlendMode);
+
+bool getConstant(const char *in, BlendAlpha &out);
+bool getConstant(BlendAlpha in, const char *&out);
+std::vector<std::string> getConstants(BlendAlpha);
 
 bool getConstant(const char *in, StencilAction &out);
 bool getConstant(StencilAction in, const char *&out);

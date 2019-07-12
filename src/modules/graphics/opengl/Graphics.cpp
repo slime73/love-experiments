@@ -1092,8 +1092,14 @@ void Graphics::drawToStencilBuffer(StencilAction action, int value)
 
 	switch (action)
 	{
-	case STENCIL_REPLACE:
+	case STENCIL_KEEP:
 	default:
+		glaction = GL_KEEP;
+		break;
+	case STENCIL_ZERO:
+		glaction = GL_ZERO;
+		break;
+	case STENCIL_REPLACE:
 		glaction = GL_REPLACE;
 		break;
 	case STENCIL_INCREMENT:

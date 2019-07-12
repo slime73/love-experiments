@@ -40,7 +40,7 @@
 #include "Mesh.h"
 #include "Image.h"
 #include "Deprecations.h"
-#include "depthstencil.h"
+#include "renderstate.h"
 #include "math/Transform.h"
 #include "font/Rasterizer.h"
 #include "font/Font.h"
@@ -882,6 +882,8 @@ public:
 
 	void cleanupCachedShaderStage(ShaderStage::StageType type, const std::string &cachekey);
 
+	Canvas *getTemporaryCanvas(PixelFormat format, int w, int h, int samples);
+
 	template <typename T>
 	T *getScratchBuffer(size_t count)
 	{
@@ -1017,8 +1019,6 @@ protected:
 	virtual void getAPIStats(int &shaderswitches) const = 0;
 
 	void createQuadIndexBuffer();
-
-	Canvas *getTemporaryCanvas(PixelFormat format, int w, int h, int samples);
 
 	void restoreState(const DisplayState &s);
 	void restoreStateChecked(const DisplayState &s);
