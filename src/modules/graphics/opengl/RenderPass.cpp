@@ -84,14 +84,103 @@ static GLenum getGLStencilAction(StencilAction action)
 	return 0;
 }
 
-void RenderPass::beginPass(love::graphics::Graphics *gfx)
+void RenderPass::beginPass(love::graphics::Graphics *gfx, bool isBackbuffer)
 {
-	
+	const auto &rts = renderTargets;
+
+	GLuint fbo = 0;
+
+	if (isBackbuffer)
+	{
+		gl.bindFramebuffer(OpenGL::FRAMEBUFFER_ALL, gl.getDefaultFBO());
+
+		// The projection matrix is flipped compared to rendering to a canvas, due
+		// to OpenGL considering (0,0) bottom-left instead of top-left.
+//		projectionMatrix = Matrix4::ortho(0.0, (float) w, (float) h, 0.0, -10.0f, 10.0f);
+	}
+	else
+	{
+//		fbo = gl.getCachedFBO(rts);
+
+//		projectionMatrix = Matrix4::ortho(0.0, (float) w, 0.0, (float) h, -10.0f, 10.0f);
+	}
+
+	gl.bindFramebuffer(OpenGL::FRAMEBUFFER_ALL, fbo);
+
+//	gl.setViewport({0, 0, pixelw, pixelh});
+
+	// Make sure the correct sRGB setting is used when drawing to the canvases.
+	if (GLAD_VERSION_1_0 || GLAD_EXT_sRGB_write_control)
+	{
+		bool hasSRGBcanvas = isBackbuffer && isGammaCorrect();
+
+		for (int i = 0; i < rts.colorCount; i++)
+		{
+			if (rts.colors[i].canvas->getPixelFormat() == PIXELFORMAT_sRGBA8)
+			{
+				hasSRGBcanvas = true;
+				break;
+			}
+		}
+
+		if (hasSRGBcanvas != gl.isStateEnabled(OpenGL::ENABLE_FRAMEBUFFER_SRGB))
+			gl.setEnableState(OpenGL::ENABLE_FRAMEBUFFER_SRGB, hasSRGBcanvas);
+	}
+
+	GLbitfield clearFlags = 0;
+
+	if (isBackbuffer || rts.colorCount == 1)
+	{
+		clearFlags |= GL_COLOR_BUFFER_BIT;
+	}
+	else if (rts.colorCount > 0)
+	{
+
+	}
+
+	bool hadDepthWrites = gl.hasDepthWrites();
+
+	if (rts.depthStencil.beginAction == BEGIN_CLEAR)
+	{
+		if (!hadDepthWrites) // glDepthMask also affects glClear.
+			gl.setDepthWrites(true);
+
+		glStencilMask(0xFFFFFFFF);
+
+		clearFlags |= GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT;
+
+		gl.clearDepth(rts.depthStencil.clearDepth);
+		glClearStencil(rts.depthStencil.clearStencil);
+	}
+
+	if (clearFlags != 0)
+		glClear(clearFlags);
+
+	if (rts.depthStencil.beginAction == BEGIN_CLEAR)
+	{
+		if (!hadDepthWrites)
+			gl.setDepthWrites(hadDepthWrites);
+	}
+
+	discardIfNeeded(isBackbuffer);
+
+	if (gl.bugs.clearRequiresDriverTextureStateUpdate && Shader::current)
+	{
+		// This seems to be enough to fix the bug for me. Other methods I've
+		// tried (e.g. dummy draws) don't work in all cases.
+		gl.useProgram(0);
+		gl.useProgram((GLuint) Shader::current->getHandle());
+	}
 }
 
-void RenderPass::endPass(love::graphics::Graphics *gfx)
+void RenderPass::endPass(love::graphics::Graphics */*gfx*/, bool isBackbuffer)
 {
+	discardIfNeeded(isBackbuffer);
+}
 
+void RenderPass::discardIfNeeded(bool isBackbuffer)
+{
+	// TODO
 }
 
 void RenderPass::applyState(const RenderState &state, uint32 diff)
@@ -102,6 +191,8 @@ void RenderPass::applyState(const RenderState &state, uint32 diff)
 	}
 
 	// TODO: built-in uniforms (should that be here, or somewhere else?)
+	// TODO: vertex attribute layout and buffer bindings?
+	// TODO: texture bindings?
 
 	if (diff & STATEBIT_COLOR)
 	{

@@ -22,6 +22,7 @@
 #include "Texture.h"
 #include "Quad.h"
 #include "Graphics.h"
+#include "common/memory.h"
 
 // C++
 #include <algorithm>
@@ -39,7 +40,7 @@ RenderPass::RenderPass(Graphics *gfx, const RenderTargetSetup &rts)
 	reset(gfx, rts);
 
 	dataSize = 1024;
-	data = (uint8 *) malloc(dataSize);
+	data = (uint8 *) malloc(dataSize); // TODO: aligned malloc
 	commands.reserve(10);
 }
 
@@ -51,9 +52,11 @@ RenderPass::~RenderPass()
 }
 
 template <typename T>
-T *RenderPass::addCommand(CommandType type, size_t size)
+T *RenderPass::addCommand(CommandType type, size_t size, size_t alignment)
 {
-	// TODO: should we care about alignment?
+	size = alignUp(size, alignment);
+	currentOffset = alignUp(currentOffset, alignment);
+
 	if (currentOffset + size > dataSize)
 	{
 		size_t newSize = std::max(dataSize * 2, currentOffset + size);
@@ -81,6 +84,9 @@ void RenderPass::reset()
 	commands.clear();
 	inputs.clear();
 	currentOffset = 0;
+
+	graphicsState.clear();
+	graphicsState.emplace_back();
 }
 
 void RenderPass::reset(Graphics *gfx, const RenderTargetSetup &rts)
@@ -109,6 +115,10 @@ void RenderPass::drawInstanced(Mesh *mesh, const Matrix4 &transform, int instanc
 
 void RenderPass::setColor(const Colorf &color)
 {
+	auto &state = graphicsState.back();
+	if (state.render.color == color)
+		return;
+
 	auto c = addCommand<Colorf>(COMMAND_SET_COLOR);
 	*c = color;
 
@@ -117,16 +127,22 @@ void RenderPass::setColor(const Colorf &color)
 	c->b = std::min(std::max(c->b, 0.0f), 1.0f);
 	c->a = std::min(std::max(c->a, 0.0f), 1.0f);
 
-	gammaCorrectColor(*c);
+	state.render.color = *c;
 }
 
 void RenderPass::setShader(Shader *shader)
 {
-	auto cmd = addCommand<ShaderState>(COMMAND_SET_SHADER);
-	cmd->shader = shader;
+	auto &state = graphicsState.back();
+	if (state.render.shader == shader)
+		return;
+
+	auto cmd = addCommand<Shader *>(COMMAND_SET_SHADER);
+	*cmd = shader;
 
 	if (shader != nullptr)
 		inputs.emplace_back(shader);
+
+	state.render.shader = shader;
 }
 
 void RenderPass::setShader()
@@ -139,20 +155,35 @@ void RenderPass::setBlendMode(BlendMode mode, BlendAlpha alphaMode)
 	setBlendState(getBlendState(mode, alphaMode));
 }
 
-void RenderPass::setBlendState(const BlendState &state)
+void RenderPass::setBlendState(const BlendState &blend)
 {
+	auto &s = graphicsState.back();
+	if (s.render.blend == blend)
+		return;
+
 	auto cmd = addCommand<BlendState>(COMMAND_SET_BLENDSTATE);
-	*cmd = state;
+	*cmd = blend;
+
+	s.render.blend = blend;
 }
 
 void RenderPass::setStencil(CompareMode compare, StencilAction action, int value, uint32 readMask, uint32 writeMask)
 {
+	StencilState stencil;
+	stencil.compare = compare;
+	stencil.action = action;
+	stencil.value = value;
+	stencil.readMask = readMask;
+	stencil.writeMask = writeMask;
+
+	auto &s = graphicsState.back();
+	if (s.render.stencil == stencil)
+		return;
+
 	auto cmd = addCommand<StencilState>(COMMAND_SET_STENCILSTATE);
-	cmd->compare = compare;
-	cmd->action = action;
-	cmd->value = value;
-	cmd->readMask = readMask;
-	cmd->writeMask = writeMask;
+	*cmd = stencil;
+
+	s.render.stencil = stencil;
 }
 
 void RenderPass::setStencil()
@@ -172,25 +203,37 @@ void RenderPass::setDepthMode()
 	setDepthMode(COMPARE_ALWAYS, false);
 }
 
+template <typename T>
+static const T *read(const uint8 *buffer, size_t offset)
+{
+	return (const T *) (buffer + offset);
+}
+
 void RenderPass::execute(Graphics *gfx)
 {
 	auto &rts = renderTargets;
 
-	if (rts.temporaryRTFlags != 0 && rts.depthStencil.canvas.get() == nullptr)
+	bool isBackbuffer = rts.isBackbuffer();
+	bool tempDepthStencil = false;
+
+	if (!isBackbuffer && (rts.flags & (RT_TEMPORARY_DEPTH | RT_TEMPORARY_STENCIL)) != 0)
+		tempDepthStencil = true;
+
+	if (tempDepthStencil)
 	{
-		bool wantsdepth   = (rts.temporaryRTFlags & TEMPORARY_RT_DEPTH) != 0;
-		bool wantsstencil = (rts.temporaryRTFlags & TEMPORARY_RT_STENCIL) != 0;
+		bool wantsDepth   = (rts.flags & RT_TEMPORARY_DEPTH) != 0;
+		bool wantsStencil = (rts.flags & RT_TEMPORARY_STENCIL) != 0;
 
 		PixelFormat dsformat = PIXELFORMAT_STENCIL8;
-		if (wantsdepth && wantsstencil)
+		if (wantsDepth && wantsStencil)
 			dsformat = PIXELFORMAT_DEPTH24_STENCIL8;
-		else if (wantsdepth && gfx->isCanvasFormatSupported(PIXELFORMAT_DEPTH24, false))
+		else if (wantsDepth && gfx->isCanvasFormatSupported(PIXELFORMAT_DEPTH24, false))
 			dsformat = PIXELFORMAT_DEPTH24;
-		else if (wantsdepth && gfx->isCanvasFormatSupported(PIXELFORMAT_DEPTH32F, false))
+		else if (wantsDepth && gfx->isCanvasFormatSupported(PIXELFORMAT_DEPTH32F, false))
 			dsformat = PIXELFORMAT_DEPTH32F;
-		else if (wantsdepth)
+		else if (wantsDepth)
 			dsformat = PIXELFORMAT_DEPTH16;
-		else if (wantsstencil)
+		else if (wantsStencil)
 			dsformat = PIXELFORMAT_STENCIL8;
 
 		Canvas *colorcanvas = rts.colors[0].canvas.get();
@@ -205,10 +248,10 @@ void RenderPass::execute(Graphics *gfx)
 		rts.depthStencil = rt;
 	}
 
-	beginPass(gfx);
+	beginPass(gfx, isBackbuffer);
 
-	uint32 diff = 0xFFFFFFFF;
-	GraphicsState currentState;
+	uint32 diff = STATEBIT_ALL;
+	RenderState currentState;
 
 	for (auto cmd : commands)
 	{
@@ -216,102 +259,105 @@ void RenderPass::execute(Graphics *gfx)
 		{
 		case COMMAND_DRAW_DRAWABLE:
 		{
-			const auto &c = (const CommandDrawDrawable &) data[cmd.offset];
-			c.drawable->draw(gfx, c.transform);
+			const auto c = read<CommandDrawDrawable>(data, cmd.offset);
+			c->drawable->draw(gfx, c->transform);
+			diff = 0;
 			break;
 		}
 		case COMMAND_DRAW_QUAD:
 		{
-			const auto &c = (const CommandDrawQuad &) data[cmd.offset];
-			c.texture->draw(gfx, c.quad, c.transform);
+			const auto c = read<CommandDrawQuad>(data, cmd.offset);
+			c->texture->draw(gfx, c->quad, c->transform);
+			diff = 0;
 			break;
 		}
 		case COMMAND_DRAW_LAYER:
 		{
-
+			// TODO
 			break;
 		}
 		case COMMAND_DRAW_QUAD_LAYER:
 		{
-
+			// TODO
 			break;
 		}
 		case COMMAND_DRAW_MESH_INSTANCED:
 		{
-			const auto &c = (const CommandDrawMeshInstanced &) data[cmd.offset];
-			c.mesh->drawInstanced(gfx, c.transform, c.instanceCount);
+			const auto c = read<CommandDrawMeshInstanced>(data, cmd.offset);
+			c->mesh->drawInstanced(gfx, c->transform, c->instanceCount);
+			diff = 0;
 			break;
 		}
 		case COMMAND_DRAW_POINTS:
 		{
-
+			// TODO
 			break;
 		}
 		case COMMAND_DRAW_LINE:
 		{
-
+			// TODO
 			break;
 		}
 		case COMMAND_DRAW_POLYGON:
 		{
-
+			// TODO
 			break;
 		}
 		case COMMAND_PRINT:
 		{
-
+			// TODO
 			break;
 		}
 		case COMMAND_PRINTF:
 		{
-
+			// TODO
 			break;
 		}
 		case COMMAND_SET_COLOR:
 		{
-			currentState.color = (const Colorf &) data[cmd.offset];
+			currentState.color = *read<Colorf>(data, cmd.offset);
 			diff |= STATEBIT_COLOR;
 			break;
 		}
 		case COMMAND_SET_SHADER:
 		{
-			currentState.shader = ((const ShaderState &) data[cmd.offset]).shader;
+			currentState.shader = *read<Shader *>(data, cmd.offset);
 			diff |= STATEBIT_SHADER;
 			break;
 		}
 		case COMMAND_SET_BLENDSTATE:
 		{
-			currentState.blend = (const BlendState &) data[cmd.offset];
+			currentState.blend = *read<BlendState>(data, cmd.offset);
 			diff |= STATEBIT_BLEND;
 			break;
 		}
 		case COMMAND_SET_STENCILSTATE:
 		{
-			currentState.stencil = (const StencilState &) data[cmd.offset];
+			currentState.stencil = *read<StencilState>(data, cmd.offset);
 			diff |= STATEBIT_STENCIL;
 			break;
 		}
 		case COMMAND_SET_DEPTHSTATE:
 		{
-			currentState.depth = (const DepthState &) data[cmd.offset];
+			currentState.depth = *read<DepthState>(data, cmd.offset);
 			diff |= STATEBIT_DEPTH;
 			break;
 		}
 		case COMMAND_SET_SCISSOR:
 		{
-			currentState.scissor = (const ScissorState &) data[cmd.offset];
+			currentState.scissor = *read<ScissorState>(data, cmd.offset);
 			diff |= STATEBIT_SCISSOR;
 			break;
 		}
 		case COMMAND_SET_COLORMASK:
 		{
-			currentState.colorChannelMask = (const ColorChannelMask &) data[cmd.offset];
+			currentState.colorChannelMask = *read<ColorChannelMask>(data, cmd.offset);
 			diff |= STATEBIT_COLORMASK;
 			break;
 		}
 		case COMMAND_SET_WIREFRAME:
 		{
-			currentState.wireframe = (const bool &) data[cmd.offset];
+			currentState.wireframe = *read<bool>(data, cmd.offset);
 			diff |= STATEBIT_WIREFRAME;
 			break;
 		}
@@ -320,21 +366,21 @@ void RenderPass::execute(Graphics *gfx)
 
 	gfx->flushStreamDraws();
 
-	endPass(gfx);
+	endPass(gfx, isBackbuffer);
 
-	for (int i = 0; i < renderTargets.colorCount; i++)
+	if (tempDepthStencil)
+		rts.depthStencil.canvas = nullptr;
+
+	for (int i = 0; i < rts.colorCount; i++)
 	{
-		const auto &rt = renderTargets.colors[i];
+		const auto &rt = rts.colors[i];
 		if (rt.canvas->getMipmapMode() == Canvas::MIPMAPS_AUTO && rt.mipmap == 0)
 			rt.canvas->generateMipmaps();
 	}
 
-	const auto &ds = renderTargets.depthStencil;
+	const auto &ds = rts.depthStencil;
 	if (ds.canvas.get() && ds.canvas->getMipmapMode() == Canvas::MIPMAPS_AUTO && ds.mipmap == 0)
 		ds.canvas->generateMipmaps();
-
-	if (rts.temporaryRTFlags != 0 && rts.depthStencil.canvas.get() == nullptr)
-		rts.depthStencil.canvas = nullptr;
 }
 
 void RenderPass::validateRenderTargets(Graphics *gfx, const RenderTargetSetup &rts) const

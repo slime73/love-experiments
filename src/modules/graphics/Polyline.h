@@ -23,6 +23,7 @@
 // LOVE
 #include "common/config.h"
 #include "common/Vector.h"
+#include "common/StringMap.h"
 #include "graphics/vertex.h"
 
 // C++
@@ -43,6 +44,21 @@ class Graphics;
 class Polyline
 {
 public:
+
+	enum Style
+	{
+		STYLE_ROUGH,
+		STYLE_SMOOTH,
+		STYLE_MAX_ENUM
+	};
+
+	enum JoinType
+	{
+		JOIN_NONE,
+		JOIN_MITER,
+		JOIN_BEVEL,
+		JOIN_MAX_ENUM
+	};
 
 	Polyline(vertex::TriangleIndexMode mode = vertex::TriangleIndexMode::STRIP)
 		: vertices(nullptr)

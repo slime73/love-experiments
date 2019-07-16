@@ -80,16 +80,11 @@ CompareMode getReversedCompareMode(CompareMode mode)
 {
 	switch (mode)
 	{
-	case COMPARE_LESS:
-		return COMPARE_GREATER;
-	case COMPARE_LEQUAL:
-		return COMPARE_GEQUAL;
-	case COMPARE_GEQUAL:
-		return COMPARE_LEQUAL;
-	case COMPARE_GREATER:
-		return COMPARE_LESS;
-	default:
-		return mode;
+		case COMPARE_LESS: return COMPARE_GREATER;
+		case COMPARE_LEQUAL: return COMPARE_GEQUAL;
+		case COMPARE_GEQUAL: return COMPARE_LEQUAL;
+		case COMPARE_GREATER: return COMPARE_LESS;
+		default: return mode;
 	}
 }
 
@@ -115,6 +110,38 @@ static StringMap<BlendAlpha, BLENDALPHA_MAX_ENUM>::Entry blendAlphaEntries[] =
 };
 
 static StringMap<BlendAlpha, BLENDALPHA_MAX_ENUM> blendAlphaModes(blendAlphaEntries, sizeof(blendAlphaEntries));
+
+static StringMap<BlendFactor, BLENDFACTOR_MAX_ENUM>::Entry blendFactorEntries[] =
+{
+	{ "zero",              BLENDFACTOR_ZERO                 },
+	{ "one",               BLENDFACTOR_ONE                  },
+	{ "srccolor",          BLENDFACTOR_SRC_COLOR            },
+	{ "oneminussrccolor",  BLENDFACTOR_ONE_MINUS_SRC_COLOR  },
+	{ "srcalpha",          BLENDFACTOR_SRC_ALPHA            },
+	{ "oneminussrcalpha",  BLENDFACTOR_ONE_MINUS_SRC_ALPHA  },
+	{ "dstcolor",          BLENDFACTOR_DST_COLOR            },
+	{ "oneminusdstcolor",  BLENDFACTOR_ONE_MINUS_DST_COLOR  },
+	{ "dstalpha",          BLENDFACTOR_DST_ALPHA            },
+	{ "oneminusdstalpha",  BLENDFACTOR_ONE_MINUS_DST_ALPHA  },
+	{ "srcalphasaturated", BLENDFACTOR_SRC_ALPHA_SATURATED  },
+	{ "src2color",         BLENDFACTOR_SRC1_COLOR           },
+	{ "oneminussrc2color", BLENDFACTOR_ONE_MINUS_SRC1_COLOR },
+	{ "src2alpha",         BLENDFACTOR_SRC1_ALPHA           },
+	{ "oneminussrc2alpha", BLENDFACTOR_ONE_MINUS_SRC1_ALPHA },
+};
+
+static StringMap<BlendFactor, BLENDFACTOR_MAX_ENUM> blendFactors(blendFactorEntries, sizeof(blendFactorEntries));
+
+static StringMap<BlendOperation, BLENDOP_MAX_ENUM>::Entry blendOperationEntries[] =
+{
+	{ "add",             BLENDOP_ADD              },
+	{ "subtract",        BLENDOP_SUBTRACT         },
+	{ "reversesubtract", BLENDOP_REVERSE_SUBTRACT },
+	{ "min",             BLENDOP_MIN              },
+	{ "max",             BLENDOP_MAX              },
+};
+
+static StringMap<BlendOperation, BLENDOP_MAX_ENUM> blendOperations(blendOperationEntries, sizeof(blendOperationEntries));
 
 static StringMap<StencilAction, STENCIL_MAX_ENUM>::Entry stencilActionEntries[] =
 {
@@ -172,6 +199,36 @@ bool getConstant(BlendAlpha in, const char *&out)
 std::vector<std::string> getConstants(BlendAlpha)
 {
 	return blendAlphaModes.getNames();
+}
+
+bool getConstant(const char *in, BlendFactor &out)
+{
+	return blendFactors.find(in, out);
+}
+
+bool getConstant(BlendFactor in, const char *&out)
+{
+	return blendFactors.find(in, out);
+}
+
+std::vector<std::string> getConstants(BlendFactor)
+{
+	return blendFactors.getNames();
+}
+
+bool getConstant(const char *in, BlendOperation &out)
+{
+	return blendOperations.find(in, out);
+}
+
+bool getConstant(BlendOperation in, const char *&out)
+{
+	return blendOperations.find(in, out);
+}
+
+std::vector<std::string> getConstants(BlendOperation)
+{
+	return blendOperations.getNames();
 }
 
 bool getConstant(const char *in, StencilAction &out)

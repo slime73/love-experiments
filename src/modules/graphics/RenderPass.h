@@ -26,10 +26,12 @@
 #include "common/Vector.h"
 #include "common/int.h"
 #include "common/Color.h"
+#include "common/Optional.h"
 
 #include "Drawable.h"
 #include "renderstate.h"
 #include "vertex.h"
+#include "Polyline.h"
 
 namespace love
 {
@@ -63,21 +65,6 @@ public:
 		ARC_MAX_ENUM
 	};
 
-	enum LineStyle
-	{
-		LINE_ROUGH,
-		LINE_SMOOTH,
-		LINE_MAX_ENUM
-	};
-
-	enum LineJoin
-	{
-		LINE_JOIN_NONE,
-		LINE_JOIN_MITER,
-		LINE_JOIN_BEVEL,
-		LINE_JOIN_MAX_ENUM
-	};
-
 	enum StackType
 	{
 		STACK_ALL,
@@ -85,10 +72,10 @@ public:
 		STACK_MAX_ENUM
 	};
 
-	enum TemporaryRenderTargetFlags
+	enum RenderTargetFlags
 	{
-		TEMPORARY_RT_DEPTH   = (1 << 0),
-		TEMPORARY_RT_STENCIL = (1 << 1),
+		RT_TEMPORARY_DEPTH   = (1 << 0),
+		RT_TEMPORARY_STENCIL = (1 << 1),
 	};
 
 	enum BeginAction
@@ -123,15 +110,21 @@ public:
 
 	struct RenderTargetSetup
 	{
-		RenderTarget colors[MAX_COLOR_RENDER_TARGETS];
+		RenderTarget colors[MAX_COLOR_RENDER_TARGETS] = {};
 		int colorCount = 0;
 
 		RenderTarget depthStencil;
-		uint32 temporaryRTFlags = 0;
+
+		uint32 flags = 0;
 
 		const RenderTarget &getFirstTarget() const
 		{
 			return colorCount > 0 ? colors[0] : depthStencil;
+		}
+
+		bool isBackbuffer() const
+		{
+			return getFirstTarget().canvas.get() == nullptr;
 		}
 	};
 
@@ -224,11 +217,6 @@ protected:
 		Vector2 positions[1]; // Actual size determined in line().
 	};
 
-	struct ShaderState
-	{
-		Shader *shader = nullptr;
-	};
-
 	struct ScissorState
 	{
 		Rect rect;
@@ -261,34 +249,10 @@ protected:
 		STATEBIT_CULLMODE = 1 << STATE_CULLMODE,
 		STATEBIT_FACEWINDING = 1 << STATE_FACEWINDING,
 		STATEBIT_WIREFRAME = 1 << STATE_WIREFRAME,
+		STATEBIT_ALL = 0xFFFFFFFF
 	};
 
-	struct GraphicsState
-	{
-		Colorf color = Colorf(1.0, 1.0, 1.0, 1.0);
-
-		float lineWidth = 1.0f;
-		LineStyle lineStyle = LINE_SMOOTH;
-		LineJoin lineJoin = LINE_JOIN_MITER;
-
-		float pointSize = 1.0f;
-
-		BlendState blend;
-		ScissorState scissor;
-		StencilState stencil;
-		DepthState depth;
-
-		CullMode meshCullMode = CULL_NONE;
-		vertex::Winding winding = vertex::WINDING_CCW;
-
-		Font *font = nullptr;
-		Shader *shader = nullptr;
-
-		ColorChannelMask colorChannelMask;
-
-		bool wireframe = false;
-	};
-
+	// State that affects the graphics backend.
 	struct RenderState
 	{
 		Colorf color = Colorf(1.0, 1.0, 1.0, 1.0);
@@ -308,17 +272,25 @@ protected:
 		bool wireframe = false;
 	};
 
-	template <typename T>
-	T *addCommand(CommandType type, size_t size);
+	// All state, including high-level data that backends don't know about.
+	struct GraphicsState
+	{
+		Font *font = nullptr;
+
+		float lineWidth = 1.0f;
+		Polyline::Style lineStyle = Polyline::STYLE_SMOOTH;
+		Polyline::JoinType lineJoin = Polyline::JOIN_MITER;
+
+		float pointSize = 1.0f;
+
+		RenderState render;
+	};
 
 	template <typename T>
-	T *addCommand(CommandType type) { return addCommand<T>(type, sizeof(T)); }
+	T *addCommand(CommandType type, size_t size = sizeof(T), size_t alignment = alignof(T));
 
-	virtual void beginPass(Graphics *gfx) = 0;
-	virtual void endPass(Graphics *gfx) = 0;
-
-	virtual void executeSetColor(const Colorf &color) = 0;
-	virtual void executeSetShader(Shader *shader) = 0;
+	virtual void beginPass(Graphics *gfx, bool isBackbuffer) = 0;
+	virtual void endPass(Graphics *gfx, bool isBackbuffer) = 0;
 
 	void validateRenderTargets(Graphics *gfx, const RenderTargetSetup &rts) const;
 
@@ -330,6 +302,8 @@ protected:
 	size_t currentOffset;
 
 	std::vector<StrongRef<Object>> inputs;
+
+	std::vector<GraphicsState> graphicsState;
 
 }; // RenderPass
 

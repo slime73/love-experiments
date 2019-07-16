@@ -116,12 +116,25 @@ struct BlendState
 	BlendFactor srcFactorA = BLENDFACTOR_ONE;
 	BlendFactor dstFactorRGB = BLENDFACTOR_ZERO;
 	BlendFactor dstFactorA = BLENDFACTOR_ZERO;
+
+	bool operator == (const BlendState &b) const
+	{
+		return enable == b.enable
+			&& operationRGB == b.operationRGB && operationA == b.operationA
+			&& srcFactorRGB == b.srcFactorRGB && srcFactorA == b.srcFactorA
+			&& dstFactorRGB == b.dstFactorRGB && dstFactorA == b.dstFactorA;
+	}
 };
 
 struct DepthState
 {
 	CompareMode compare = COMPARE_ALWAYS;
 	bool write = false;
+
+	bool operator == (const DepthState &d) const
+	{
+		return compare == d.compare && write == d.write;
+	}
 };
 
 struct StencilState
@@ -131,6 +144,12 @@ struct StencilState
 	int value = 0;
 	uint32 readMask = 0xFFFFFFFF;
 	uint32 writeMask = 0xFFFFFFFF;
+
+	bool operator == (const StencilState &s) const
+	{
+		return compare == s.compare && action == s.action && value == s.value
+			&& readMask == s.readMask && writeMask == s.writeMask;
+	}
 };
 
 struct ColorChannelMask
@@ -139,6 +158,11 @@ struct ColorChannelMask
 	bool g = true;
 	bool b = true;
 	bool a = true;
+
+	bool operator == (const ColorChannelMask &c) const
+	{
+		return r == c.r && g == c.g && b == c.b && a == c.a;
+	}
 };
 
 BlendState getBlendState(BlendMode mode, BlendAlpha alphamode);
@@ -160,6 +184,14 @@ std::vector<std::string> getConstants(BlendMode);
 bool getConstant(const char *in, BlendAlpha &out);
 bool getConstant(BlendAlpha in, const char *&out);
 std::vector<std::string> getConstants(BlendAlpha);
+
+bool getConstant(const char *in, BlendFactor &out);
+bool getConstant(BlendFactor in, const char *&out);
+std::vector<std::string> getConstants(BlendFactor);
+
+bool getConstant(const char *in, BlendOperation &out);
+bool getConstant(BlendOperation in, const char *&out);
+std::vector<std::string> getConstants(BlendOperation);
 
 bool getConstant(const char *in, StencilAction &out);
 bool getConstant(StencilAction in, const char *&out);

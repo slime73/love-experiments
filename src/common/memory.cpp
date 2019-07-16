@@ -62,9 +62,4 @@ size_t getPageSize()
 #endif
 }
 
-size_t alignUp(size_t size, size_t alignment)
-{
-	return (size + alignment - 1) & (~(alignment - 1));
-}
-
 } // love

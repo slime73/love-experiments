@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include "int.h"
+
 #include <stddef.h>
 
 namespace love
@@ -33,6 +35,14 @@ size_t getPageSize();
 /**
  * 'alignment' must be a power of two.
  **/
-size_t alignUp(size_t size, size_t alignment);
+static inline size_t alignUp(size_t size, size_t alignment)
+{
+	return (size + alignment - 1) & (~(alignment - 1));
+}
+
+static inline uint8 *alignUp(uint8 *mem, size_t alignment)
+{
+	return (uint8_t *) alignUp((size_t) mem, alignment);
+}
 
 } // love
