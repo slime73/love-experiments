@@ -137,7 +137,7 @@ public:
 	void execute(Graphics *gfx);
 
 	void draw(Drawable *drawable, const Matrix4 &transform);
-	void drawInstanced(Mesh *mesh, const Matrix4 &transform, int instanceCount);
+	void drawInstanced(Graphics *gfx, Mesh *mesh, const Matrix4 &transform, int instanceCount);
 
 	void setColor(const Colorf &color);
 

@@ -159,7 +159,7 @@ struct ColorChannelMask
 	bool b = true;
 	bool a = true;
 
-	bool operator == (const ColorChannelMask &c) const
+	bool operator == (ColorChannelMask c) const
 	{
 		return r == c.r && g == c.g && b == c.b && a == c.a;
 	}

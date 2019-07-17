@@ -39,7 +39,13 @@ public:
 
 private:
 
-	void discardIfNeeded(bool isBackbuffer);
+	enum PassState
+	{
+		PASS_BEGIN,
+		PASS_END,
+	};
+
+	void discardIfNeeded(PassState passState, bool isBackbuffer);
 	void applyState(const RenderState &state, uint32 diff);
 
 

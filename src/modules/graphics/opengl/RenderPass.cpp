@@ -20,6 +20,7 @@
 
 #include "RenderPass.h"
 #include "Graphics.h"
+#include "Canvas.h"
 #include "OpenGL.h"
 
 namespace love
@@ -162,7 +163,7 @@ void RenderPass::beginPass(love::graphics::Graphics *gfx, bool isBackbuffer)
 			gl.setDepthWrites(hadDepthWrites);
 	}
 
-	discardIfNeeded(isBackbuffer);
+	discardIfNeeded(PASS_BEGIN, isBackbuffer);
 
 	if (gl.bugs.clearRequiresDriverTextureStateUpdate && Shader::current)
 	{
@@ -175,11 +176,66 @@ void RenderPass::beginPass(love::graphics::Graphics *gfx, bool isBackbuffer)
 
 void RenderPass::endPass(love::graphics::Graphics */*gfx*/, bool isBackbuffer)
 {
-	discardIfNeeded(isBackbuffer);
+	const auto &rts = renderTargets;
+	auto depthstencil = rts.depthStencil.canvas.get();
+
+	discardIfNeeded(PASS_END, isBackbuffer);
+
+	// Resolve MSAA buffers. MSAA is only supported for 2D render targets so we
+	// don't have to worry about resolving to slices.
+	if (!isBackbuffer && rts.colorCount > 0 && rts.colors[0].canvas->getMSAA() > 1)
+	{
+		int mip = rts.colors[0].mipmap;
+		int w = rts.colors[0].canvas->getPixelWidth(mip);
+		int h = rts.colors[0].canvas->getPixelHeight(mip);
+
+		for (int i = 0; i < rts.colorCount; i++)
+		{
+			Canvas *c = (Canvas *) rts.colors[i].canvas.get();
+
+			if (!c->isReadable())
+				continue;
+
+			glReadBuffer(GL_COLOR_ATTACHMENT0 + i);
+
+			gl.bindFramebuffer(OpenGL::FRAMEBUFFER_DRAW, c->getFBO());
+
+			if (GLAD_APPLE_framebuffer_multisample)
+				glResolveMultisampleFramebufferAPPLE();
+			else
+				glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+		}
+	}
+
+	if (depthstencil != nullptr && depthstencil->getMSAA() > 1 && depthstencil->isReadable())
+	{
+		gl.bindFramebuffer(OpenGL::FRAMEBUFFER_DRAW, ((Canvas *) depthstencil)->getFBO());
+
+		if (GLAD_APPLE_framebuffer_multisample)
+			glResolveMultisampleFramebufferAPPLE();
+		else
+		{
+			int mip = rts.depthStencil.mipmap;
+			int w = depthstencil->getPixelWidth(mip);
+			int h = depthstencil->getPixelHeight(mip);
+			PixelFormat format = depthstencil->getPixelFormat();
+
+			GLbitfield mask = 0;
+
+			if (isPixelFormatDepth(format))
+				mask |= GL_DEPTH_BUFFER_BIT;
+			if (isPixelFormatStencil(format))
+				mask |= GL_STENCIL_BUFFER_BIT;
+
+			if (mask != 0)
+				glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, mask, GL_NEAREST);
+		}
+	}
 }
 
-void RenderPass::discardIfNeeded(bool isBackbuffer)
+void RenderPass::discardIfNeeded(PassState passState, bool isBackbuffer)
 {
+
 	// TODO
 }
 

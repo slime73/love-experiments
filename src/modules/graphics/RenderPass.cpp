@@ -104,8 +104,11 @@ void RenderPass::draw(Drawable *drawable, const Matrix4 &transform)
 	inputs.emplace_back(drawable);
 }
 
-void RenderPass::drawInstanced(Mesh *mesh, const Matrix4 &transform, int instanceCount)
+void RenderPass::drawInstanced(Graphics *gfx, Mesh *mesh, const Matrix4 &transform, int instanceCount)
 {
+	if (instanceCount > 1 && !gfx->getCapabilities().features[Graphics::FEATURE_INSTANCING])
+		throw love::Exception("Instancing is not supported on this system.");
+
 	auto cmd = addCommand<CommandDrawMeshInstanced>(COMMAND_DRAW_MESH_INSTANCED);
 	cmd->mesh = mesh;
 	cmd->instanceCount = instanceCount;
@@ -385,7 +388,7 @@ void RenderPass::execute(Graphics *gfx)
 
 void RenderPass::validateRenderTargets(Graphics *gfx, const RenderTargetSetup &rts) const
 {
-	const auto &capabilities = gfx->getCapabilities();
+	const auto &caps = gfx->getCapabilities();
 	RenderTarget firsttarget = rts.getFirstTarget();
 	love::graphics::Canvas *firstcanvas = firsttarget.canvas;
 	int ncolors = rts.colorCount;
@@ -393,10 +396,10 @@ void RenderPass::validateRenderTargets(Graphics *gfx, const RenderTargetSetup &r
 	if (firstcanvas == nullptr)
 		return;
 
-	if (ncolors > capabilities.limits[Graphics::LIMIT_MULTI_CANVAS])
+	if (ncolors > caps.limits[Graphics::LIMIT_MULTI_CANVAS])
 		throw love::Exception("This system can't simultaneously render to %d canvases.", ncolors);
 
-	bool multiformatsupported = capabilities.features[Graphics::FEATURE_MULTI_CANVAS_FORMATS];
+	bool multiformatsupported = caps.features[Graphics::FEATURE_MULTI_CANVAS_FORMATS];
 
 	PixelFormat firstcolorformat = PIXELFORMAT_UNKNOWN;
 	if (ncolors > 0)
