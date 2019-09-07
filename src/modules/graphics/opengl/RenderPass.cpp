@@ -85,6 +85,15 @@ static GLenum getGLStencilAction(StencilAction action)
 	return 0;
 }
 
+RenderPass::RenderPass(love::graphics::Graphics *gfx, const RenderTargetSetup &rts)
+	: love::graphics::RenderPass(gfx, rts)
+{
+}
+
+RenderPass::~RenderPass()
+{
+}
+
 void RenderPass::beginPass(love::graphics::Graphics *gfx, bool isBackbuffer)
 {
 	const auto &rts = renderTargets;

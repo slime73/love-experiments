@@ -40,6 +40,8 @@ namespace graphics
 {
 
 class Graphics;
+class RenderPass;
+class RenderPassContext;
 
 /**
  * Holds and draws arbitrary vertex geometry.
@@ -171,6 +173,7 @@ public:
 	void draw(Graphics *gfx, const Matrix4 &m) override;
 
 	void drawInstanced(Graphics *gfx, const Matrix4 &m, int instancecount);
+//	void drawInstanced(RenderPassContext *ctx, const Matrix4 &m, int instancecount);
 
 	static std::vector<AttribFormat> getDefaultVertexFormat();
 

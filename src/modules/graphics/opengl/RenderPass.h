@@ -34,8 +34,8 @@ class RenderPass : public love::graphics::RenderPass
 {
 public:
 
-	void beginPass(love::graphics::Graphics *gfx, bool isBackbuffer) override;
-	void endPass(love::graphics::Graphics *gfx, bool isBackbuffer) override;
+	RenderPass(Graphics *gfx, const RenderTargetSetup &rts);
+	virtual ~RenderPass();
 
 private:
 
@@ -45,7 +45,11 @@ private:
 		PASS_END,
 	};
 
+	void beginPass(love::graphics::Graphics *gfx, bool isBackbuffer) override;
+	void endPass(love::graphics::Graphics *gfx, bool isBackbuffer) override;
+
 	void discardIfNeeded(PassState passState, bool isBackbuffer);
+
 	void applyState(const RenderState &state, uint32 diff);
 
 
