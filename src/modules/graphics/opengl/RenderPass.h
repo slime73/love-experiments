@@ -49,8 +49,8 @@ private:
 		PASS_END,
 	};
 
-	void beginPass(love::graphics::Graphics *gfx, bool isBackbuffer) override;
-	void endPass(love::graphics::Graphics *gfx, bool isBackbuffer) override;
+	void beginPass(love::graphics::Graphics *gfx, DrawContext *context, bool isBackbuffer) override;
+	void endPass(love::graphics::Graphics *gfx, DrawContext *context, bool isBackbuffer) override;
 
 	void discardIfNeeded(PassState passState, bool isBackbuffer);
 

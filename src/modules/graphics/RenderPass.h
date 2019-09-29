@@ -165,17 +165,22 @@ protected:
 
 	enum CommandType
 	{
+		// Draw commands.
 		COMMAND_DRAW_DRAWABLE,
 		COMMAND_DRAW_QUAD,
 		COMMAND_DRAW_LAYER,
 		COMMAND_DRAW_QUAD_LAYER,
 		COMMAND_DRAW_MESH_INSTANCED,
-		COMMAND_DRAW_POINTS,
 		COMMAND_DRAW_LINE,
 		COMMAND_DRAW_POLYGON,
 		COMMAND_PRINT,
 		COMMAND_PRINTF,
+
+		// Uniform data update commands.
 		COMMAND_SET_COLOR,
+		COMMAND_SET_TRANSFORM,
+
+		// Render state update commands.
 		COMMAND_SET_SHADER,
 		COMMAND_SET_BLENDSTATE,
 		COMMAND_SET_STENCILSTATE,
@@ -211,14 +216,6 @@ protected:
 		Matrix4 transform;
 	};
 
-	struct CommandDrawPoints
-	{
-		int count;
-		float pointSize;
-		bool colors;
-		Vector2 positions[1]; // Actual size determined in points().
-	};
-
 	struct CommandDrawLine
 	{
 		int count;
@@ -227,7 +224,6 @@ protected:
 
 	enum StateType
 	{
-		STATE_COLOR = 0,
 		STATE_BLEND,
 		STATE_SCISSOR,
 		STATE_STENCIL,
@@ -241,7 +237,6 @@ protected:
 
 	enum StateBit
 	{
-		STATEBIT_COLOR = 1 << STATE_COLOR,
 		STATEBIT_BLEND = 1 << STATE_BLEND,
 		STATEBIT_SCISSOR = 1 << STATE_SCISSOR,
 		STATEBIT_STENCIL = 1 << STATE_STENCIL,
@@ -254,6 +249,15 @@ protected:
 		STATEBIT_ALL = 0xFFFFFFFF
 	};
 
+	// The members in here must respect uniform buffer alignment/padding rules.
+	struct BuiltinUniformData
+	{
+		Matrix4 transformMatrix;
+		Matrix4 projectionMatrix;
+		Vector4 screenSizeParams;
+		Colorf constantColor;
+	};
+
 	// All state, including high-level data that backends don't know about.
 	struct GraphicsState
 	{
@@ -263,7 +267,7 @@ protected:
 		Polyline::Style lineStyle = Polyline::STYLE_SMOOTH;
 		Polyline::JoinType lineJoin = Polyline::JOIN_MITER;
 
-		float pointSize = 1.0f;
+		Colorf color;
 
 		RenderState render;
 	};
@@ -277,6 +281,8 @@ protected:
 
 		vertex::Attributes vertexAttributes;
 
+		BuiltinUniformData builtinUniforms;
+
 		DrawContext(RenderPass *pass)
 			: pass(pass)
 		{}
@@ -285,8 +291,8 @@ protected:
 	template <typename T>
 	T *addCommand(CommandType type, size_t size = sizeof(T), size_t alignment = alignof(T));
 
-	virtual void beginPass(Graphics *gfx, bool isBackbuffer) = 0;
-	virtual void endPass(Graphics *gfx, bool isBackbuffer) = 0;
+	virtual void beginPass(Graphics *gfx, DrawContext *context, bool isBackbuffer) = 0;
+	virtual void endPass(Graphics *gfx, DrawContext *context, bool isBackbuffer) = 0;
 
 	void validateRenderTargets(Graphics *gfx, const RenderTargetSetup &rts) const;
 

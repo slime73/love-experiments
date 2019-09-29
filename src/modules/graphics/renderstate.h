@@ -178,8 +178,6 @@ struct ScissorState
 // State that affects a graphics backend.
 struct RenderState
 {
-	Colorf color = Colorf(1.0, 1.0, 1.0, 1.0);
-
 	BlendState blend;
 	ScissorState scissor;
 	StencilState stencil;

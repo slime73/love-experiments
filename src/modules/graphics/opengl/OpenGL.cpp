@@ -566,18 +566,6 @@ void OpenGL::prepareDraw(Graphics *gfx)
 	data.projectionMatrix = gfx->getProjection();
 
 	{
-		Matrix3 normalmatrix = Matrix3(data.transformMatrix).transposedInverse();
-		const float *e = normalmatrix.getElements();
-		for (int i = 0; i < 3; i++)
-		{
-			data.normalMatrix[i].x = e[i * 3 + 0];
-			data.normalMatrix[i].y = e[i * 3 + 1];
-			data.normalMatrix[i].z = e[i * 3 + 2];
-			data.normalMatrix[i].w = 0.0f;
-		}
-	}
-
-	{
 		Rect view = getViewport();
 
 		data.screenSizeParams.x = view.w;

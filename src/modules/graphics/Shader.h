@@ -129,12 +129,11 @@ public:
 		Texture **textures;
 	};
 
-	// Uniform buffer alignment/padding rules.
+	// The members in here must respect uniform buffer alignment/padding rules.
 	struct BuiltinUniformData
 	{
 		Matrix4 transformMatrix;
 		Matrix4 projectionMatrix;
-		Vector4 normalMatrix[3]; // 3x3 matrix padded to an array of 3 vector4s.
 		Vector4 screenSizeParams;
 		Colorf constantColor;
 	};

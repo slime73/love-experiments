@@ -34,7 +34,7 @@ namespace love
 namespace graphics
 {
 
-static_assert(sizeof(Shader::BuiltinUniformData) == sizeof(float) * 4 * 13, "Update the array in wrap_GraphicsShader.lua if this changes.");
+static_assert(sizeof(Shader::BuiltinUniformData) == sizeof(float) * 4 * 10, "Update the array in wrap_GraphicsShader.lua if this changes.");
 
 love::Type Shader::type("Shader", &Object::type);
 

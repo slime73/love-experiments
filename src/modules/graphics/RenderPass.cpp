@@ -137,7 +137,7 @@ void RenderPass::polyline(const Vector2 *vertices, int count)
 void RenderPass::setColor(const Colorf &color)
 {
 	auto &state = graphicsState.back();
-	if (state.render.color == color)
+	if (state.color == color)
 		return;
 
 	auto c = addCommand<Colorf>(COMMAND_SET_COLOR);
@@ -148,7 +148,7 @@ void RenderPass::setColor(const Colorf &color)
 	c->b = std::min(std::max(c->b, 0.0f), 1.0f);
 	c->a = std::min(std::max(c->a, 0.0f), 1.0f);
 
-	state.render.color = *c;
+	state.color = *c;
 }
 
 void RenderPass::setShader(Shader *shader)
@@ -269,12 +269,11 @@ void RenderPass::execute(Graphics *gfx)
 		rts.depthStencil = rt;
 	}
 
-	beginPass(gfx, isBackbuffer);
-
 	DrawContext context(this);
 
-	uint32 diff = STATEBIT_ALL;
-	RenderState currentState;
+	beginPass(gfx, &context, isBackbuffer);
+
+	context.builtinUniforms.transformMatrix = Matrix4();
 
 	for (auto cmd : commands)
 	{
@@ -284,14 +283,12 @@ void RenderPass::execute(Graphics *gfx)
 		{
 			const auto c = read<CommandDrawDrawable>(data, cmd.offset);
 			c->drawable->draw(gfx, c->transform);
-			diff = 0;
 			break;
 		}
 		case COMMAND_DRAW_QUAD:
 		{
 			const auto c = read<CommandDrawQuad>(data, cmd.offset);
 			c->texture->draw(gfx, c->quad, c->transform);
-			diff = 0;
 			break;
 		}
 		case COMMAND_DRAW_LAYER:
@@ -308,12 +305,6 @@ void RenderPass::execute(Graphics *gfx)
 		{
 			const auto c = read<CommandDrawMeshInstanced>(data, cmd.offset);
 			c->mesh->drawInstanced(gfx, c->transform, c->instanceCount);
-			diff = 0;
-			break;
-		}
-		case COMMAND_DRAW_POINTS:
-		{
-			// TODO
 			break;
 		}
 		case COMMAND_DRAW_LINE:
@@ -338,50 +329,55 @@ void RenderPass::execute(Graphics *gfx)
 		}
 		case COMMAND_SET_COLOR:
 		{
-			currentState.color = *read<Colorf>(data, cmd.offset);
-			diff |= STATEBIT_COLOR;
+			context.builtinUniforms.constantColor = *read<Colorf>(data, cmd.offset);
+			gammaCorrectColor(context.builtinUniforms.constantColor);
+			break;
+		}
+		case COMMAND_SET_TRANSFORM:
+		{
+			context.builtinUniforms.transformMatrix = *read<Matrix4>(data, cmd.offset);
 			break;
 		}
 		case COMMAND_SET_SHADER:
 		{
-			currentState.shader = *read<Shader *>(data, cmd.offset);
-			diff |= STATEBIT_SHADER;
+			context.state.shader = *read<Shader *>(data, cmd.offset);
+			context.stateDiff |= STATEBIT_SHADER;
 			break;
 		}
 		case COMMAND_SET_BLENDSTATE:
 		{
-			currentState.blend = *read<BlendState>(data, cmd.offset);
-			diff |= STATEBIT_BLEND;
+			context.state.blend = *read<BlendState>(data, cmd.offset);
+			context.stateDiff |= STATEBIT_BLEND;
 			break;
 		}
 		case COMMAND_SET_STENCILSTATE:
 		{
-			currentState.stencil = *read<StencilState>(data, cmd.offset);
-			diff |= STATEBIT_STENCIL;
+			context.state.stencil = *read<StencilState>(data, cmd.offset);
+			context.stateDiff |= STATEBIT_STENCIL;
 			break;
 		}
 		case COMMAND_SET_DEPTHSTATE:
 		{
-			currentState.depth = *read<DepthState>(data, cmd.offset);
-			diff |= STATEBIT_DEPTH;
+			context.state.depth = *read<DepthState>(data, cmd.offset);
+			context.stateDiff |= STATEBIT_DEPTH;
 			break;
 		}
 		case COMMAND_SET_SCISSOR:
 		{
-			currentState.scissor = *read<ScissorState>(data, cmd.offset);
-			diff |= STATEBIT_SCISSOR;
+			context.state.scissor = *read<ScissorState>(data, cmd.offset);
+			context.stateDiff |= STATEBIT_SCISSOR;
 			break;
 		}
 		case COMMAND_SET_COLORMASK:
 		{
-			currentState.colorChannelMask = *read<ColorChannelMask>(data, cmd.offset);
-			diff |= STATEBIT_COLORMASK;
+			context.state.colorChannelMask = *read<ColorChannelMask>(data, cmd.offset);
+			context.stateDiff |= STATEBIT_COLORMASK;
 			break;
 		}
 		case COMMAND_SET_WIREFRAME:
 		{
-			currentState.wireframe = *read<bool>(data, cmd.offset);
-			diff |= STATEBIT_WIREFRAME;
+			context.state.wireframe = *read<bool>(data, cmd.offset);
+			context.stateDiff |= STATEBIT_WIREFRAME;
 			break;
 		}
 		}
@@ -389,7 +385,7 @@ void RenderPass::execute(Graphics *gfx)
 
 	gfx->flushStreamDraws();
 
-	endPass(gfx, isBackbuffer);
+	endPass(gfx, &context, isBackbuffer);
 
 	if (tempDepthStencil)
 		rts.depthStencil.canvas = nullptr;

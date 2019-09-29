@@ -94,30 +94,47 @@ RenderPass::~RenderPass()
 {
 }
 
-void RenderPass::beginPass(love::graphics::Graphics *gfx, bool isBackbuffer)
+void RenderPass::beginPass(love::graphics::Graphics *gfx, DrawContext *context, bool isBackbuffer)
 {
 	const auto &rts = renderTargets;
 
+	Matrix4 projectionMatrix;
+
 	GLuint fbo = 0;
+	Rect viewport = {0, 0, 0, 0};
 
 	if (isBackbuffer)
 	{
-		gl.bindFramebuffer(OpenGL::FRAMEBUFFER_ALL, gl.getDefaultFBO());
+		fbo = gl.getDefaultFBO();
 
-		// The projection matrix is flipped compared to rendering to a canvas, due
-		// to OpenGL considering (0,0) bottom-left instead of top-left.
-//		projectionMatrix = Matrix4::ortho(0.0, (float) w, (float) h, 0.0, -10.0f, 10.0f);
+		int w = gfx->getWidth();
+		int h = gfx->getHeight();
+
+		viewport.w = gfx->getPixelWidth();
+		viewport.h = gfx->getPixelHeight();
+
+		// The projection matrix is flipped compared to rendering to a canvas,
+		// due to OpenGL considering (0,0) bottom-left instead of top-left.
+		projectionMatrix = Matrix4::ortho(0.0, (float) w, (float) h, 0.0, -10.0f, 10.0f);
 	}
 	else
 	{
+		auto c = rts.getFirstTarget().canvas.get();
 //		fbo = gl.getCachedFBO(rts);
 
-//		projectionMatrix = Matrix4::ortho(0.0, (float) w, 0.0, (float) h, -10.0f, 10.0f);
+		int w = c->getWidth();
+		int h = c->getHeight();
+
+		viewport.w = c->getPixelWidth();
+		viewport.h = c->getPixelHeight();
+
+		projectionMatrix = Matrix4::ortho(0.0, (float) w, 0.0, (float) h, -10.0f, 10.0f);
 	}
 
-	gl.bindFramebuffer(OpenGL::FRAMEBUFFER_ALL, fbo);
+	context->builtinUniforms.projectionMatrix = projectionMatrix;
 
-//	gl.setViewport({0, 0, pixelw, pixelh});
+	gl.bindFramebuffer(OpenGL::FRAMEBUFFER_ALL, fbo);
+	gl.setViewport(viewport);
 
 	// Make sure the correct sRGB setting is used when drawing to the canvases.
 	if (GLAD_VERSION_1_0 || GLAD_EXT_sRGB_write_control)
@@ -183,7 +200,7 @@ void RenderPass::beginPass(love::graphics::Graphics *gfx, bool isBackbuffer)
 	}
 }
 
-void RenderPass::endPass(love::graphics::Graphics */*gfx*/, bool isBackbuffer)
+void RenderPass::endPass(love::graphics::Graphics */*gfx*/, DrawContext *context, bool isBackbuffer)
 {
 	const auto &rts = renderTargets;
 	auto depthstencil = rts.depthStencil.canvas.get();
@@ -260,13 +277,6 @@ void RenderPass::applyState(const RenderState &state, uint32 diff, const vertex:
 	// TODO: built-in uniforms (should that be here, or somewhere else?)
 	// TODO: vertex attribute layout and buffer bindings?
 	// TODO: texture bindings?
-
-	if (diff & STATEBIT_COLOR)
-	{
-		Colorf c = state.color;
-		gammaCorrectColor(c);
-//		glVertexAttrib4f(ATTRIB_CONSTANTCOLOR, c.r, c.g, c.b, c.a);
-	}
 
 	if (diff & STATEBIT_BLEND)
 	{
