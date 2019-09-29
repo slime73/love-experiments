@@ -157,6 +157,12 @@ public:
 	void setDepthMode(CompareMode compare, bool write);
 	void setDepthMode();
 
+	void rotate(float r);
+	void scale(float x, float y);
+	void translate(float x, float y);
+	void shear(float kx, float ky);
+	void origin();
+
 	virtual void draw(PrimitiveType primType, int firstVertex, int vertexCount, int instanceCount) = 0;
 	virtual void draw(PrimitiveType primType, int indexCount, int instanceCount, IndexDataType indexType, Resource *indexBuffer, size_t indexOffset) = 0;
 	virtual void drawQuads(int start, int count, Resource *quadIndexBuffer) = 0;
@@ -178,7 +184,6 @@ protected:
 
 		// Uniform data update commands.
 		COMMAND_SET_COLOR,
-		COMMAND_SET_TRANSFORM,
 
 		// Render state update commands.
 		COMMAND_SET_SHADER,
@@ -218,8 +223,16 @@ protected:
 
 	struct CommandDrawLine
 	{
+		Matrix4 transform;
 		int count;
 		Vector2 positions[1]; // Actual size determined in line().
+	};
+
+	struct CommandDrawPolygon
+	{
+		Matrix4 transform;
+		int count;
+		Vector2 positions[1]; // Actual size determined in polygon().
 	};
 
 	enum StateType
@@ -306,6 +319,7 @@ protected:
 	std::vector<StrongRef<Object>> inputs;
 
 	std::vector<GraphicsState> graphicsState;
+	std::vector<Matrix4> transformState;
 
 }; // RenderPass
 

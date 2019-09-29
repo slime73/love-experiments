@@ -87,6 +87,9 @@ void RenderPass::reset()
 
 	graphicsState.clear();
 	graphicsState.emplace_back();
+
+	transformState.clear();
+	transformState.emplace_back();
 }
 
 void RenderPass::reset(Graphics *gfx, const RenderTargetSetup &rts)
@@ -100,7 +103,7 @@ void RenderPass::draw(Drawable *drawable, const Matrix4 &transform)
 {
 	auto cmd = addCommand<CommandDrawDrawable>(COMMAND_DRAW_DRAWABLE);
 	cmd->drawable = drawable;
-	cmd->transform = transform;
+	cmd->transform = transformState.back() * transform;
 	inputs.emplace_back(drawable);
 }
 
@@ -112,7 +115,7 @@ void RenderPass::drawInstanced(Graphics *gfx, Mesh *mesh, const Matrix4 &transfo
 	auto cmd = addCommand<CommandDrawMeshInstanced>(COMMAND_DRAW_MESH_INSTANCED);
 	cmd->mesh = mesh;
 	cmd->instanceCount = instanceCount;
-	cmd->transform = transform;
+	cmd->transform = transformState.back() * transform;
 	inputs.emplace_back(mesh);
 }
 
@@ -123,6 +126,8 @@ Vector2 *RenderPass::polyline(int count)
 
 	size_t cmdsize = sizeof(CommandDrawLine) + sizeof(Vector2) * (count - 1);
 	auto cmd = addCommand<CommandDrawLine>(COMMAND_DRAW_LINE, cmdsize);
+
+	cmd->transform = transformState.back();
 	cmd->count = count;
 
 	return cmd->positions;
@@ -131,6 +136,8 @@ Vector2 *RenderPass::polyline(int count)
 void RenderPass::polyline(const Vector2 *vertices, int count)
 {
 	Vector2 *v = polyline(count);
+	if (v == nullptr)
+		return;
 	memcpy(v, vertices, count * sizeof(Vector2));
 }
 
@@ -224,6 +231,31 @@ void RenderPass::setDepthMode()
 	setDepthMode(COMPARE_ALWAYS, false);
 }
 
+void RenderPass::rotate(float r)
+{
+	transformState.back().rotate(r);
+}
+
+void RenderPass::scale(float x, float y)
+{
+	transformState.back().scale(x, y);
+}
+
+void RenderPass::translate(float x, float y)
+{
+	transformState.back().translate(x, y);
+}
+
+void RenderPass::shear(float kx, float ky)
+{
+	transformState.back().shear(kx, ky);
+}
+
+void RenderPass::origin()
+{
+	transformState.back().setIdentity();
+}
+
 template <typename T>
 static const T *read(const uint8 *buffer, size_t offset)
 {
@@ -272,8 +304,6 @@ void RenderPass::execute(Graphics *gfx)
 	DrawContext context(this);
 
 	beginPass(gfx, &context, isBackbuffer);
-
-	context.builtinUniforms.transformMatrix = Matrix4();
 
 	for (auto cmd : commands)
 	{
@@ -331,11 +361,6 @@ void RenderPass::execute(Graphics *gfx)
 		{
 			context.builtinUniforms.constantColor = *read<Colorf>(data, cmd.offset);
 			gammaCorrectColor(context.builtinUniforms.constantColor);
-			break;
-		}
-		case COMMAND_SET_TRANSFORM:
-		{
-			context.builtinUniforms.transformMatrix = *read<Matrix4>(data, cmd.offset);
 			break;
 		}
 		case COMMAND_SET_SHADER:
