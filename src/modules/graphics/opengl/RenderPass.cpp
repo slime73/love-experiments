@@ -265,7 +265,7 @@ void RenderPass::applyState(const RenderState &state, uint32 diff, const vertex:
 	{
 		Colorf c = state.color;
 		gammaCorrectColor(c);
-		glVertexAttrib4f(ATTRIB_CONSTANTCOLOR, c.r, c.g, c.b, c.a);
+//		glVertexAttrib4f(ATTRIB_CONSTANTCOLOR, c.r, c.g, c.b, c.a);
 	}
 
 	if (diff & STATEBIT_BLEND)
