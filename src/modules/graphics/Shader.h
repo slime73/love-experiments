@@ -68,12 +68,8 @@ public:
 		BUILTIN_TEXTURE_VIDEO_Y,
 		BUILTIN_TEXTURE_VIDEO_CB,
 		BUILTIN_TEXTURE_VIDEO_CR,
-		BUILTIN_MATRIX_VIEW_FROM_LOCAL,
-		BUILTIN_MATRIX_CLIP_FROM_VIEW,
-		BUILTIN_MATRIX_CLIP_FROM_LOCAL,
-		BUILTIN_MATRIX_VIEW_NORMAL_FROM_LOCAL,
-		BUILTIN_POINT_SIZE,
-		BUILTIN_SCREEN_SIZE,
+		BUILTIN_UNIFORMS_PER_DRAW,
+		BUILTIN_POINT_SIZE, // TODO: remove
 		BUILTIN_MAX_ENUM
 	};
 
@@ -131,6 +127,16 @@ public:
 		size_t dataSize;
 
 		Texture **textures;
+	};
+
+	// Uniform buffer alignment/padding rules.
+	struct BuiltinUniformData
+	{
+		Matrix4 transformMatrix;
+		Matrix4 projectionMatrix;
+		Vector4 normalMatrix[3]; // 3x3 matrix padded to an array of 3 vector4s.
+		Vector4 screenSizeParams;
+		Colorf constantColor;
 	};
 
 	// Pointer to currently active Shader.
