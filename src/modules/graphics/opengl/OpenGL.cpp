@@ -580,8 +580,8 @@ void OpenGL::prepareDraw(Graphics *gfx)
 	{
 		Rect view = getViewport();
 
-		data.screenSizeParams[0] = view.w;
-		data.screenSizeParams[1] = view.h;
+		data.screenSizeParams.x = view.w;
+		data.screenSizeParams.y = view.h;
 
 		// The shader does pixcoord.y = gl_FragCoord.y * params.z + params.w.
 		// This lets us flip pixcoord.y when needed, to be consistent (drawing
@@ -589,15 +589,15 @@ void OpenGL::prepareDraw(Graphics *gfx)
 		if (gfx->isCanvasActive())
 		{
 			// No flipping: pixcoord.y = gl_FragCoord.y * 1.0 + 0.0.
-			data.screenSizeParams[2] = 1.0f;
-			data.screenSizeParams[3] = 0.0f;
+			data.screenSizeParams.z = 1.0f;
+			data.screenSizeParams.w = 0.0f;
 		}
 		else
 		{
 			// gl_FragCoord.y is flipped when drawing to the screen, so we
 			// un-flip: pixcoord.y = gl_FragCoord.y * -1.0 + height.
-			data.screenSizeParams[2] = -1.0f;
-			data.screenSizeParams[3] = view.h;
+			data.screenSizeParams.z = -1.0f;
+			data.screenSizeParams.w = view.h;
 		}
 	}
 

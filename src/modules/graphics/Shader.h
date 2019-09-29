@@ -129,18 +129,13 @@ public:
 		Texture **textures;
 	};
 
-	struct Vector4
-	{
-		float x, y, z, w;
-	};
-
 	// Uniform buffer alignment/padding rules.
 	struct BuiltinUniformData
 	{
 		Matrix4 transformMatrix;
 		Matrix4 projectionMatrix;
 		Vector4 normalMatrix[3]; // 3x3 matrix padded to an array of 3 vector4s.
-		float screenSizeParams[4];
+		Vector4 screenSizeParams;
 		Colorf constantColor;
 	};
 
