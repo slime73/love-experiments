@@ -171,7 +171,7 @@ struct ColorChannelMask
 
 struct ScissorState
 {
-	Rect rect;
+	Rect rect = {0, 0, 0, 0};
 	bool enable = false;
 };
 

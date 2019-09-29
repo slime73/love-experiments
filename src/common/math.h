@@ -62,10 +62,8 @@ namespace love
 
 struct Rect
 {
-	int x = 0;
-	int y = 0;
-	int w = 0;
-	int h = 0;
+	int x, y;
+	int w, h;
 
 	bool operator == (const Rect &rhs) const
 	{
