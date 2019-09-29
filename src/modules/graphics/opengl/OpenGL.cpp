@@ -110,10 +110,6 @@ OpenGL::OpenGL()
 	, vendor(VENDOR_UNKNOWN)
 	, state()
 {
-	state.constantColor = Colorf(1.0f, 1.0f, 1.0f, 1.0f);
-
-	float nan = std::numeric_limits<float>::quiet_NaN();
-	state.lastConstantColor = Colorf(nan, nan, nan, nan);
 }
 
 bool OpenGL::initContext()
@@ -183,7 +179,6 @@ void OpenGL::setupContext()
 
 	GLfloat glcolor[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 	glVertexAttrib4fv(ATTRIB_COLOR, glcolor);
-	glVertexAttrib4fv(ATTRIB_CONSTANTCOLOR, glcolor);
 
 	GLint maxvertexattribs = 1;
 	glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &maxvertexattribs);
@@ -557,21 +552,59 @@ void OpenGL::createDefaultTexture()
 	}
 }
 
-void OpenGL::prepareDraw()
+void OpenGL::prepareDraw(Graphics *gfx)
 {
 	TempDebugGroup debuggroup("Prepare OpenGL draw");
 
-	// Make sure the active shader's love-provided uniforms are up to date.
-	if (Shader::current != nullptr)
-		((Shader *)Shader::current)->updateBuiltinUniforms();
+	if (Shader::current == nullptr)
+		return;
 
-	if (state.constantColor != state.lastConstantColor)
+	// Make sure the active shader's love-provided uniforms are up to date.
+	Shader::BuiltinUniformData data;
+
+	data.transformMatrix = gfx->getTransform();
+	data.projectionMatrix = gfx->getProjection();
+
 	{
-		state.lastConstantColor = state.constantColor;
-		Colorf c = state.constantColor;
-		gammaCorrectColor(c);
-		glVertexAttrib4f(ATTRIB_CONSTANTCOLOR, c.r, c.g, c.b, c.a);
+		Matrix3 normalmatrix = Matrix3(data.transformMatrix).transposedInverse();
+		const float *e = normalmatrix.getElements();
+		for (int i = 0; i < 3; i++)
+		{
+			data.normalMatrix[i].x = e[i * 3 + 0];
+			data.normalMatrix[i].y = e[i * 3 + 1];
+			data.normalMatrix[i].z = e[i * 3 + 2];
+			data.normalMatrix[i].w = 0.0f;
+		}
 	}
+
+	{
+		Rect view = getViewport();
+
+		data.screenSizeParams[0] = view.w;
+		data.screenSizeParams[1] = view.h;
+
+		// The shader does pixcoord.y = gl_FragCoord.y * params.z + params.w.
+		// This lets us flip pixcoord.y when needed, to be consistent (drawing
+		// with no Canvas active makes the pixel coordinates y-flipped.)
+		if (gfx->isCanvasActive())
+		{
+			// No flipping: pixcoord.y = gl_FragCoord.y * 1.0 + 0.0.
+			data.screenSizeParams[2] = 1.0f;
+			data.screenSizeParams[3] = 0.0f;
+		}
+		else
+		{
+			// gl_FragCoord.y is flipped when drawing to the screen, so we
+			// un-flip: pixcoord.y = gl_FragCoord.y * -1.0 + height.
+			data.screenSizeParams[2] = -1.0f;
+			data.screenSizeParams[3] = view.h;
+		}
+	}
+
+	data.constantColor = gfx->getColor();
+	gammaCorrectColor(data.constantColor);
+
+	((Shader *)Shader::current)->updateBuiltinUniforms(data);
 }
 
 GLenum OpenGL::getGLPrimitiveType(PrimitiveType type)
@@ -803,16 +836,6 @@ void OpenGL::setScissor(const Rect &v, bool canvasActive)
 	}
 
 	state.scissor = v;
-}
-
-void OpenGL::setConstantColor(const Colorf &color)
-{
-	state.constantColor = color;
-}
-
-const Colorf &OpenGL::getConstantColor() const
-{
-	return state.constantColor;
 }
 
 void OpenGL::setPointSize(float size)
