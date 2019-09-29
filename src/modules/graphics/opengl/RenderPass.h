@@ -37,6 +37,10 @@ public:
 	RenderPass(Graphics *gfx, const RenderTargetSetup &rts);
 	virtual ~RenderPass();
 
+	void draw(PrimitiveType primType, int firstVertex, int vertexCount, int instanceCount) override;
+	void draw(PrimitiveType primType, int indexCount, int instanceCount, IndexDataType indexType, Resource *indexBuffer, size_t indexOffset) override;
+	void drawQuads(int start, int count, Resource *quadIndexBuffer) override;
+
 private:
 
 	enum PassState
@@ -50,8 +54,10 @@ private:
 
 	void discardIfNeeded(PassState passState, bool isBackbuffer);
 
-	void applyState(const RenderState &state, uint32 diff);
+	void applyState(const RenderState &state, uint32 stateDiff, const vertex::Attributes &attribs);
 
+	vertex::Attributes currentAttributes;
+	vertex::BufferBindings currentBuffers;
 
 }; // RenderPass
 

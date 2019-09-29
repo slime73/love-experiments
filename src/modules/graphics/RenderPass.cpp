@@ -116,6 +116,24 @@ void RenderPass::drawInstanced(Graphics *gfx, Mesh *mesh, const Matrix4 &transfo
 	inputs.emplace_back(mesh);
 }
 
+Vector2 *RenderPass::polyline(int count)
+{
+	if (count <= 0)
+		return nullptr;
+
+	size_t cmdsize = sizeof(CommandDrawLine) + sizeof(Vector2) * (count - 1);
+	auto cmd = addCommand<CommandDrawLine>(COMMAND_DRAW_LINE, cmdsize);
+	cmd->count = count;
+
+	return cmd->positions;
+}
+
+void RenderPass::polyline(const Vector2 *vertices, int count)
+{
+	Vector2 *v = polyline(count);
+	memcpy(v, vertices, count * sizeof(Vector2));
+}
+
 void RenderPass::setColor(const Colorf &color)
 {
 	auto &state = graphicsState.back();
@@ -252,6 +270,8 @@ void RenderPass::execute(Graphics *gfx)
 	}
 
 	beginPass(gfx, isBackbuffer);
+
+	DrawContext context(this);
 
 	uint32 diff = STATEBIT_ALL;
 	RenderState currentState;

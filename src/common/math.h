@@ -22,7 +22,6 @@
 #define LOVE_MATH_H
 
 #include <climits> // for CHAR_BIT
-#include <cstdlib> // for rand() and RAND_MAX
 
 /* Definitions of useful mathematical constants
  * M_E        - e
@@ -63,8 +62,10 @@ namespace love
 
 struct Rect
 {
-	int x, y;
-	int w, h;
+	int x = 0;
+	int y = 0;
+	int w = 0;
+	int h = 0;
 
 	bool operator == (const Rect &rhs) const
 	{

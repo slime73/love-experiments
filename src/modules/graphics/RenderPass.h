@@ -101,6 +101,7 @@ public:
 
 		BeginAction beginAction = BEGIN_LOAD;
 		EndAction endAction = END_STORE;
+
 		Colorf clearColor;
 		double clearDepth = 1.0;
 		int clearStencil = 0;
@@ -139,6 +140,9 @@ public:
 	void draw(Drawable *drawable, const Matrix4 &transform);
 	void drawInstanced(Graphics *gfx, Mesh *mesh, const Matrix4 &transform, int instanceCount);
 
+	Vector2 *polyline(int count);
+	void polyline(const Vector2 *vertices, int count);
+
 	void setColor(const Colorf &color);
 
 	void setShader(Shader *shader);
@@ -152,6 +156,10 @@ public:
 
 	void setDepthMode(CompareMode compare, bool write);
 	void setDepthMode();
+
+	virtual void draw(PrimitiveType primType, int firstVertex, int vertexCount, int instanceCount) = 0;
+	virtual void draw(PrimitiveType primType, int indexCount, int instanceCount, IndexDataType indexType, Resource *indexBuffer, size_t indexOffset) = 0;
+	virtual void drawQuads(int start, int count, Resource *quadIndexBuffer) = 0;
 
 protected:
 
@@ -217,12 +225,6 @@ protected:
 		Vector2 positions[1]; // Actual size determined in line().
 	};
 
-	struct ScissorState
-	{
-		Rect rect;
-		bool enable;
-	};
-
 	enum StateType
 	{
 		STATE_COLOR = 0,
@@ -252,26 +254,6 @@ protected:
 		STATEBIT_ALL = 0xFFFFFFFF
 	};
 
-	// State that affects the graphics backend.
-	struct RenderState
-	{
-		Colorf color = Colorf(1.0, 1.0, 1.0, 1.0);
-
-		BlendState blend;
-		ScissorState scissor;
-		StencilState stencil;
-		DepthState depth;
-
-		CullMode meshCullMode = CULL_NONE;
-		vertex::Winding winding = vertex::WINDING_CCW;
-
-		Shader *shader = nullptr;
-
-		ColorChannelMask colorChannelMask;
-
-		bool wireframe = false;
-	};
-
 	// All state, including high-level data that backends don't know about.
 	struct GraphicsState
 	{
@@ -284,6 +266,20 @@ protected:
 		float pointSize = 1.0f;
 
 		RenderState render;
+	};
+
+	struct DrawContext
+	{
+		RenderPass *pass;
+
+		RenderState state;
+		uint32 stateDiff = STATEBIT_ALL;
+
+		vertex::Attributes vertexAttributes;
+
+		DrawContext(RenderPass *pass)
+			: pass(pass)
+		{}
 	};
 
 	template <typename T>

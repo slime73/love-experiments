@@ -31,6 +31,7 @@ namespace graphics
 {
 
 class Graphics;
+class RenderPass;
 
 /**
  * A Drawable is anything that can be drawn on screen with a

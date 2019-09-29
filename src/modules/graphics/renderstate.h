@@ -21,6 +21,8 @@
 #pragma once
 
 #include "common/int.h"
+#include "common/math.h"
+#include "vertex.h"
 
 #include <vector>
 #include <string>
@@ -29,6 +31,8 @@ namespace love
 {
 namespace graphics
 {
+
+class Shader;
 
 enum BlendMode // High level wrappers
 {
@@ -163,6 +167,32 @@ struct ColorChannelMask
 	{
 		return r == c.r && g == c.g && b == c.b && a == c.a;
 	}
+};
+
+struct ScissorState
+{
+	Rect rect;
+	bool enable = false;
+};
+
+// State that affects a graphics backend.
+struct RenderState
+{
+	Colorf color = Colorf(1.0, 1.0, 1.0, 1.0);
+
+	BlendState blend;
+	ScissorState scissor;
+	StencilState stencil;
+	DepthState depth;
+
+	CullMode meshCullMode = CULL_NONE;
+	vertex::Winding winding = vertex::WINDING_CCW;
+
+	Shader *shader = nullptr;
+
+	ColorChannelMask colorChannelMask;
+
+	bool wireframe = false;
 };
 
 BlendState getBlendState(BlendMode mode, BlendAlpha alphamode);

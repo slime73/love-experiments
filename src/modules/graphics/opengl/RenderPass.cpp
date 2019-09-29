@@ -248,8 +248,10 @@ void RenderPass::discardIfNeeded(PassState passState, bool isBackbuffer)
 	// TODO
 }
 
-void RenderPass::applyState(const RenderState &state, uint32 diff)
+void RenderPass::applyState(const RenderState &state, uint32 diff, const vertex::Attributes &attribs)
 {
+	currentAttributes = attribs;
+
 	if (diff & STATEBIT_SHADER)
 	{
 		gl.useProgram((GLuint) state.shader->getHandle());
@@ -359,6 +361,97 @@ void RenderPass::applyState(const RenderState &state, uint32 diff)
 	if (diff & STATEBIT_WIREFRAME && !GLAD_ES_VERSION_2_0)
 	{
 		glPolygonMode(GL_FRONT_AND_BACK, state.wireframe ? GL_LINE : GL_FILL);
+	}
+}
+
+void RenderPass::draw(PrimitiveType primType, int firstVertex, int vertexCount, int instanceCount)
+{
+	gl.setVertexAttributes(currentAttributes, currentBuffers);
+
+	GLenum glprimtype = OpenGL::getGLPrimitiveType(primType);
+
+	if (instanceCount > 1)
+		glDrawArraysInstanced(glprimtype, firstVertex, vertexCount, instanceCount);
+	else
+		glDrawArrays(glprimtype, firstVertex, vertexCount);
+}
+
+void RenderPass::draw(PrimitiveType primType, int indexCount, int instanceCount, IndexDataType indexType, Resource *indexBuffer, size_t indexOffset)
+{
+	gl.setVertexAttributes(currentAttributes, currentBuffers);
+
+	const void *gloffset = BUFFER_OFFSET(indexOffset);
+	GLenum glprimtype = OpenGL::getGLPrimitiveType(primType);
+	GLenum gldatatype = OpenGL::getGLIndexDataType(indexType);
+
+	gl.bindBuffer(BUFFER_INDEX, indexBuffer->getHandle());
+
+	if (instanceCount > 1)
+		glDrawElementsInstanced(glprimtype, indexCount, gldatatype, gloffset, instanceCount);
+	else
+		glDrawElements(glprimtype, indexCount, gldatatype, gloffset);
+}
+
+static inline void advanceVertexOffsets(const vertex::Attributes &attributes, vertex::BufferBindings &buffers, int vertexcount)
+{
+	uint32 touchedbuffers = 0;
+
+	for (unsigned int i = 0; i < vertex::Attributes::MAX; i++)
+	{
+		if (!attributes.isEnabled(i))
+			continue;
+
+		auto &attrib = attributes.attribs[i];
+
+		uint32 bufferbit = 1u << attrib.bufferIndex;
+		if ((touchedbuffers & bufferbit) == 0)
+		{
+			touchedbuffers |= bufferbit;
+			const auto &layout = attributes.bufferLayouts[attrib.bufferIndex];
+			buffers.info[attrib.bufferIndex].offset += layout.stride * vertexcount;
+		}
+	}
+}
+
+void RenderPass::drawQuads(int start, int count, Resource *quadIndexBuffer)
+{
+	const int MAX_VERTICES_PER_DRAW = LOVE_UINT16_MAX;
+	const int MAX_QUADS_PER_DRAW    = MAX_VERTICES_PER_DRAW / 4;
+
+	gl.bindBuffer(BUFFER_INDEX, quadIndexBuffer->getHandle());
+
+	if (gl.isBaseVertexSupported())
+	{
+		gl.setVertexAttributes(currentAttributes, currentBuffers);
+
+		int basevertex = start * 4;
+
+		for (int quadindex = 0; quadindex < count; quadindex += MAX_QUADS_PER_DRAW)
+		{
+			int quadcount = std::min(MAX_QUADS_PER_DRAW, count - quadindex);
+
+			glDrawElementsBaseVertex(GL_TRIANGLES, quadcount * 6, GL_UNSIGNED_SHORT, BUFFER_OFFSET(0), basevertex);
+
+			basevertex += quadcount * 4;
+		}
+	}
+	else
+	{
+		vertex::BufferBindings bufferscopy = currentBuffers;
+		if (start > 0)
+			advanceVertexOffsets(currentAttributes, bufferscopy, start * 4);
+
+		for (int quadindex = 0; quadindex < count; quadindex += MAX_QUADS_PER_DRAW)
+		{
+			gl.setVertexAttributes(currentAttributes, bufferscopy);
+
+			int quadcount = std::min(MAX_QUADS_PER_DRAW, count - quadindex);
+
+			glDrawElements(GL_TRIANGLES, quadcount * 6, GL_UNSIGNED_SHORT, BUFFER_OFFSET(0));
+
+			if (count > MAX_QUADS_PER_DRAW)
+				advanceVertexOffsets(currentAttributes, bufferscopy, quadcount * 4);
+		}
 	}
 }
 
