@@ -727,7 +727,7 @@ void OpenGL::setVertexAttributes(const vertex::Attributes &attributes, const ver
 			uint32 divisorbit = divisor << i;
 			instanceattribbits |= divisorbit;
 
-			if ((state.enabledAttribArrays & bit) ^ divisorbit)
+			if ((state.instancedAttribArrays & bit) ^ divisorbit)
 				glVertexAttribDivisor(i, divisor);
 
 			GLboolean normalized = GL_FALSE;
@@ -1725,7 +1725,9 @@ bool OpenGL::isPixelFormatSupported(PixelFormat pixelformat, bool rendertarget, 
 		if (rendertarget)
 			return false;
 		else
-			return (GLAD_VERSION_1_1 && GLAD_EXT_texture_rg) || (GLAD_EXT_texture_norm16 && (GLAD_ES_VERSION_3_0 || GLAD_EXT_texture_rg));
+			return GLAD_VERSION_3_0
+				|| (GLAD_VERSION_1_1 && GLAD_ARB_texture_rg)
+				|| (GLAD_EXT_texture_norm16 && (GLAD_ES_VERSION_3_0 || GLAD_EXT_texture_rg));
 	case PIXELFORMAT_RGBA16:
 		if (rendertarget)
 			return false;
