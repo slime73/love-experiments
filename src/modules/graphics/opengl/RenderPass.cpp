@@ -94,24 +94,20 @@ RenderPass::~RenderPass()
 {
 }
 
-void RenderPass::beginPass(love::graphics::Graphics *gfx, DrawContext *context, bool isBackbuffer)
+void RenderPass::beginPass(DrawContext *context)
 {
 	const auto &rts = renderTargets;
+
+	int w = context->passWidth;
+	int h = context->passHeight;
 
 	Matrix4 projectionMatrix;
 
 	GLuint fbo = 0;
-	Rect viewport = {0, 0, 0, 0};
 
-	if (isBackbuffer)
+	if (context->isBackbuffer)
 	{
 		fbo = gl.getDefaultFBO();
-
-		int w = gfx->getWidth();
-		int h = gfx->getHeight();
-
-		viewport.w = gfx->getPixelWidth();
-		viewport.h = gfx->getPixelHeight();
 
 		// The projection matrix is flipped compared to rendering to a canvas,
 		// due to OpenGL considering (0,0) bottom-left instead of top-left.
@@ -119,14 +115,7 @@ void RenderPass::beginPass(love::graphics::Graphics *gfx, DrawContext *context, 
 	}
 	else
 	{
-		auto c = rts.getFirstTarget().canvas.get();
 //		fbo = gl.getCachedFBO(rts);
-
-		int w = c->getWidth();
-		int h = c->getHeight();
-
-		viewport.w = c->getPixelWidth();
-		viewport.h = c->getPixelHeight();
 
 		projectionMatrix = Matrix4::ortho(0.0, (float) w, 0.0, (float) h, -10.0f, 10.0f);
 	}
@@ -134,12 +123,12 @@ void RenderPass::beginPass(love::graphics::Graphics *gfx, DrawContext *context, 
 	context->builtinUniforms.projectionMatrix = projectionMatrix;
 
 	gl.bindFramebuffer(OpenGL::FRAMEBUFFER_ALL, fbo);
-	gl.setViewport(viewport);
+	gl.setViewport({0, 0, context->passPixelWidth, context->passPixelHeight});
 
 	// Make sure the correct sRGB setting is used when drawing to the canvases.
 	if (GLAD_VERSION_1_0 || GLAD_EXT_sRGB_write_control)
 	{
-		bool hasSRGBcanvas = isBackbuffer && isGammaCorrect();
+		bool hasSRGBcanvas = context->isBackbuffer && isGammaCorrect();
 
 		for (int i = 0; i < rts.colorCount; i++)
 		{
@@ -156,7 +145,7 @@ void RenderPass::beginPass(love::graphics::Graphics *gfx, DrawContext *context, 
 
 	GLbitfield clearFlags = 0;
 
-	if (isBackbuffer || rts.colorCount == 1)
+	if (context->isBackbuffer || rts.colorCount == 1)
 	{
 		clearFlags |= GL_COLOR_BUFFER_BIT;
 	}
@@ -189,7 +178,7 @@ void RenderPass::beginPass(love::graphics::Graphics *gfx, DrawContext *context, 
 			gl.setDepthWrites(hadDepthWrites);
 	}
 
-	discardIfNeeded(PASS_BEGIN, isBackbuffer);
+	discardIfNeeded(PASS_BEGIN, context->isBackbuffer);
 
 	if (gl.bugs.clearRequiresDriverTextureStateUpdate && Shader::current)
 	{
@@ -200,16 +189,16 @@ void RenderPass::beginPass(love::graphics::Graphics *gfx, DrawContext *context, 
 	}
 }
 
-void RenderPass::endPass(love::graphics::Graphics */*gfx*/, DrawContext *context, bool isBackbuffer)
+void RenderPass::endPass(DrawContext *context)
 {
 	const auto &rts = renderTargets;
 	auto depthstencil = rts.depthStencil.canvas.get();
 
-	discardIfNeeded(PASS_END, isBackbuffer);
+	discardIfNeeded(PASS_END, context->isBackbuffer);
 
 	// Resolve MSAA buffers. MSAA is only supported for 2D render targets so we
 	// don't have to worry about resolving to slices.
-	if (!isBackbuffer && rts.colorCount > 0 && rts.colors[0].canvas->getMSAA() > 1)
+	if (!context->isBackbuffer && rts.colorCount > 0 && rts.colors[0].canvas->getMSAA() > 1)
 	{
 		int mip = rts.colors[0].mipmap;
 		int w = rts.colors[0].canvas->getPixelWidth(mip);
@@ -265,18 +254,20 @@ void RenderPass::discardIfNeeded(PassState passState, bool isBackbuffer)
 	// TODO
 }
 
-void RenderPass::applyState(const RenderState &state, uint32 diff, const vertex::Attributes &attribs)
+void RenderPass::applyState(DrawContext *context)
 {
-	currentAttributes = attribs;
+	// TODO: built-in uniforms (should that be here, or somewhere else?)
+	// TODO: texture bindings?
+
+	currentAttributes = context->vertexAttributes;
+
+	uint32 diff = context->stateDiff;
+	const RenderState &state = context->state;
 
 	if (diff & STATEBIT_SHADER)
 	{
 		gl.useProgram((GLuint) state.shader->getHandle());
 	}
-
-	// TODO: built-in uniforms (should that be here, or somewhere else?)
-	// TODO: vertex attribute layout and buffer bindings?
-	// TODO: texture bindings?
 
 	if (diff & STATEBIT_BLEND)
 	{
@@ -298,13 +289,13 @@ void RenderPass::applyState(const RenderState &state, uint32 diff, const vertex:
 
 		Rect r = state.scissor.rect;
 
-		if (renderTargets.getFirstTarget().canvas.get())
+		if (context->isBackbuffer)
 			glScissor(r.x, r.y, r.w, r.h);
 		else
 		{
 			// With no Canvas active, we need to compensate for glScissor starting
 			// from the lower left of the viewport instead of the top left.
-			glScissor(r.x, 100 - (r.y + r.h), r.w, r.h); // TODO
+			glScissor(r.x, context->passPixelHeight - (r.y + r.h), r.w, r.h);
 		}
 	}
 
@@ -372,6 +363,8 @@ void RenderPass::applyState(const RenderState &state, uint32 diff, const vertex:
 	{
 		glPolygonMode(GL_FRONT_AND_BACK, state.wireframe ? GL_LINE : GL_FILL);
 	}
+
+	context->stateDiff = 0;
 }
 
 void RenderPass::draw(PrimitiveType primType, int firstVertex, int vertexCount, int instanceCount)

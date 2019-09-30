@@ -49,12 +49,12 @@ private:
 		PASS_END,
 	};
 
-	void beginPass(love::graphics::Graphics *gfx, DrawContext *context, bool isBackbuffer) override;
-	void endPass(love::graphics::Graphics *gfx, DrawContext *context, bool isBackbuffer) override;
+	void beginPass(DrawContext *context) override;
+	void endPass(DrawContext *context) override;
 
 	void discardIfNeeded(PassState passState, bool isBackbuffer);
 
-	void applyState(const RenderState &state, uint32 stateDiff, const vertex::Attributes &attribs);
+	void applyState(DrawContext *context);
 
 	vertex::Attributes currentAttributes;
 	vertex::BufferBindings currentBuffers;

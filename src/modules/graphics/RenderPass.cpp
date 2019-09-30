@@ -302,9 +302,27 @@ void RenderPass::execute(Graphics *gfx)
 		rts.depthStencil = rt;
 	}
 
-	DrawContext context(this);
+	DrawContext context;
 
-	beginPass(gfx, &context, isBackbuffer);
+	context.isBackbuffer = isBackbuffer;
+
+	if (isBackbuffer)
+	{
+		context.passWidth = gfx->getWidth();
+		context.passHeight = gfx->getHeight();
+		context.passPixelWidth = gfx->getPixelWidth();
+		context.passPixelHeight = gfx->getPixelHeight();
+	}
+	else
+	{
+		auto c = rts.getFirstTarget().canvas.get();
+		context.passWidth = c->getWidth();
+		context.passHeight = c->getHeight();
+		context.passPixelWidth = c->getPixelWidth();
+		context.passPixelHeight = c->getPixelHeight();
+	}
+
+	beginPass(&context);
 
 	for (auto cmd : commands)
 	{
@@ -411,7 +429,7 @@ void RenderPass::execute(Graphics *gfx)
 
 	gfx->flushStreamDraws();
 
-	endPass(gfx, &context, isBackbuffer);
+	endPass(&context);
 
 	if (tempDepthStencil)
 		rts.depthStencil.canvas = nullptr;

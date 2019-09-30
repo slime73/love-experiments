@@ -287,25 +287,25 @@ protected:
 
 	struct DrawContext
 	{
-		RenderPass *pass;
-
-		RenderState state;
 		uint32 stateDiff = STATEBIT_ALL;
+		RenderState state;
 
 		vertex::Attributes vertexAttributes;
 
 		BuiltinUniformData builtinUniforms;
 
-		DrawContext(RenderPass *pass)
-			: pass(pass)
-		{}
+		bool isBackbuffer = false;
+		int passWidth = 0;
+		int passHeight = 0;
+		int passPixelWidth = 0;
+		int passPixelHeight = 0;
 	};
 
 	template <typename T>
 	T *addCommand(CommandType type, size_t size = sizeof(T), size_t alignment = alignof(T));
 
-	virtual void beginPass(Graphics *gfx, DrawContext *context, bool isBackbuffer) = 0;
-	virtual void endPass(Graphics *gfx, DrawContext *context, bool isBackbuffer) = 0;
+	virtual void beginPass(DrawContext *context) = 0;
+	virtual void endPass(DrawContext *context) = 0;
 
 	void validateRenderTargets(Graphics *gfx, const RenderTargetSetup &rts) const;
 
