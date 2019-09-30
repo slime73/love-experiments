@@ -221,6 +221,7 @@ void RenderPass::setStencil()
 
 void RenderPass::setDepthMode(CompareMode compare, bool write)
 {
+	// TODO: s.render.depth
 	auto cmd = addCommand<DepthState>(COMMAND_SET_DEPTHSTATE);
 	cmd->compare = compare;
 	cmd->write = write;

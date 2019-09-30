@@ -712,29 +712,7 @@ void Shader::updateBuiltinUniforms(const BuiltinUniformData &data)
 
 	GLint location = builtinUniforms[BUILTIN_UNIFORMS_PER_DRAW];
 	if (location >= 0)
-		glUniform4fv(location, 13, (const GLfloat *) &data);
-}
-
-std::string Shader::getGLSLVersion()
-{
-	const char *tmp = (const char *) glGetString(GL_SHADING_LANGUAGE_VERSION);
-
-	if (tmp == nullptr)
-		return "0.0";
-
-	// the version string always begins with a version number of the format
-	//   major_number.minor_number
-	// or
-	//   major_number.minor_number.release_number
-	// we can keep release_number, since it does not affect the check below.
-	std::string versionstring(tmp);
-	size_t minorendpos = versionstring.find(' ');
-	return versionstring.substr(0, minorendpos);
-}
-
-bool Shader::isSupported()
-{
-	return GLAD_ES_VERSION_2_0 || (getGLSLVersion() >= "1.2");
+		glUniform4fv(location, sizeof(BuiltinUniformData) / (sizeof(float) * 4), (const GLfloat *) &data);
 }
 
 int Shader::getUniformTypeComponents(GLenum type) const

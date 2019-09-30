@@ -69,9 +69,6 @@ public:
 	void updatePointSize(float size);
 	void updateBuiltinUniforms(const BuiltinUniformData &data);
 
-	static std::string getGLSLVersion();
-	static bool isSupported();
-
 private:
 
 	struct TextureUnit
