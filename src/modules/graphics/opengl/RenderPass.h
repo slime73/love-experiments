@@ -37,6 +37,8 @@ public:
 	RenderPass(Graphics *gfx, const RenderTargetSetup &rts);
 	virtual ~RenderPass();
 
+	void applyState(DrawContext *context) override;
+
 	void draw(PrimitiveType primType, int firstVertex, int vertexCount, int instanceCount) override;
 	void draw(PrimitiveType primType, int indexCount, int instanceCount, IndexDataType indexType, Resource *indexBuffer, size_t indexOffset) override;
 	void drawQuads(int start, int count, Resource *quadIndexBuffer) override;
@@ -53,8 +55,6 @@ private:
 	void endPass(DrawContext *context) override;
 
 	void discardIfNeeded(PassState passState, bool isBackbuffer);
-
-	void applyState(DrawContext *context);
 
 	vertex::Attributes currentAttributes;
 	vertex::BufferBindings currentBuffers;

@@ -101,7 +101,7 @@ void RenderPass::beginPass(DrawContext *context)
 	int w = context->passWidth;
 	int h = context->passHeight;
 
-	Matrix4 projectionMatrix;
+	Matrix4 projection;
 
 	GLuint fbo = 0;
 
@@ -111,16 +111,16 @@ void RenderPass::beginPass(DrawContext *context)
 
 		// The projection matrix is flipped compared to rendering to a canvas,
 		// due to OpenGL considering (0,0) bottom-left instead of top-left.
-		projectionMatrix = Matrix4::ortho(0.0, (float) w, (float) h, 0.0, -10.0f, 10.0f);
+		projection = Matrix4::ortho(0.0, (float) w, (float) h, 0.0, -10.0f, 10.0f);
 	}
 	else
 	{
 //		fbo = gl.getCachedFBO(rts);
 
-		projectionMatrix = Matrix4::ortho(0.0, (float) w, 0.0, (float) h, -10.0f, 10.0f);
+		projection = Matrix4::ortho(0.0, (float) w, 0.0, (float) h, -10.0f, 10.0f);
 	}
 
-	context->builtinUniforms.projectionMatrix = projectionMatrix;
+	context->builtinUniforms.projectionMatrix = projection;
 
 	gl.bindFramebuffer(OpenGL::FRAMEBUFFER_ALL, fbo);
 	gl.setViewport({0, 0, context->passPixelWidth, context->passPixelHeight});
@@ -250,13 +250,13 @@ void RenderPass::endPass(DrawContext *context)
 
 void RenderPass::discardIfNeeded(PassState passState, bool isBackbuffer)
 {
-
 	// TODO
 }
 
 void RenderPass::applyState(DrawContext *context)
 {
 	// TODO: built-in uniforms (should that be here, or somewhere else?)
+	// TODO: vertex buffers?
 	// TODO: texture bindings?
 
 	currentAttributes = context->vertexAttributes;
@@ -287,15 +287,16 @@ void RenderPass::applyState(DrawContext *context)
 		if (state.scissor.enable != gl.isStateEnabled(OpenGL::ENABLE_SCISSOR_TEST))
 			gl.setEnableState(OpenGL::ENABLE_SCISSOR_TEST, state.scissor.enable);
 
-		Rect r = state.scissor.rect;
-
-		if (context->isBackbuffer)
-			glScissor(r.x, r.y, r.w, r.h);
-		else
+		if (state.scissor.enable)
 		{
-			// With no Canvas active, we need to compensate for glScissor starting
-			// from the lower left of the viewport instead of the top left.
-			glScissor(r.x, context->passPixelHeight - (r.y + r.h), r.w, r.h);
+			Rect r = state.scissor.rect;
+
+			// With no Canvas active, compensate for glScissor starting from the
+			// lower left of the viewport instead of the top left.
+			if (context->isBackbuffer)
+				r.y = context->passPixelHeight - (r.y + r.h);
+
+			glScissor(r.x, r.y, r.w, r.h);
 		}
 	}
 

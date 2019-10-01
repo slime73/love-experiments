@@ -331,7 +331,7 @@ void RenderPass::execute(Graphics *gfx)
 		case COMMAND_DRAW_DRAWABLE:
 		{
 			const auto c = read<CommandDrawDrawable>(data, cmd.offset);
-			c->drawable->draw(gfx, c->transform);
+			c->drawable->draw(this, &context, c->transform);
 			break;
 		}
 		case COMMAND_DRAW_QUAD:

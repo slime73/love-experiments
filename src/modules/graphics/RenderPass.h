@@ -46,6 +46,31 @@ class Mesh;
 class Shader;
 class Font;
 
+// The members in here must respect uniform buffer alignment/padding rules.
+struct BuiltinUniformData
+{
+	Matrix4 transformMatrix;
+	Matrix4 projectionMatrix;
+	Vector4 screenSizeParams;
+	Colorf constantColor;
+};
+
+struct DrawContext
+{
+	uint32 stateDiff = 0xFFFFFFFF;
+	RenderState state;
+
+	vertex::Attributes vertexAttributes;
+
+	BuiltinUniformData builtinUniforms;
+
+	bool isBackbuffer = false;
+	int passWidth = 0;
+	int passHeight = 0;
+	int passPixelWidth = 0;
+	int passPixelHeight = 0;
+};
+
 class RenderPass : public Object
 {
 public:
@@ -163,6 +188,9 @@ public:
 	void shear(float kx, float ky);
 	void origin();
 
+	// Functions called by Drawable objects during execute().
+	virtual void applyState(DrawContext *context) = 0;
+
 	virtual void draw(PrimitiveType primType, int firstVertex, int vertexCount, int instanceCount) = 0;
 	virtual void draw(PrimitiveType primType, int indexCount, int instanceCount, IndexDataType indexType, Resource *indexBuffer, size_t indexOffset) = 0;
 	virtual void drawQuads(int start, int count, Resource *quadIndexBuffer) = 0;
@@ -262,15 +290,6 @@ protected:
 		STATEBIT_ALL = 0xFFFFFFFF
 	};
 
-	// The members in here must respect uniform buffer alignment/padding rules.
-	struct BuiltinUniformData
-	{
-		Matrix4 transformMatrix;
-		Matrix4 projectionMatrix;
-		Vector4 screenSizeParams;
-		Colorf constantColor;
-	};
-
 	// All state, including high-level data that backends don't know about.
 	struct GraphicsState
 	{
@@ -283,22 +302,6 @@ protected:
 		Colorf color;
 
 		RenderState render;
-	};
-
-	struct DrawContext
-	{
-		uint32 stateDiff = STATEBIT_ALL;
-		RenderState state;
-
-		vertex::Attributes vertexAttributes;
-
-		BuiltinUniformData builtinUniforms;
-
-		bool isBackbuffer = false;
-		int passWidth = 0;
-		int passHeight = 0;
-		int passPixelWidth = 0;
-		int passPixelHeight = 0;
 	};
 
 	template <typename T>

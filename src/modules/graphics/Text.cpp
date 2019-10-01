@@ -256,10 +256,6 @@ void Text::draw(Graphics *gfx, const Matrix4 &m)
 	if (font->getTextureCacheID() != texture_cache_id)
 		regenerateVertices();
 
-	int totalverts = 0;
-	for (const Font::DrawCommand &cmd : draw_commands)
-		totalverts = std::max(cmd.startvertex + cmd.vertexcount, totalverts);
-
 	vertex_buffer->unmap(); // Make sure all pending data is flushed to the GPU.
 
 	Graphics::TempTransform transform(gfx, m);

@@ -32,6 +32,7 @@ namespace graphics
 
 class Graphics;
 class RenderPass;
+struct DrawContext;
 
 /**
  * A Drawable is anything that can be drawn on screen with a
@@ -52,6 +53,7 @@ public:
 	 * Draws the object with the specified transformation matrix.
 	 **/
 	virtual void draw(Graphics *gfx, const Matrix4 &m) = 0;
+	virtual void draw(RenderPass *pass, DrawContext *context, const Matrix4 &m) {};
 };
 
 } // graphics
