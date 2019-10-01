@@ -23,6 +23,7 @@
 #include "Quad.h"
 #include "Graphics.h"
 #include "common/memory.h"
+#include "math/Transform.h"
 
 // C++
 #include <algorithm>
@@ -255,6 +256,34 @@ void RenderPass::shear(float kx, float ky)
 void RenderPass::origin()
 {
 	transformState.back().setIdentity();
+}
+
+void RenderPass::applyTransform(love::math::Transform *transform)
+{
+	Matrix4 &m = transformState.back();
+	m *= transform->getMatrix();
+}
+
+void RenderPass::replaceTransform(love::math::Transform *transform)
+{
+	const Matrix4 &m = transform->getMatrix();
+	transformState.back() = m;
+}
+
+Vector2 RenderPass::transformPoint(Vector2 point)
+{
+	Vector2 p;
+	transformState.back().transformXY(&p, &point, 1);
+	return p;
+}
+
+Vector2 RenderPass::inverseTransformPoint(Vector2 point)
+{
+	Vector2 p;
+	// TODO: We should probably cache the inverse transform so we don't have to
+	// re-calculate it every time this is called.
+	transformState.back().inverse().transformXY(&p, &point, 1);
+	return p;
 }
 
 template <typename T>

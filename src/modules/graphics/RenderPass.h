@@ -35,6 +35,12 @@
 
 namespace love
 {
+
+namespace math
+{
+class Transform;
+}
+
 namespace graphics
 {
 
@@ -187,6 +193,12 @@ public:
 	void translate(float x, float y);
 	void shear(float kx, float ky);
 	void origin();
+
+	void applyTransform(love::math::Transform *transform);
+	void replaceTransform(love::math::Transform *transform);
+
+	Vector2 transformPoint(Vector2 point);
+	Vector2 inverseTransformPoint(Vector2 point);
 
 	// Functions called by Drawable objects during execute().
 	virtual void applyState(DrawContext *context) = 0;
