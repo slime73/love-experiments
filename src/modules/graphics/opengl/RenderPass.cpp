@@ -68,6 +68,23 @@ static GLenum getGLBlendFactor(BlendFactor factor)
 	return 0;
 }
 
+static GLenum getGLCompareMode(CompareMode mode)
+{
+	switch (mode)
+	{
+		case COMPARE_LESS: return GL_LESS;
+		case COMPARE_LEQUAL: return GL_LEQUAL;
+		case COMPARE_EQUAL: return GL_EQUAL;
+		case COMPARE_GEQUAL: return GL_GEQUAL;
+		case COMPARE_GREATER: return GL_GREATER;
+		case COMPARE_NOTEQUAL: return GL_NOTEQUAL;
+		case COMPARE_ALWAYS: return GL_ALWAYS;
+		case COMPARE_NEVER: return GL_NEVER;
+		case COMPARE_MAX_ENUM: return 0;
+	}
+	return 0;
+}
+
 static GLenum getGLStencilAction(StencilAction action)
 {
 	switch (action)
@@ -81,6 +98,30 @@ static GLenum getGLStencilAction(StencilAction action)
 		case STENCIL_DECREMENT_WRAP: return GL_DECR_WRAP;
 		case STENCIL_INVERT: return GL_INVERT;
 		case STENCIL_MAX_ENUM: return 0;
+	}
+	return 0;
+}
+
+static GLenum getGLPrimitiveType(PrimitiveType type)
+{
+	switch (type)
+	{
+		case PRIMITIVE_TRIANGLES: return GL_TRIANGLES;
+		case PRIMITIVE_TRIANGLE_STRIP: return GL_TRIANGLE_STRIP;
+		case PRIMITIVE_TRIANGLE_FAN: return GL_TRIANGLE_FAN;
+		case PRIMITIVE_POINTS: return GL_POINTS;
+		case PRIMITIVE_MAX_ENUM: return 0;
+	}
+	return 0;
+}
+
+static GLenum getGLIndexDataType(IndexDataType type)
+{
+	switch (type)
+	{
+		case INDEX_UINT16: return GL_UNSIGNED_SHORT;
+		case INDEX_UINT32: return GL_UNSIGNED_INT;
+		case INDEX_MAX_ENUM: return 0;
 	}
 	return 0;
 }
@@ -187,6 +228,9 @@ void RenderPass::beginPass(DrawContext *context)
 		gl.useProgram(0);
 		gl.useProgram((GLuint) Shader::current->getHandle());
 	}
+
+	// The behaviour of these depend on whether the backbuffer is active.
+	context->stateDiff |= STATEBIT_SCISSOR | STATEBIT_FACEWINDING;
 }
 
 void RenderPass::endPass(DrawContext *context)
@@ -310,7 +354,7 @@ void RenderPass::applyState(DrawContext *context)
 
 		if (depthenable)
 		{
-			glDepthFunc(OpenGL::getGLCompareMode(depth.compare));
+			glDepthFunc(getGLCompareMode(depth.compare));
 			gl.setDepthWrites(depth.write);
 		}
 	}
@@ -332,7 +376,7 @@ void RenderPass::applyState(DrawContext *context)
 		 * setStencilTest(COMPARE_GREATER, 4) will make it pass if the stencil
 		 * buffer has a value greater than 4.
 		 **/
-		GLenum glcompare = OpenGL::getGLCompareMode(getReversedCompareMode(stencil.compare));
+		GLenum glcompare = getGLCompareMode(getReversedCompareMode(stencil.compare));
 		GLenum glaction = getGLStencilAction(stencil.action);
 
 		glStencilFunc(glcompare, stencil.value, stencil.readMask);
@@ -348,7 +392,7 @@ void RenderPass::applyState(DrawContext *context)
 	if (diff & STATEBIT_FACEWINDING)
 	{
 		vertex::Winding winding = state.winding;
-		if (renderTargets.getFirstTarget().canvas.get())
+		if (!context->isBackbuffer)
 			winding = winding == vertex::WINDING_CW ? vertex::WINDING_CCW : vertex::WINDING_CW;
 
 		glFrontFace(winding == vertex::WINDING_CW ? GL_CW : GL_CCW);
@@ -372,7 +416,7 @@ void RenderPass::draw(PrimitiveType primType, int firstVertex, int vertexCount, 
 {
 	gl.setVertexAttributes(currentAttributes, currentBuffers);
 
-	GLenum glprimtype = OpenGL::getGLPrimitiveType(primType);
+	GLenum glprimtype = getGLPrimitiveType(primType);
 
 	if (instanceCount > 1)
 		glDrawArraysInstanced(glprimtype, firstVertex, vertexCount, instanceCount);
@@ -385,8 +429,8 @@ void RenderPass::draw(PrimitiveType primType, int indexCount, int instanceCount,
 	gl.setVertexAttributes(currentAttributes, currentBuffers);
 
 	const void *gloffset = BUFFER_OFFSET(indexOffset);
-	GLenum glprimtype = OpenGL::getGLPrimitiveType(primType);
-	GLenum gldatatype = OpenGL::getGLIndexDataType(indexType);
+	GLenum glprimtype = getGLPrimitiveType(primType);
+	GLenum gldatatype = getGLIndexDataType(indexType);
 
 	gl.bindBuffer(BUFFER_INDEX, indexBuffer->getHandle());
 
