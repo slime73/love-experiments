@@ -143,7 +143,6 @@ void RenderPass::beginPass(DrawContext *context)
 	int h = context->passHeight;
 
 	Matrix4 projection;
-
 	GLuint fbo = 0;
 
 	if (context->isBackbuffer)
@@ -186,13 +185,50 @@ void RenderPass::beginPass(DrawContext *context)
 
 	GLbitfield clearFlags = 0;
 
-	if (context->isBackbuffer || rts.colorCount == 1)
+	if ((context->isBackbuffer || rts.colorCount == 1) && rts.colors[0].beginAction == BEGIN_CLEAR)
 	{
+		Colorf c = rts.colors[0].clearColor;
+		gammaCorrectColor(c);
+		glClearColor(c.r, c.g, c.b, c.a);
 		clearFlags |= GL_COLOR_BUFFER_BIT;
 	}
 	else if (rts.colorCount > 0)
 	{
+		bool drawbuffersmodified = false;
 
+		for (int i = 0; i < rts.colorCount; i++)
+		{
+			if (rts.colors[i].beginAction != BEGIN_CLEAR)
+				continue;
+
+			Colorf c = rts.colors[i].clearColor;
+			gammaCorrectColor(c);
+
+			if (GLAD_ES_VERSION_3_0 || GLAD_VERSION_3_0)
+			{
+				const GLfloat carray[] = {c.r, c.g, c.b, c.a};
+				glClearBufferfv(GL_COLOR, i, carray);
+			}
+			else
+			{
+				glDrawBuffer(GL_COLOR_ATTACHMENT0 + i);
+				glClearColor(c.r, c.g, c.b, c.a);
+				glClear(GL_COLOR_BUFFER_BIT);
+
+				drawbuffersmodified = true;
+			}
+		}
+
+		// Revert to the expected draw buffers once we're done, if glClearBuffer
+		// wasn't supported.
+		if (drawbuffersmodified)
+		{
+			GLenum bufs[MAX_COLOR_RENDER_TARGETS];
+			for (int i = 0; i < rts.colorCount; i++)
+				bufs[i] = GL_COLOR_ATTACHMENT0 + i;
+
+			glDrawBuffers(rts.colorCount, bufs);
+		}
 	}
 
 	bool hadDepthWrites = gl.hasDepthWrites();
@@ -404,7 +440,7 @@ void RenderPass::applyState(DrawContext *context)
 		glColorMask(mask.r, mask.g, mask.b, mask.a);
 	}
 
-	if (diff & STATEBIT_WIREFRAME && !GLAD_ES_VERSION_2_0)
+	if ((diff & STATEBIT_WIREFRAME) && !GLAD_ES_VERSION_2_0)
 	{
 		glPolygonMode(GL_FRONT_AND_BACK, state.wireframe ? GL_LINE : GL_FILL);
 	}
