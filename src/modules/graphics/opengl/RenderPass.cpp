@@ -328,9 +328,51 @@ void RenderPass::endPass(DrawContext *context)
 	}
 }
 
+bool RenderPass::shouldDiscard(const RenderTarget &rt, PassState passState) const
+{
+	if (passState == PASS_BEGIN)
+		return rt.beginAction == BEGIN_DISCARD;
+	else if (passState == PASS_END)
+		return rt.endAction == END_DISCARD;
+	return false;
+}
+
 void RenderPass::discardIfNeeded(PassState passState, bool isBackbuffer)
 {
-	// TODO
+	if (!(GLAD_VERSION_4_3 || GLAD_ARB_invalidate_subdata || GLAD_ES_VERSION_3_0 || GLAD_EXT_discard_framebuffer))
+		return;
+
+	const auto &rts = renderTargets;
+
+	GLenum attachments[MAX_COLOR_RENDER_TARGETS + 2];
+	int attachmentcount = 0;
+
+	// glDiscardFramebuffer uses different attachment enums for the default FBO.
+	bool defaultFBO0 = isBackbuffer && gl.getDefaultFBO() == 0;
+
+	GLenum colorname = defaultFBO0 ? GL_COLOR : GL_COLOR_ATTACHMENT0;
+	GLenum depthname = defaultFBO0 ? GL_DEPTH : GL_DEPTH_ATTACHMENT;
+	GLenum stencilname = defaultFBO0 ? GL_STENCIL : GL_STENCIL_ATTACHMENT;
+
+	int colorCount = isBackbuffer ? 1 : rts.colorCount;
+	for (int i = 0; i < colorCount; i++)
+	{
+		if (shouldDiscard(rts.colors[i], passState))
+			attachments[attachmentcount++] = colorname + i;
+	}
+
+	if (shouldDiscard(rts.depthStencil, passState))
+	{
+		attachments[attachmentcount++] = depthname;
+		attachments[attachmentcount++] = stencilname;
+	}
+
+	if (attachmentcount == 0)
+		return;
+	else if (GLAD_VERSION_4_3 || GLAD_ARB_invalidate_subdata || GLAD_ES_VERSION_3_0)
+		glInvalidateFramebuffer(GL_FRAMEBUFFER, attachmentcount, attachments);
+	else if (GLAD_EXT_discard_framebuffer)
+		glDiscardFramebufferEXT(GL_FRAMEBUFFER, attachmentcount, attachments);
 }
 
 void RenderPass::applyState(DrawContext *context)

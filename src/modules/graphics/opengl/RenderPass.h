@@ -54,6 +54,7 @@ private:
 	void beginPass(DrawContext *context) override;
 	void endPass(DrawContext *context) override;
 
+	bool shouldDiscard(const RenderTarget &rt, PassState passState) const;
 	void discardIfNeeded(PassState passState, bool isBackbuffer);
 
 	vertex::Attributes currentAttributes;
