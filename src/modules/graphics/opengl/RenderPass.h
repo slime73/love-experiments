@@ -51,11 +51,11 @@ private:
 		PASS_END,
 	};
 
-	void beginPass(DrawContext *context) override;
-	void endPass(DrawContext *context) override;
-
 	bool shouldDiscard(const RenderTarget &rt, PassState passState) const;
 	void discardIfNeeded(PassState passState, bool isBackbuffer);
+
+	void beginPass(DrawContext *context) override;
+	void endPass(DrawContext *context) override;
 
 	vertex::Attributes currentAttributes;
 	vertex::BufferBindings currentBuffers;

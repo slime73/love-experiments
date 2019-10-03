@@ -135,6 +135,52 @@ RenderPass::~RenderPass()
 {
 }
 
+bool RenderPass::shouldDiscard(const RenderTarget &rt, PassState passState) const
+{
+	if (passState == PASS_BEGIN)
+		return rt.beginAction == BEGIN_DISCARD;
+	else if (passState == PASS_END)
+		return rt.endAction == END_DISCARD;
+	return false;
+}
+
+void RenderPass::discardIfNeeded(PassState passState, bool isBackbuffer)
+{
+	if (!(GLAD_VERSION_4_3 || GLAD_ARB_invalidate_subdata || GLAD_ES_VERSION_3_0 || GLAD_EXT_discard_framebuffer))
+		return;
+
+	const auto &rts = renderTargets;
+
+	GLenum attachments[MAX_COLOR_RENDER_TARGETS + 2];
+	int attachmentcount = 0;
+
+	// glDiscardFramebuffer uses different attachment enums for the default FBO.
+	bool defaultFBO0 = isBackbuffer && gl.getDefaultFBO() == 0;
+
+	GLenum colorname = defaultFBO0 ? GL_COLOR : GL_COLOR_ATTACHMENT0;
+	GLenum depthname = defaultFBO0 ? GL_DEPTH : GL_DEPTH_ATTACHMENT;
+	GLenum stencilname = defaultFBO0 ? GL_STENCIL : GL_STENCIL_ATTACHMENT;
+
+	for (int i = 0; i < rts.colorCount; i++)
+	{
+		if (shouldDiscard(rts.colors[i], passState))
+			attachments[attachmentcount++] = colorname + i;
+	}
+
+	if (shouldDiscard(rts.depthStencil, passState))
+	{
+		attachments[attachmentcount++] = depthname;
+		attachments[attachmentcount++] = stencilname;
+	}
+
+	if (attachmentcount == 0)
+		return;
+	else if (GLAD_VERSION_4_3 || GLAD_ARB_invalidate_subdata || GLAD_ES_VERSION_3_0)
+		glInvalidateFramebuffer(GL_FRAMEBUFFER, attachmentcount, attachments);
+	else if (GLAD_EXT_discard_framebuffer)
+		glDiscardFramebufferEXT(GL_FRAMEBUFFER, attachmentcount, attachments);
+}
+
 void RenderPass::beginPass(DrawContext *context)
 {
 	const auto &rts = renderTargets;
@@ -172,7 +218,8 @@ void RenderPass::beginPass(DrawContext *context)
 
 		for (int i = 0; i < rts.colorCount; i++)
 		{
-			if (rts.colors[i].canvas->getPixelFormat() == PIXELFORMAT_sRGBA8)
+			auto c = rts.colors[i].canvas.get();
+			if (c != nullptr && c->getPixelFormat() == PIXELFORMAT_sRGBA8)
 			{
 				hasSRGBcanvas = true;
 				break;
@@ -183,12 +230,18 @@ void RenderPass::beginPass(DrawContext *context)
 			gl.setEnableState(OpenGL::ENABLE_FRAMEBUFFER_SRGB, hasSRGBcanvas);
 	}
 
+	// glScissor affects glClear.
+	if (gl.isStateEnabled(OpenGL::ENABLE_SCISSOR_TEST))
+	{
+		gl.setEnableState(OpenGL::ENABLE_SCISSOR_TEST, false);
+		context->stateDiff |= STATEBIT_SCISSOR;
+	}
+
 	GLbitfield clearFlags = 0;
 
-	if ((context->isBackbuffer || rts.colorCount == 1) && rts.colors[0].beginAction == BEGIN_CLEAR)
+	if (rts.colorCount == 1 && rts.colors[0].beginAction == BEGIN_CLEAR)
 	{
-		Colorf c = rts.colors[0].clearColor;
-		gammaCorrectColor(c);
+		Colorf c = gammaCorrectColor(rts.colors[0].clearColor);
 		glClearColor(c.r, c.g, c.b, c.a);
 		clearFlags |= GL_COLOR_BUFFER_BIT;
 	}
@@ -201,8 +254,7 @@ void RenderPass::beginPass(DrawContext *context)
 			if (rts.colors[i].beginAction != BEGIN_CLEAR)
 				continue;
 
-			Colorf c = rts.colors[i].clearColor;
-			gammaCorrectColor(c);
+			Colorf c = gammaCorrectColor(rts.colors[i].clearColor);
 
 			if (GLAD_ES_VERSION_3_0 || GLAD_VERSION_3_0)
 			{
@@ -231,29 +283,39 @@ void RenderPass::beginPass(DrawContext *context)
 		}
 	}
 
-	bool hadDepthWrites = gl.hasDepthWrites();
-
 	if (rts.depthStencil.beginAction == BEGIN_CLEAR)
 	{
-		if (!hadDepthWrites) // glDepthMask also affects glClear.
-			gl.setDepthWrites(true);
+		// TODO: backbuffer depth/stencil pixel format.
+		PixelFormat format = PIXELFORMAT_UNKNOWN;
+		if (rts.depthStencil.canvas.get())
+			format = rts.depthStencil.canvas->getPixelFormat();
 
-		glStencilMask(0xFFFFFFFF);
+		if (isPixelFormatDepth(format))
+		{
+			// glDepthMask affects glClear.
+			if (!gl.hasDepthWrites())
+			{
+				gl.setDepthWrites(true);
+				context->stateDiff |= STATEBIT_DEPTH;
+			}
 
-		clearFlags |= GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT;
+			gl.clearDepth(rts.depthStencil.clearDepth);
+			clearFlags |= GL_DEPTH_BUFFER_BIT;
+		}
 
-		gl.clearDepth(rts.depthStencil.clearDepth);
-		glClearStencil(rts.depthStencil.clearStencil);
+		if (isPixelFormatStencil(format))
+		{
+			// glStencilMask affects glClear.
+			glStencilMask(0xFFFFFFFF);
+			context->stateDiff |= STATEBIT_STENCIL;
+
+			glClearStencil(rts.depthStencil.clearStencil);
+			clearFlags |= GL_STENCIL_BUFFER_BIT;
+		}
 	}
 
 	if (clearFlags != 0)
 		glClear(clearFlags);
-
-	if (rts.depthStencil.beginAction == BEGIN_CLEAR)
-	{
-		if (!hadDepthWrites)
-			gl.setDepthWrites(hadDepthWrites);
-	}
 
 	discardIfNeeded(PASS_BEGIN, context->isBackbuffer);
 
@@ -316,63 +378,14 @@ void RenderPass::endPass(DrawContext *context)
 			PixelFormat format = depthstencil->getPixelFormat();
 
 			GLbitfield mask = 0;
-
 			if (isPixelFormatDepth(format))
 				mask |= GL_DEPTH_BUFFER_BIT;
 			if (isPixelFormatStencil(format))
 				mask |= GL_STENCIL_BUFFER_BIT;
 
-			if (mask != 0)
-				glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, mask, GL_NEAREST);
+			glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, mask, GL_NEAREST);
 		}
 	}
-}
-
-bool RenderPass::shouldDiscard(const RenderTarget &rt, PassState passState) const
-{
-	if (passState == PASS_BEGIN)
-		return rt.beginAction == BEGIN_DISCARD;
-	else if (passState == PASS_END)
-		return rt.endAction == END_DISCARD;
-	return false;
-}
-
-void RenderPass::discardIfNeeded(PassState passState, bool isBackbuffer)
-{
-	if (!(GLAD_VERSION_4_3 || GLAD_ARB_invalidate_subdata || GLAD_ES_VERSION_3_0 || GLAD_EXT_discard_framebuffer))
-		return;
-
-	const auto &rts = renderTargets;
-
-	GLenum attachments[MAX_COLOR_RENDER_TARGETS + 2];
-	int attachmentcount = 0;
-
-	// glDiscardFramebuffer uses different attachment enums for the default FBO.
-	bool defaultFBO0 = isBackbuffer && gl.getDefaultFBO() == 0;
-
-	GLenum colorname = defaultFBO0 ? GL_COLOR : GL_COLOR_ATTACHMENT0;
-	GLenum depthname = defaultFBO0 ? GL_DEPTH : GL_DEPTH_ATTACHMENT;
-	GLenum stencilname = defaultFBO0 ? GL_STENCIL : GL_STENCIL_ATTACHMENT;
-
-	int colorCount = isBackbuffer ? 1 : rts.colorCount;
-	for (int i = 0; i < colorCount; i++)
-	{
-		if (shouldDiscard(rts.colors[i], passState))
-			attachments[attachmentcount++] = colorname + i;
-	}
-
-	if (shouldDiscard(rts.depthStencil, passState))
-	{
-		attachments[attachmentcount++] = depthname;
-		attachments[attachmentcount++] = stencilname;
-	}
-
-	if (attachmentcount == 0)
-		return;
-	else if (GLAD_VERSION_4_3 || GLAD_ARB_invalidate_subdata || GLAD_ES_VERSION_3_0)
-		glInvalidateFramebuffer(GL_FRAMEBUFFER, attachmentcount, attachments);
-	else if (GLAD_EXT_discard_framebuffer)
-		glDiscardFramebufferEXT(GL_FRAMEBUFFER, attachmentcount, attachments);
 }
 
 void RenderPass::applyState(DrawContext *context)
