@@ -105,8 +105,8 @@ public:
 
 	enum RenderTargetFlags
 	{
-		RT_TEMPORARY_DEPTH   = (1 << 0),
-		RT_TEMPORARY_STENCIL = (1 << 1),
+		RT_AUTO_DEPTH   = (1 << 0),
+		RT_AUTO_STENCIL = (1 << 1),
 	};
 
 	enum BeginAction

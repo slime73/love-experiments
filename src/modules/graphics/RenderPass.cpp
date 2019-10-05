@@ -296,16 +296,35 @@ void RenderPass::execute(Graphics *gfx)
 {
 	auto &rts = renderTargets;
 
-	bool isBackbuffer = rts.isBackbuffer();
+	DrawContext context;
+	context.isBackbuffer = rts.isBackbuffer();
+
+	if (context.isBackbuffer)
+	{
+		context.passWidth = gfx->getWidth();
+		context.passHeight = gfx->getHeight();
+		context.passPixelWidth = gfx->getPixelWidth();
+		context.passPixelHeight = gfx->getPixelHeight();
+	}
+	else
+	{
+		const auto &rt = rts.getFirstTarget();
+		auto c = rt.canvas.get();
+		context.passWidth = c->getWidth(rt.mipmap);
+		context.passHeight = c->getHeight(rt.mipmap);
+		context.passPixelWidth = c->getPixelWidth(rt.mipmap);
+		context.passPixelHeight = c->getPixelHeight(rt.mipmap);
+	}
+
 	bool tempDepthStencil = false;
 
-	if (!isBackbuffer && (rts.flags & (RT_TEMPORARY_DEPTH | RT_TEMPORARY_STENCIL)) != 0)
+	if (!context.isBackbuffer && (rts.flags & (RT_AUTO_DEPTH | RT_AUTO_STENCIL)) != 0)
 		tempDepthStencil = true;
 
 	if (tempDepthStencil)
 	{
-		bool wantsDepth   = (rts.flags & RT_TEMPORARY_DEPTH) != 0;
-		bool wantsStencil = (rts.flags & RT_TEMPORARY_STENCIL) != 0;
+		bool wantsDepth   = (rts.flags & RT_AUTO_DEPTH) != 0;
+		bool wantsStencil = (rts.flags & RT_AUTO_STENCIL) != 0;
 
 		PixelFormat dsformat = PIXELFORMAT_STENCIL8;
 		if (wantsDepth && wantsStencil)
@@ -320,8 +339,8 @@ void RenderPass::execute(Graphics *gfx)
 			dsformat = PIXELFORMAT_STENCIL8;
 
 		Canvas *colorcanvas = rts.colors[0].canvas.get();
-		int pixelw = colorcanvas->getPixelWidth();
-		int pixelh = colorcanvas->getPixelHeight();
+		int pixelw = context.passPixelWidth;
+		int pixelh = context.passPixelHeight;
 		int reqmsaa = colorcanvas->getRequestedMSAA();
 
 		RenderTarget rt;
@@ -329,26 +348,6 @@ void RenderPass::execute(Graphics *gfx)
 		rt.beginAction = BEGIN_CLEAR;
 		rt.endAction = END_DISCARD;
 		rts.depthStencil = rt;
-	}
-
-	DrawContext context;
-
-	context.isBackbuffer = isBackbuffer;
-
-	if (isBackbuffer)
-	{
-		context.passWidth = gfx->getWidth();
-		context.passHeight = gfx->getHeight();
-		context.passPixelWidth = gfx->getPixelWidth();
-		context.passPixelHeight = gfx->getPixelHeight();
-	}
-	else
-	{
-		auto c = rts.getFirstTarget().canvas.get();
-		context.passWidth = c->getWidth();
-		context.passHeight = c->getHeight();
-		context.passPixelWidth = c->getPixelWidth();
-		context.passPixelHeight = c->getPixelHeight();
 	}
 
 	beginPass(&context);
