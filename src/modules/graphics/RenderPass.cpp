@@ -33,7 +33,7 @@ namespace love
 namespace graphics
 {
 
-RenderPass::RenderPass(Graphics *gfx, const RenderTargetSetup &rts)
+RenderPass::RenderPass(Graphics *gfx, const RenderPassAttachments &rts)
 	: data(nullptr)
 	, dataSize(0)
 	, currentOffset(0)
@@ -93,7 +93,7 @@ void RenderPass::reset()
 	transformState.emplace_back();
 }
 
-void RenderPass::reset(Graphics *gfx, const RenderTargetSetup &rts)
+void RenderPass::reset(Graphics *gfx, const RenderPassAttachments &rts)
 {
 	validateRenderTargets(gfx, rts);
 	reset();
@@ -294,10 +294,11 @@ static const T *read(const uint8 *buffer, size_t offset)
 
 void RenderPass::execute(Graphics *gfx)
 {
-	auto &rts = renderTargets;
-
 	DrawContext context;
-	context.isBackbuffer = rts.isBackbuffer();
+	context.renderTargets = renderTargets;
+	context.isBackbuffer = context.renderTargets.isBackbuffer();
+
+	auto &rts = context.renderTargets;
 
 	if (context.isBackbuffer)
 	{
@@ -316,26 +317,14 @@ void RenderPass::execute(Graphics *gfx)
 		context.passPixelHeight = c->getPixelHeight(rt.mipmap);
 	}
 
-	bool tempDepthStencil = false;
-
-	if (!context.isBackbuffer && (rts.flags & (RT_AUTO_DEPTH | RT_AUTO_STENCIL)) != 0)
-		tempDepthStencil = true;
-
-	if (tempDepthStencil)
+	if (!context.isBackbuffer && (rts.autoDepth || rts.autoStencil) && !rts.depthStencil.canvas.get())
 	{
-		bool wantsDepth   = (rts.flags & RT_AUTO_DEPTH) != 0;
-		bool wantsStencil = (rts.flags & RT_AUTO_STENCIL) != 0;
-
 		PixelFormat dsformat = PIXELFORMAT_STENCIL8;
-		if (wantsDepth && wantsStencil)
+		if (rts.autoDepth && rts.autoStencil)
 			dsformat = PIXELFORMAT_DEPTH24_STENCIL8;
-		else if (wantsDepth && gfx->isCanvasFormatSupported(PIXELFORMAT_DEPTH24, false))
+		else if (rts.autoDepth && gfx->isCanvasFormatSupported(PIXELFORMAT_DEPTH24, false))
 			dsformat = PIXELFORMAT_DEPTH24;
-		else if (wantsDepth && gfx->isCanvasFormatSupported(PIXELFORMAT_DEPTH32F, false))
-			dsformat = PIXELFORMAT_DEPTH32F;
-		else if (wantsDepth)
-			dsformat = PIXELFORMAT_DEPTH16;
-		else if (wantsStencil)
+		else if (rts.autoStencil)
 			dsformat = PIXELFORMAT_STENCIL8;
 
 		Canvas *colorcanvas = rts.colors[0].canvas.get();
@@ -343,11 +332,9 @@ void RenderPass::execute(Graphics *gfx)
 		int pixelh = context.passPixelHeight;
 		int reqmsaa = colorcanvas->getRequestedMSAA();
 
-		RenderTarget rt;
-		rt.canvas = gfx->getTemporaryCanvas(dsformat, pixelw, pixelh, reqmsaa);
-		rt.beginAction = BEGIN_CLEAR;
-		rt.endAction = END_DISCARD;
-		rts.depthStencil = rt;
+		rts.depthStencil.canvas = gfx->getTemporaryCanvas(dsformat, pixelw, pixelh, reqmsaa);
+		rts.depthStencil.beginAction = RenderPassAttachment::BEGIN_CLEAR;
+		rts.depthStencil.endAction = RenderPassAttachment::END_DISCARD;
 	}
 
 	beginPass(&context);
@@ -459,9 +446,6 @@ void RenderPass::execute(Graphics *gfx)
 
 	endPass(&context);
 
-	if (tempDepthStencil)
-		rts.depthStencil.canvas = nullptr;
-
 	for (int i = 0; i < rts.colorCount; i++)
 	{
 		const auto &rt = rts.colors[i];
@@ -474,10 +458,10 @@ void RenderPass::execute(Graphics *gfx)
 		ds.canvas->generateMipmaps();
 }
 
-void RenderPass::validateRenderTargets(Graphics *gfx, const RenderTargetSetup &rts) const
+void RenderPass::validateRenderTargets(Graphics *gfx, const RenderPassAttachments &rts) const
 {
 	const auto &caps = gfx->getCapabilities();
-	RenderTarget firsttarget = rts.getFirstTarget();
+	const auto &firsttarget = rts.getFirstTarget();
 	love::graphics::Canvas *firstcanvas = firsttarget.canvas;
 	int ncolors = rts.colorCount;
 

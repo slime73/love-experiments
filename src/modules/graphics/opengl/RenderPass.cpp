@@ -126,7 +126,7 @@ static GLenum getGLIndexDataType(IndexDataType type)
 	return 0;
 }
 
-RenderPass::RenderPass(love::graphics::Graphics *gfx, const RenderTargetSetup &rts)
+RenderPass::RenderPass(love::graphics::Graphics *gfx, const RenderPassAttachments &rts)
 	: love::graphics::RenderPass(gfx, rts)
 {
 }
@@ -135,27 +135,27 @@ RenderPass::~RenderPass()
 {
 }
 
-bool RenderPass::shouldDiscard(const RenderTarget &rt, PassState passState) const
+bool RenderPass::shouldDiscard(const RenderPassAttachment &rt, PassState passState) const
 {
 	if (passState == PASS_BEGIN)
-		return rt.beginAction == BEGIN_DISCARD;
+		return rt.beginAction == RenderPassAttachment::BEGIN_DISCARD;
 	else if (passState == PASS_END)
-		return rt.endAction == END_DISCARD;
+		return rt.endAction == RenderPassAttachment::END_DISCARD;
 	return false;
 }
 
-void RenderPass::discardIfNeeded(PassState passState, bool isBackbuffer)
+void RenderPass::discardIfNeeded(DrawContext *context, PassState passState)
 {
 	if (!(GLAD_VERSION_4_3 || GLAD_ARB_invalidate_subdata || GLAD_ES_VERSION_3_0 || GLAD_EXT_discard_framebuffer))
 		return;
 
-	const auto &rts = renderTargets;
+	const auto &rts = context->renderTargets;
 
-	GLenum attachments[MAX_COLOR_RENDER_TARGETS + 2];
+	GLenum attachments[RenderPassAttachments::MAX_COLOR_RENDER_TARGETS + 2];
 	int attachmentcount = 0;
 
 	// glDiscardFramebuffer uses different attachment enums for the default FBO.
-	bool defaultFBO0 = isBackbuffer && gl.getDefaultFBO() == 0;
+	bool defaultFBO0 = context->isBackbuffer && gl.getDefaultFBO() == 0;
 
 	GLenum colorname = defaultFBO0 ? GL_COLOR : GL_COLOR_ATTACHMENT0;
 	GLenum depthname = defaultFBO0 ? GL_DEPTH : GL_DEPTH_ATTACHMENT;
@@ -183,7 +183,9 @@ void RenderPass::discardIfNeeded(PassState passState, bool isBackbuffer)
 
 void RenderPass::beginPass(DrawContext *context)
 {
-	const auto &rts = renderTargets;
+	typedef RenderPassAttachment Attachment;
+
+	const auto &rts = context->renderTargets;
 
 	int w = context->passWidth;
 	int h = context->passHeight;
@@ -251,7 +253,7 @@ void RenderPass::beginPass(DrawContext *context)
 
 	GLbitfield clearFlags = 0;
 
-	if (rts.colorCount == 1 && rts.colors[0].beginAction == BEGIN_CLEAR)
+	if (rts.colorCount == 1 && rts.colors[0].beginAction == Attachment::BEGIN_CLEAR)
 	{
 		Colorf c = gammaCorrectColor(rts.colors[0].clearColor);
 		glClearColor(c.r, c.g, c.b, c.a);
@@ -263,7 +265,7 @@ void RenderPass::beginPass(DrawContext *context)
 
 		for (int i = 0; i < rts.colorCount; i++)
 		{
-			if (rts.colors[i].beginAction != BEGIN_CLEAR)
+			if (rts.colors[i].beginAction != Attachment::BEGIN_CLEAR)
 				continue;
 
 			Colorf c = gammaCorrectColor(rts.colors[i].clearColor);
@@ -295,12 +297,14 @@ void RenderPass::beginPass(DrawContext *context)
 		}
 	}
 
-	if (rts.depthStencil.beginAction == BEGIN_CLEAR)
+	if (rts.depthStencil.beginAction == Attachment::BEGIN_CLEAR)
 	{
 		// TODO: backbuffer depth/stencil pixel format.
 		PixelFormat format = PIXELFORMAT_UNKNOWN;
 		if (rts.depthStencil.canvas.get())
 			format = rts.depthStencil.canvas->getPixelFormat();
+		else if (context->isBackbuffer)
+			format = PIXELFORMAT_DEPTH24_STENCIL8;;
 
 		if (isPixelFormatDepth(format))
 		{
@@ -329,7 +333,7 @@ void RenderPass::beginPass(DrawContext *context)
 	if (clearFlags != 0)
 		glClear(clearFlags);
 
-	discardIfNeeded(PASS_BEGIN, context->isBackbuffer);
+	discardIfNeeded(context, PASS_BEGIN);
 
 	if (gl.bugs.clearRequiresDriverTextureStateUpdate && Shader::current)
 	{
@@ -345,10 +349,10 @@ void RenderPass::beginPass(DrawContext *context)
 
 void RenderPass::endPass(DrawContext *context)
 {
-	const auto &rts = renderTargets;
+	const auto &rts = context->renderTargets;
 	auto depthstencil = rts.depthStencil.canvas.get();
 
-	discardIfNeeded(PASS_END, context->isBackbuffer);
+	discardIfNeeded(context, PASS_END);
 
 	// Resolve MSAA buffers. MSAA is only supported for 2D render targets so we
 	// don't have to worry about resolving to slices.

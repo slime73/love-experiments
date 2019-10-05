@@ -34,7 +34,7 @@ class RenderPass : public love::graphics::RenderPass
 {
 public:
 
-	RenderPass(Graphics *gfx, const RenderTargetSetup &rts);
+	RenderPass(Graphics *gfx, const RenderPassAttachments &rts);
 	virtual ~RenderPass();
 
 	void applyState(DrawContext *context) override;
@@ -51,8 +51,8 @@ private:
 		PASS_END,
 	};
 
-	bool shouldDiscard(const RenderTarget &rt, PassState passState) const;
-	void discardIfNeeded(PassState passState, bool isBackbuffer);
+	bool shouldDiscard(const RenderPassAttachment &rt, PassState passState) const;
+	void discardIfNeeded(DrawContext *context, PassState passState);
 
 	void beginPass(DrawContext *context) override;
 	void endPass(DrawContext *context) override;

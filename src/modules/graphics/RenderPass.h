@@ -52,6 +52,58 @@ class Mesh;
 class Shader;
 class Font;
 
+struct RenderPassAttachment
+{
+	enum BeginAction
+	{
+		BEGIN_LOAD,
+		BEGIN_CLEAR,
+		BEGIN_DISCARD,
+		BEGIN_MAX_ENUM
+	};
+
+	enum EndAction
+	{
+		END_STORE,
+		END_DISCARD,
+		END_MAX_ENUM
+	};
+
+	StrongRef<Canvas> canvas;
+	int slice = 0;
+	int mipmap = 0;
+
+	BeginAction beginAction = BEGIN_LOAD;
+	EndAction endAction = END_STORE;
+
+	Colorf clearColor;
+	double clearDepth = 1.0;
+	int clearStencil = 0;
+};
+
+struct RenderPassAttachments
+{
+	static const int MAX_COLOR_RENDER_TARGETS = 8;
+
+	RenderPassAttachment colors[MAX_COLOR_RENDER_TARGETS] = {};
+	int colorCount = 0;
+
+	RenderPassAttachment depthStencil;
+
+	bool autoDepth = false;
+	bool autoStencil = false;
+
+	const RenderPassAttachment &getFirstTarget() const
+	{
+		return colorCount > 0 ? colors[0] : depthStencil;
+	}
+
+	bool isBackbuffer() const
+	{
+		return getFirstTarget().canvas.get() == nullptr;
+	}
+};
+
 // The members in here must respect uniform buffer alignment/padding rules.
 struct BuiltinUniformData
 {
@@ -69,6 +121,8 @@ struct DrawContext
 	vertex::Attributes vertexAttributes;
 
 	BuiltinUniformData builtinUniforms;
+
+	RenderPassAttachments renderTargets;
 
 	bool isBackbuffer = false;
 	int passWidth = 0;
@@ -96,75 +150,11 @@ public:
 		ARC_MAX_ENUM
 	};
 
-	enum StackType
-	{
-		STACK_ALL,
-		STACK_TRANSFORM,
-		STACK_MAX_ENUM
-	};
-
-	enum RenderTargetFlags
-	{
-		RT_AUTO_DEPTH   = (1 << 0),
-		RT_AUTO_STENCIL = (1 << 1),
-	};
-
-	enum BeginAction
-	{
-		BEGIN_LOAD,
-		BEGIN_CLEAR,
-		BEGIN_DISCARD,
-		BEGIN_MAX_ENUM
-	};
-
-	enum EndAction
-	{
-		END_STORE,
-		END_DISCARD,
-		END_MAX_ENUM
-	};
-
-	struct RenderTarget
-	{
-		StrongRef<love::graphics::Canvas> canvas;
-		int slice = 0;
-		int mipmap = 0;
-
-		BeginAction beginAction = BEGIN_LOAD;
-		EndAction endAction = END_STORE;
-
-		Colorf clearColor;
-		double clearDepth = 1.0;
-		int clearStencil = 0;
-	};
-
-	static const int MAX_COLOR_RENDER_TARGETS = 8;
-
-	struct RenderTargetSetup
-	{
-		RenderTarget colors[MAX_COLOR_RENDER_TARGETS] = {};
-		int colorCount = 0;
-
-		RenderTarget depthStencil;
-
-		uint32 flags = 0;
-
-		const RenderTarget &getFirstTarget() const
-		{
-			return colorCount > 0 ? colors[0] : depthStencil;
-		}
-
-		bool isBackbuffer() const
-		{
-			return getFirstTarget().canvas.get() == nullptr;
-		}
-	};
-
-	RenderPass(Graphics *gfx, const RenderTargetSetup &rts);
+	RenderPass(Graphics *gfx, const RenderPassAttachments &rts);
 	virtual ~RenderPass();
 
 	void reset();
-	void reset(Graphics *gfx, const RenderTargetSetup &rts);
+	void reset(Graphics *gfx, const RenderPassAttachments &rts);
 
 	void execute(Graphics *gfx);
 
@@ -238,8 +228,6 @@ protected:
 
 	virtual void beginPass(DrawContext *context) = 0;
 	virtual void endPass(DrawContext *context) = 0;
-
-	RenderTargetSetup renderTargets;
 
 private:
 
@@ -326,7 +314,9 @@ private:
 	template <typename T>
 	T *addCommand(CommandType type, size_t size = sizeof(T), size_t alignment = alignof(T));
 
-	void validateRenderTargets(Graphics *gfx, const RenderTargetSetup &rts) const;
+	void validateRenderTargets(Graphics *gfx, const RenderPassAttachments &rts) const;
+
+	RenderPassAttachments renderTargets;
 
 	std::vector<Command> commands;
 	uint8 *data;
