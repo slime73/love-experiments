@@ -300,6 +300,8 @@ void Canvas::unloadVolatile()
 		auto gfx = Module::getInstance<Graphics>(Module::M_GRAPHICS);
 		if (gfx != nullptr)
 			gfx->cleanupCanvas(this);
+
+		gl.cleanupCanvas(this);
 	}
 
 	if (fbo != 0)

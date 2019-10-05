@@ -34,9 +34,12 @@
 // GLAD
 #include "libraries/glad/gladfuncs.hpp"
 
+#include "libraries/xxHash/xxhash.h"
+
 // C++
 #include <vector>
 #include <stack>
+#include <unordered_map>
 
 // The last argument to AttribPointer takes a buffer offset casted to a pointer.
 #define BUFFER_OFFSET(i) ((char *) NULL + (i))
@@ -49,6 +52,7 @@ namespace graphics
 class Resource;
 class Buffer;
 class Graphics;
+class Canvas;
 
 namespace opengl
 {
@@ -114,6 +118,45 @@ public:
 
 		bool swizzled = false;
 		GLint swizzle[4];
+	};
+
+	static const int MAX_COLOR_RENDER_TARGETS = 8;
+
+	struct CachedRenderTarget
+	{
+		love::graphics::Canvas *canvas;
+		int slice;
+		int mipmap;
+	};
+
+	struct CachedRenderTargets
+	{
+		CachedRenderTarget targets[MAX_COLOR_RENDER_TARGETS + 1];
+		int count = 0;
+
+		void add(love::graphics::Canvas *canvas, int slice, int mipmap)
+		{
+			targets[count].canvas = canvas;
+			targets[count].slice = slice;
+			targets[count].mipmap = mipmap;
+			count++;
+		}
+
+		bool operator == (const CachedRenderTargets &rts) const
+		{
+			if (count != rts.count)
+				return false;
+
+			for (int i = 0; i < count; i++)
+			{
+				if (targets[i].canvas != rts.targets[i].canvas
+					|| targets[i].slice != rts.targets[i].slice
+					|| targets[i].mipmap != rts.targets[i].mipmap)
+					return false;
+			}
+
+			return true;
+		}
 	};
 
 	class TempDebugGroup
@@ -301,6 +344,9 @@ public:
 	 **/
 	GLuint getDefaultFBO() const;
 
+	GLuint getCachedFBO(const CachedRenderTargets &targets);
+	void cleanupCanvas(love::graphics::Canvas *canvas);
+
 	/**
 	 * Gets the ID for love's default texture (used for "untextured" primitives.)
 	 **/
@@ -425,6 +471,14 @@ public:
 
 private:
 
+	struct CachedFBOHasher
+	{
+		size_t operator() (const CachedRenderTargets &rts) const
+		{
+			return XXH32(rts.targets, sizeof(CachedRenderTarget) * rts.count, 0);
+		}
+	};
+
 	void initVendor();
 	void initOpenGLFunctions();
 	void initMaxValues();
@@ -479,6 +533,8 @@ private:
 		GLuint defaultTexture[TEXTURE_MAX_ENUM];
 
 	} state;
+
+	std::unordered_map<CachedRenderTargets, GLuint, CachedFBOHasher> cachedFBOs;
 
 }; // OpenGL
 

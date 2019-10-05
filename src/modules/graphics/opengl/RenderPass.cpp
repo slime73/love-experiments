@@ -201,7 +201,19 @@ void RenderPass::beginPass(DrawContext *context)
 	}
 	else
 	{
-//		fbo = gl.getCachedFBO(rts);
+		OpenGL::CachedRenderTargets cachedRTs;
+
+		for (int i = 0; i < rts.colorCount; i++)
+		{
+			const auto &rt = rts.colors[i];
+			cachedRTs.add(rt.canvas.get(), rt.slice, rt.mipmap);
+		}
+
+		const auto &ds = rts.depthStencil;
+		if (ds.canvas.get())
+			cachedRTs.add(ds.canvas.get(), ds.slice, ds.mipmap);
+
+		fbo = gl.getCachedFBO(cachedRTs);
 
 		projection = Matrix4::ortho(0.0, (float) w, 0.0, (float) h, -10.0f, 10.0f);
 	}

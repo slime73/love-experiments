@@ -979,6 +979,117 @@ GLuint OpenGL::getDefaultFBO() const
 #endif
 }
 
+GLuint OpenGL::getCachedFBO(const CachedRenderTargets &rts)
+{
+	auto it = cachedFBOs.find(rts);
+	if (it != cachedFBOs.end())
+		return it->second;
+
+	GLuint fbo = 0;
+
+	glGenFramebuffers(1, &fbo);
+	gl.bindFramebuffer(OpenGL::FRAMEBUFFER_ALL, fbo);
+
+	bool hasdepthstencil = false;
+	int ncolortargets = 0;
+	GLenum drawbuffers[MAX_COLOR_RENDER_TARGETS];
+
+	auto attachCanvas = [&](const CachedRenderTarget &rt)
+	{
+		PixelFormat pixelformat = rt.canvas->getPixelFormat();
+		bool renderbuffer = rt.canvas->getMSAA() > 1 || !rt.canvas->isReadable();
+		bool srgb = false;
+		OpenGL::TextureFormat fmt = OpenGL::convertPixelFormat(pixelformat, renderbuffer, srgb);
+
+		if (fmt.framebufferAttachments[0] == GL_COLOR_ATTACHMENT0)
+		{
+			fmt.framebufferAttachments[0] = GL_COLOR_ATTACHMENT0 + ncolortargets;
+			drawbuffers[ncolortargets] = fmt.framebufferAttachments[0];
+			ncolortargets++;
+		}
+		else if (isPixelFormatDepthStencil(pixelformat))
+		{
+			hasdepthstencil = true;
+		}
+
+		GLuint handle = (GLuint) rt.canvas->getRenderTargetHandle();
+
+		for (GLenum attachment : fmt.framebufferAttachments)
+		{
+			if (attachment == GL_NONE)
+				continue;
+			else if (renderbuffer)
+				glFramebufferRenderbuffer(GL_FRAMEBUFFER, attachment, GL_RENDERBUFFER, handle);
+			else
+			{
+				TextureType textype = rt.canvas->getTextureType();
+
+				int layer = textype == TEXTURE_CUBE ? 0 : rt.slice;
+				int face = textype == TEXTURE_CUBE ? rt.slice : 0;
+				int level = rt.mipmap;
+
+				gl.framebufferTexture(attachment, textype, handle, level, layer, face);
+			}
+		}
+	};
+
+	for (int i = 0; i < rts.count; i++)
+		attachCanvas(rts.targets[i]);
+
+	if (ncolortargets > 1)
+		glDrawBuffers(ncolortargets, drawbuffers);
+	else if (ncolortargets == 0 && hasdepthstencil && (GLAD_ES_VERSION_3_0 || !GLAD_ES_VERSION_2_0))
+	{
+		// glDrawBuffers is an ext in GL2. glDrawBuffer doesn't exist in ES3.
+		GLenum none = GL_NONE;
+		if (GLAD_ES_VERSION_3_0)
+			glDrawBuffers(1, &none);
+		else
+			glDrawBuffer(GL_NONE);
+		glReadBuffer(GL_NONE);
+	}
+
+	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+
+	if (status != GL_FRAMEBUFFER_COMPLETE)
+	{
+		gl.deleteFramebuffer(fbo);
+		const char *sstr = OpenGL::framebufferStatusString(status);
+		throw love::Exception("Could not create Framebuffer Object! %s", sstr);
+	}
+
+	cachedFBOs[rts] = fbo;
+
+	return fbo;
+}
+
+void OpenGL::cleanupCanvas(love::graphics::Canvas *canvas)
+{
+	for (auto it = cachedFBOs.begin(); it != cachedFBOs.end(); /**/)
+	{
+		bool hascanvas = false;
+		const auto &rts = it->first;
+
+		for (int i = 0; i < rts.count; i++)
+		{
+			if (rts.targets[i].canvas == canvas)
+			{
+				hascanvas = true;
+				break;
+			}
+		}
+
+		if (hascanvas)
+		{
+			if (contextInitialized)
+				gl.deleteFramebuffer(it->second);
+			it = cachedFBOs.erase(it);
+		}
+		else
+			++it;
+	}
+}
+
 GLuint OpenGL::getDefaultTexture(TextureType type) const
 {
 	return state.defaultTexture[type];

@@ -126,7 +126,7 @@ public:
 
 	struct RenderTarget
 	{
-		StrongRef<Canvas> canvas;
+		StrongRef<love::graphics::Canvas> canvas;
 		int slice = 0;
 		int mipmap = 0;
 
