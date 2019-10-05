@@ -209,6 +209,40 @@ public:
 
 protected:
 
+	enum StateType
+	{
+		STATE_BLEND,
+		STATE_SCISSOR,
+		STATE_STENCIL,
+		STATE_DEPTH,
+		STATE_SHADER,
+		STATE_COLORMASK,
+		STATE_CULLMODE,
+		STATE_FACEWINDING,
+		STATE_WIREFRAME,
+	};
+
+	enum StateBit
+	{
+		STATEBIT_BLEND = 1 << STATE_BLEND,
+		STATEBIT_SCISSOR = 1 << STATE_SCISSOR,
+		STATEBIT_STENCIL = 1 << STATE_STENCIL,
+		STATEBIT_DEPTH = 1 << STATE_DEPTH,
+		STATEBIT_SHADER = 1 << STATE_SHADER,
+		STATEBIT_COLORMASK = 1 << STATE_COLORMASK,
+		STATEBIT_CULLMODE = 1 << STATE_CULLMODE,
+		STATEBIT_FACEWINDING = 1 << STATE_FACEWINDING,
+		STATEBIT_WIREFRAME = 1 << STATE_WIREFRAME,
+		STATEBIT_ALL = 0xFFFFFFFF
+	};
+
+	virtual void beginPass(DrawContext *context) = 0;
+	virtual void endPass(DrawContext *context) = 0;
+
+	RenderTargetSetup renderTargets;
+
+private:
+
 	enum CommandType
 	{
 		// Draw commands.
@@ -275,33 +309,6 @@ protected:
 		Vector2 positions[1]; // Actual size determined in polygon().
 	};
 
-	enum StateType
-	{
-		STATE_BLEND,
-		STATE_SCISSOR,
-		STATE_STENCIL,
-		STATE_DEPTH,
-		STATE_SHADER,
-		STATE_COLORMASK,
-		STATE_CULLMODE,
-		STATE_FACEWINDING,
-		STATE_WIREFRAME,
-	};
-
-	enum StateBit
-	{
-		STATEBIT_BLEND = 1 << STATE_BLEND,
-		STATEBIT_SCISSOR = 1 << STATE_SCISSOR,
-		STATEBIT_STENCIL = 1 << STATE_STENCIL,
-		STATEBIT_DEPTH = 1 << STATE_DEPTH,
-		STATEBIT_SHADER = 1 << STATE_SHADER,
-		STATEBIT_COLORMASK = 1 << STATE_COLORMASK,
-		STATEBIT_CULLMODE = 1 << STATE_CULLMODE,
-		STATEBIT_FACEWINDING = 1 << STATE_FACEWINDING,
-		STATEBIT_WIREFRAME = 1 << STATE_WIREFRAME,
-		STATEBIT_ALL = 0xFFFFFFFF
-	};
-
 	// All state, including high-level data that backends don't know about.
 	struct GraphicsState
 	{
@@ -319,12 +326,7 @@ protected:
 	template <typename T>
 	T *addCommand(CommandType type, size_t size = sizeof(T), size_t alignment = alignof(T));
 
-	virtual void beginPass(DrawContext *context) = 0;
-	virtual void endPass(DrawContext *context) = 0;
-
 	void validateRenderTargets(Graphics *gfx, const RenderTargetSetup &rts) const;
-
-	RenderTargetSetup renderTargets;
 
 	std::vector<Command> commands;
 	uint8 *data;
