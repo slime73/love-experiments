@@ -40,6 +40,45 @@ Texture::FilterMode Texture::defaultMipmapFilter = Texture::FILTER_LINEAR;
 float Texture::defaultMipmapSharpness = 0.0f;
 int64 Texture::totalGraphicsMemory = 0;
 
+uint64 SamplerState::toKey() const
+{
+	union { float f; uint32 i; } conv;
+	conv.f = lodBias;
+
+	return (minFilter << 0) | (magFilter << 1) | (mipmapFilter << 2)
+	     | (wrapU << 4) | (wrapV << 6) | (wrapW << 8)
+	     | (maxAnisotropy << 10) | (minLod << 14) | (maxLod << 18)
+	     | (depthSampleMode.hasValue << 22) | (depthSampleMode.value << 23)
+	     | ((uint64)conv.i << 32);
+}
+
+SamplerState SamplerState::fromKey(uint64 key)
+{
+	SamplerState s;
+
+	s.minFilter = (FilterMode) ((key >> 0) & 0x1);
+	s.magFilter = (FilterMode) ((key >> 1) & 0x1);
+	s.mipmapFilter = (MipmapFilterMode) ((key >> 2) & 0x3);
+
+	s.wrapU = (WrapMode) ((key >> 4) & 0x3);
+	s.wrapV = (WrapMode) ((key >> 6) & 0x3);
+	s.wrapW = (WrapMode) ((key >> 8) & 0x3);
+
+	s.maxAnisotropy = (key >> 10) & 0xF;
+
+	s.minLod = (key >> 14) & 0xF;
+	s.maxLod = (key >> 18) & 0xF;
+
+	s.depthSampleMode.hasValue = ((key >> 22) & 0x1) != 0;
+	s.depthSampleMode.value = (CompareMode) ((key >> 23) & 0xF);
+
+	union { float f; uint32 i; } conv;
+	conv.i = (uint32) (key >> 32);
+	s.lodBias = conv.f;
+
+	return s;
+}
+
 Texture::Texture(TextureType texType)
 	: texType(texType)
 	, format(PIXELFORMAT_UNKNOWN)

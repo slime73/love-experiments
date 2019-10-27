@@ -53,6 +53,53 @@ enum TextureType
 	TEXTURE_MAX_ENUM
 };
 
+struct SamplerState
+{
+	enum WrapMode
+	{
+		WRAP_CLAMP,
+		WRAP_CLAMP_ZERO,
+		WRAP_REPEAT,
+		WRAP_MIRRORED_REPEAT,
+		WRAP_MAX_ENUM
+	};
+
+	enum FilterMode
+	{
+		FILTER_LINEAR,
+		FILTER_NEAREST,
+		FILTER_MAX_ENUM
+	};
+
+	enum MipmapFilterMode
+	{
+		MIPMAP_FILTER_NONE,
+		MIPMAP_FILTER_LINEAR,
+		MIPMAP_FILTER_NEAREST,
+		MIPMAP_FILTER_MAX_ENUM
+	};
+
+	FilterMode minFilter = FILTER_LINEAR;
+	FilterMode magFilter = FILTER_LINEAR;
+	MipmapFilterMode mipmapFilter = MIPMAP_FILTER_NONE;
+
+	WrapMode wrapU = WRAP_CLAMP;
+	WrapMode wrapV = WRAP_CLAMP;
+	WrapMode wrapW = WRAP_CLAMP;
+
+	float lodBias = 0.0f;
+
+	uint8 maxAnisotropy = 1;
+
+	uint8 minLod = 0;
+	uint8 maxLod = LOVE_UINT8_MAX;
+
+	Optional<CompareMode> depthSampleMode;
+
+	uint64 toKey() const;
+	static SamplerState fromKey(uint64 key);
+};
+
 /**
  * Base class for 2D textures. All textures can be drawn with Quads, have a
  * width and height, and have filter and wrap modes.
