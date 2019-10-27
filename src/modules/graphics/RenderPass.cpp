@@ -34,7 +34,8 @@ namespace graphics
 {
 
 RenderPass::RenderPass(Graphics *gfx, const RenderPassAttachments &rts)
-	: data(nullptr)
+	: autoReset(true)
+	, data(nullptr)
 	, dataSize(0)
 	, currentOffset(0)
 {
@@ -442,7 +443,7 @@ void RenderPass::execute(Graphics *gfx)
 		}
 	}
 
-	gfx->flushStreamDraws();
+	flushBatchedDraws(&context);
 
 	endPass(&context);
 
@@ -456,6 +457,223 @@ void RenderPass::execute(Graphics *gfx)
 	const auto &ds = rts.depthStencil;
 	if (ds.canvas.get() && ds.canvas->getMipmapMode() == Canvas::MIPMAPS_AUTO && ds.mipmap == 0)
 		ds.canvas->generateMipmaps();
+
+	if (autoReset)
+		reset();
+}
+
+RenderPass::BatchedVertexData RenderPass::requestBatchedDraw(DrawContext *context, const BatchedDrawCommand &cmd)
+{
+	// TODO: This isn't thread-safe
+
+	using namespace vertex;
+
+	BatchedDrawState &state = batchedDrawState;
+
+	bool shouldflush = false;
+	bool shouldresize = false;
+
+	if (cmd.primitiveType != state.primitiveMode
+		|| cmd.vertexFormats[0] != state.formats[0]
+		|| cmd.vertexFormats[1] != state.formats[1]
+		|| ((cmd.indexMode != TriangleIndexMode::NONE) != (state.indexCount > 0))
+		|| cmd.texture != state.texture
+		|| cmd.standardShaderType != state.standardShaderType)
+	{
+		shouldflush = true;
+	}
+
+	int totalvertices = state.vertexCount + cmd.vertexCount;
+
+	// We only support uint16 index buffers for now.
+	if (totalvertices > LOVE_UINT16_MAX && cmd.indexMode != TriangleIndexMode::NONE)
+		shouldflush = true;
+
+	int reqIndexCount = getIndexCount(cmd.indexMode, cmd.vertexCount);
+	size_t reqIndexSize = reqIndexCount * sizeof(uint16);
+
+	size_t newdatasizes[2] = {0, 0};
+	size_t buffersizes[3] = {0, 0, 0};
+
+	for (int i = 0; i < 2; i++)
+	{
+		if (cmd.vertexFormats[i] == CommonFormat::NONE)
+			continue;
+
+		size_t stride = getFormatStride(cmd.vertexFormats[i]);
+		size_t datasize = stride * totalvertices;
+
+		if (state.vbMap[i].data != nullptr && datasize > state.vbMap[i].size)
+			shouldflush = true;
+
+		if (datasize > state.vb[i]->getUsableSize())
+		{
+			buffersizes[i] = std::max(datasize, state.vb[i]->getSize() * 2);
+			shouldresize = true;
+		}
+
+		newdatasizes[i] = stride * cmd.vertexCount;
+	}
+
+	if (cmd.indexMode != TriangleIndexMode::NONE)
+	{
+		size_t datasize = (state.indexCount + reqIndexCount) * sizeof(uint16);
+
+		if (state.indexBufferMap.data != nullptr && datasize > state.indexBufferMap.size)
+			shouldflush = true;
+
+		if (datasize > state.indexBuffer->getUsableSize())
+		{
+			buffersizes[2] = std::max(datasize, state.indexBuffer->getSize() * 2);
+			shouldresize = true;
+		}
+	}
+
+	if (shouldflush || shouldresize)
+	{
+		flushBatchedDraws(context);
+
+		state.primitiveMode = cmd.primitiveType;
+		state.formats[0] = cmd.vertexFormats[0];
+		state.formats[1] = cmd.vertexFormats[1];
+		state.texture = cmd.texture;
+		state.standardShaderType = cmd.standardShaderType;
+	}
+
+	if (state.vertexCount == 0 && Shader::isDefaultActive())
+		Shader::attachDefault(state.standardShaderType);
+
+	if (state.vertexCount == 0 && Shader::current != nullptr && cmd.texture != nullptr)
+		Shader::current->checkMainTexture(cmd.texture);
+
+	if (shouldresize)
+	{
+//		auto gfx = Module::getInstance<Graphics>(Module::M_GRAPHICS);
+
+		for (int i = 0; i < 2; i++)
+		{
+			if (state.vb[i]->getSize() < buffersizes[i])
+			{
+				delete state.vb[i];
+//				state.vb[i] = gfx->newStreamBuffer(BUFFER_VERTEX, buffersizes[i]);
+			}
+		}
+
+		if (state.indexBuffer->getSize() < buffersizes[2])
+		{
+			delete state.indexBuffer;
+//			state.indexBuffer = gfx->newStreamBuffer(BUFFER_INDEX, buffersizes[2]);
+		}
+	}
+
+	if (cmd.indexMode != TriangleIndexMode::NONE)
+	{
+		if (state.indexBufferMap.data == nullptr)
+			state.indexBufferMap = state.indexBuffer->map(reqIndexSize);
+
+		uint16 *indices = (uint16 *) state.indexBufferMap.data;
+		fillIndices(cmd.indexMode, state.vertexCount, cmd.vertexCount, indices);
+
+		state.indexBufferMap.data += reqIndexSize;
+	}
+
+	BatchedVertexData d;
+
+	for (int i = 0; i < 2; i++)
+	{
+		if (newdatasizes[i] > 0)
+		{
+			if (state.vbMap[i].data == nullptr)
+				state.vbMap[i] = state.vb[i]->map(newdatasizes[i]);
+
+			d.stream[i] = state.vbMap[i].data;
+
+			state.vbMap[i].data += newdatasizes[i];
+		}
+	}
+
+//	if (state.vertexCount > 0)
+//		drawCallsBatched++;
+
+	state.vertexCount += cmd.vertexCount;
+	state.indexCount  += reqIndexCount;
+
+	return d;
+}
+
+void RenderPass::flushBatchedDraws(DrawContext *context)
+{
+	using namespace vertex;
+
+	auto &sbstate = batchedDrawState;
+
+	if (sbstate.vertexCount == 0 && sbstate.indexCount == 0)
+		return;
+
+	Attributes attributes;
+	BufferBindings buffers;
+
+	size_t usedsizes[3] = {0, 0, 0};
+
+	for (int i = 0; i < 2; i++)
+	{
+		if (sbstate.formats[i] == CommonFormat::NONE)
+			continue;
+
+		attributes.setCommonFormat(sbstate.formats[i], (uint8) i);
+
+		usedsizes[i] = getFormatStride(sbstate.formats[i]) * sbstate.vertexCount;
+
+		size_t offset = sbstate.vb[i]->unmap(usedsizes[i]);
+		buffers.set(i, sbstate.vb[i], offset);
+		sbstate.vbMap[i] = StreamBuffer::MapInfo();
+	}
+
+	if (attributes.enableBits == 0)
+		return;
+
+	Matrix4 prevTransform = context->builtinUniforms.transformMatrix;
+	context->builtinUniforms.transformMatrix.setIdentity();
+
+	Colorf prevColor = context->builtinUniforms.constantColor;
+	if (attributes.isEnabled(ATTRIB_COLOR))
+		context->builtinUniforms.constantColor = Colorf(1.0f, 1.0f, 1.0f, 1.0f);
+
+	// TODO: bind texture
+	// TODO: attributes
+	// TODO: buffers
+
+	applyState(context);
+
+	if (sbstate.indexCount > 0)
+	{
+		usedsizes[2] = sizeof(uint16) * sbstate.indexCount;
+
+		size_t indexOffset = sbstate.indexBuffer->unmap(usedsizes[2]);
+
+		draw(sbstate.primitiveMode, sbstate.indexCount, 1, INDEX_UINT16, sbstate.indexBuffer, indexOffset);
+
+		sbstate.indexBufferMap = StreamBuffer::MapInfo();
+	}
+	else
+	{
+		draw(sbstate.primitiveMode, 0, sbstate.vertexCount, 1);
+	}
+
+	for (int i = 0; i < 2; i++)
+	{
+		if (usedsizes[i] > 0)
+			sbstate.vb[i]->markUsed(usedsizes[i]);
+	}
+
+	if (usedsizes[2] > 0)
+		sbstate.indexBuffer->markUsed(usedsizes[2]);
+
+	sbstate.vertexCount = 0;
+	sbstate.indexCount = 0;
+
+	context->builtinUniforms.transformMatrix = prevTransform;
+	context->builtinUniforms.constantColor = prevColor;
 }
 
 void RenderPass::validateRenderTargets(Graphics *gfx, const RenderPassAttachments &rts) const

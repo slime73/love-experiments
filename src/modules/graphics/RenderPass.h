@@ -32,6 +32,8 @@
 #include "renderstate.h"
 #include "vertex.h"
 #include "Polyline.h"
+#include "Shader.h"
+#include "StreamBuffer.h"
 
 namespace love
 {
@@ -197,6 +199,30 @@ public:
 	virtual void draw(PrimitiveType primType, int indexCount, int instanceCount, IndexDataType indexType, Resource *indexBuffer, size_t indexOffset) = 0;
 	virtual void drawQuads(int start, int count, Resource *quadIndexBuffer) = 0;
 
+	struct BatchedDrawCommand
+	{
+		PrimitiveType primitiveType = PRIMITIVE_TRIANGLES;
+		vertex::CommonFormat vertexFormats[2];
+		vertex::TriangleIndexMode indexMode = vertex::TriangleIndexMode::NONE;
+		int vertexCount = 0;
+		Texture *texture = nullptr;
+		Shader::StandardShader standardShaderType = Shader::STANDARD_DEFAULT;
+
+		BatchedDrawCommand()
+		{
+			// VS2013 can't initialize arrays in the above manner...
+			vertexFormats[1] = vertexFormats[0] = vertex::CommonFormat::NONE;
+		}
+	};
+
+	struct BatchedVertexData
+	{
+		void *stream[2];
+	};
+
+	BatchedVertexData requestBatchedDraw(DrawContext *context, const BatchedDrawCommand &cmd);
+	void flushBatchedDraws(DrawContext *context);
+
 protected:
 
 	enum StateType
@@ -311,10 +337,35 @@ private:
 		RenderState render;
 	};
 
+	struct BatchedDrawState
+	{
+		StreamBuffer *vb[2];
+		StreamBuffer *indexBuffer = nullptr;
+
+		PrimitiveType primitiveMode = PRIMITIVE_TRIANGLES;
+		vertex::CommonFormat formats[2];
+		StrongRef<Texture> texture;
+		Shader::StandardShader standardShaderType = Shader::STANDARD_DEFAULT;
+		int vertexCount = 0;
+		int indexCount = 0;
+
+		StreamBuffer::MapInfo vbMap[2];
+		StreamBuffer::MapInfo indexBufferMap = StreamBuffer::MapInfo();
+
+		BatchedDrawState()
+		{
+			vb[0] = vb[1] = nullptr;
+			formats[0] = formats[1] = vertex::CommonFormat::NONE;
+			vbMap[0] = vbMap[1] = StreamBuffer::MapInfo();
+		}
+	};
+
 	template <typename T>
 	T *addCommand(CommandType type, size_t size = sizeof(T), size_t alignment = alignof(T));
 
 	void validateRenderTargets(Graphics *gfx, const RenderPassAttachments &rts) const;
+
+	bool autoReset;
 
 	RenderPassAttachments renderTargets;
 
@@ -327,6 +378,8 @@ private:
 
 	std::vector<GraphicsState> graphicsState;
 	std::vector<Matrix4> transformState;
+
+	BatchedDrawState batchedDrawState;
 
 }; // RenderPass
 
