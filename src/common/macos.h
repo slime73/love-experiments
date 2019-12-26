@@ -18,22 +18,45 @@
  * 3. This notice may not be removed or altered from any source distribution.
  **/
 
-#ifndef LOVE_FILESYSTEM_WRAP_DROPPED_FILE_H
-#define LOVE_FILESYSTEM_WRAP_DROPPED_FILE_H
+#pragma once
 
-// LOVE
-#include "common/runtime.h"
-#include "DroppedFile.h"
+#include "config.h"
+
+#ifdef LOVE_MACOS
+
+#include <string>
 
 namespace love
 {
-namespace filesystem
+namespace macos
 {
 
-DroppedFile *luax_checkdroppedfile(lua_State *L, int idx);
-extern "C" int luaopen_droppedfile(lua_State *L);
+std::string getAppdataDirectory();
 
-} // filesystem
+/**
+ * Returns the filepath of the first detected love file in the Resources folder
+ * in the main bundle (love.app.)
+ * Returns an empty string if no love file is found.
+ **/
+std::string getLoveInResources();
+
+/**
+ * Checks for drop-file events. Returns the filepath if an event occurred, or
+ * an empty string otherwise.
+ **/
+std::string checkDropEvents();
+
+/**
+ * Returns the full path to the executable.
+ **/
+std::string getExecutablePath();
+
+/**
+ * Bounce the dock icon, if the app isn't in the foreground.
+ **/
+void requestAttention(bool continuous);
+
+} // macos
 } // love
 
-#endif // LOVE_FILESYSTEM_WRAP_DROPPED_FILE_H
+#endif // LOVE_MACOS

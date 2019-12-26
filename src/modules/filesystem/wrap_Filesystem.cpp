@@ -22,7 +22,7 @@
 #include "common/config.h"
 #include "wrap_Filesystem.h"
 #include "wrap_File.h"
-#include "wrap_DroppedFile.h"
+#include "wrap_NativeFile.h"
 #include "wrap_FileData.h"
 #include "data/wrap_Data.h"
 #include "data/wrap_DataModule.h"
@@ -44,13 +44,6 @@ namespace filesystem
 {
 
 #define instance() (Module::getInstance<Filesystem>(Module::M_FILESYSTEM))
-
-bool hack_setupWriteDirectory()
-{
-	if (instance() != 0)
-		return instance()->setupWriteDirectory();
-	return false;
-}
 
 int w_init(lua_State *L)
 {
@@ -140,9 +133,9 @@ int w_mount(lua_State *L)
 		luax_pushboolean(L, instance()->mount(data, archive.c_str(), mountpoint, append));
 		return 1;
 	}
-	else if (luax_istype(L, 1, DroppedFile::type))
+	else if (luax_istype(L, 1, NativeFile::type))
 	{
-		DroppedFile *file = luax_totype<DroppedFile>(L, 1);
+		NativeFile *file = luax_totype<NativeFile>(L, 1);
 		archive = file->getFilename();
 	}
 	else
@@ -754,7 +747,7 @@ static const char *library_extensions[] =
 {
 #ifdef LOVE_WINDOWS
 	".dll"
-#elif defined(LOVE_MACOSX) || defined(LOVE_IOS)
+#elif defined(LOVE_MACOS) || defined(LOVE_IOS)
 	".dylib", ".so"
 #else
 	".so"
@@ -834,85 +827,6 @@ int extloader(lua_State *L)
 	return 1;
 }
 
-// Deprecated functions.
-
-int w_exists(lua_State *L)
-{
-	luax_markdeprecated(L, "love.filesystem.exists", API_FUNCTION, DEPRECATED_REPLACED, "love.filesystem.getInfo");
-	const char *arg = luaL_checkstring(L, 1);
-	Filesystem::Info info = {};
-	luax_pushboolean(L, instance()->getInfo(arg, info));
-	return 1;
-}
-
-int w_isDirectory(lua_State *L)
-{
-	luax_markdeprecated(L, "love.filesystem.isDirectory", API_FUNCTION, DEPRECATED_REPLACED, "love.filesystem.getInfo");
-	const char *arg = luaL_checkstring(L, 1);
-	Filesystem::Info info = {};
-	bool exists = instance()->getInfo(arg, info);
-	luax_pushboolean(L, exists && info.type == Filesystem::FILETYPE_DIRECTORY);
-	return 1;
-}
-
-int w_isFile(lua_State *L)
-{
-	luax_markdeprecated(L, "love.filesystem.isFile", API_FUNCTION, DEPRECATED_REPLACED, "love.filesystem.getInfo");
-	const char *arg = luaL_checkstring(L, 1);
-	Filesystem::Info info = {};
-	bool exists = instance()->getInfo(arg, info);
-	luax_pushboolean(L, exists && info.type == Filesystem::FILETYPE_FILE);
-	return 1;
-}
-
-int w_isSymlink(lua_State *L)
-{
-	luax_markdeprecated(L, "love.filesystem.isSymlink", API_FUNCTION, DEPRECATED_REPLACED, "love.filesystem.getInfo");
-	const char *filename = luaL_checkstring(L, 1);
-	Filesystem::Info info = {};
-	bool exists = instance()->getInfo(filename, info);
-	luax_pushboolean(L, exists && info.type == Filesystem::FILETYPE_SYMLINK);
-	return 1;
-}
-
-int w_getLastModified(lua_State *L)
-{
-	luax_markdeprecated(L, "love.filesystem.getLastModified", API_FUNCTION, DEPRECATED_REPLACED, "love.filesystem.getInfo");
-
-	const char *filename = luaL_checkstring(L, 1);
-
-	Filesystem::Info info = {};
-	bool exists = instance()->getInfo(filename, info);
-
-	if (!exists)
-		return luax_ioError(L, "File does not exist");
-	else if (info.modtime == -1)
-		return luax_ioError(L, "Could not determine file modification date.");
-
-	lua_pushnumber(L, (lua_Number) info.modtime);
-	return 1;
-}
-
-int w_getSize(lua_State *L)
-{
-	luax_markdeprecated(L, "love.filesystem.getSize", API_FUNCTION, DEPRECATED_REPLACED, "love.filesystem.getInfo");
-
-	const char *filename = luaL_checkstring(L, 1);
-
-	Filesystem::Info info = {};
-	bool exists = instance()->getInfo(filename, info);
-
-	if (!exists)
-		luax_ioError(L, "File does not exist");
-	else if (info.size == -1)
-		return luax_ioError(L, "Could not determine file size.");
-	else if (info.size >= 0x20000000000000LL)
-		return luax_ioError(L, "Size too large to fit into a Lua number!");
-
-	lua_pushnumber(L, (lua_Number) info.size);
-	return 1;
-}
-
 // List of functions to wrap.
 static const luaL_Reg functions[] =
 {
@@ -951,21 +865,13 @@ static const luaL_Reg functions[] =
 	{ "getCRequirePath", w_getCRequirePath },
 	{ "setCRequirePath", w_setCRequirePath },
 
-	// Deprecated.
-	{ "exists", w_exists },
-	{ "isDirectory", w_isDirectory },
-	{ "isFile", w_isFile },
-	{ "isSymlink", w_isSymlink },
-	{ "getLastModified", w_getLastModified },
-	{ "getSize", w_getSize },
-
 	{ 0, 0 }
 };
 
 static const lua_CFunction types[] =
 {
 	luaopen_file,
-	luaopen_droppedfile,
+	luaopen_nativefile,
 	luaopen_filedata,
 	0
 };

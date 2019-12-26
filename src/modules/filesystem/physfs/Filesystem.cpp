@@ -37,6 +37,9 @@
 #ifdef LOVE_WINDOWS
 #	include <windows.h>
 #	include <direct.h>
+#	include <initguid.h>
+#	include <Shlobj.h>
+#	include <Knownfolders.h>
 #else
 #	include <sys/param.h>
 #	include <unistd.h>
@@ -44,6 +47,10 @@
 
 #ifdef LOVE_IOS
 #	include "common/ios.h"
+#endif
+
+#ifdef LOVE_MACOS
+#	include "common/macos.h"
 #endif
 
 #include <string>
@@ -493,13 +500,20 @@ std::string Filesystem::getAppdataDirectory()
 #ifdef LOVE_WINDOWS_UWP
 		appdata = getUserDirectory();
 #elif defined(LOVE_WINDOWS)
-		wchar_t *w_appdata = _wgetenv(L"APPDATA");
-		appdata = to_utf8(w_appdata);
+		PWSTR path = nullptr;
+		if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &path)))
+		{
+			appdata = to_utf8(path);
+			CoTaskMemFree(path);
+		}
+		else
+		{
+			wchar_t *w_appdata = _wgetenv(L"APPDATA");
+			appdata = to_utf8(w_appdata);
+		}
 		replace_char(appdata, '\\', '/');
-#elif defined(LOVE_MACOSX)
-		std::string udir = getUserDirectory();
-		udir.append("/Library/Application Support");
-		appdata = normalize(udir);
+#elif defined(LOVE_MACOS)
+		appdata = normalize(love::macos::getAppdataDirectory());
 #elif defined(LOVE_IOS)
 		appdata = normalize(love::ios::getAppdataDirectory());
 #elif defined(LOVE_LINUX)
@@ -644,20 +658,21 @@ void Filesystem::append(const char *filename, const void *data, int64 size) cons
 		throw love::Exception("Data could not be written.");
 }
 
-void Filesystem::getDirectoryItems(const char *dir, std::vector<std::string> &items)
+bool Filesystem::getDirectoryItems(const char *dir, std::vector<std::string> &items)
 {
 	if (!PHYSFS_isInit())
-		return;
+		return false;
 
 	char **rc = PHYSFS_enumerateFiles(dir);
 
 	if (rc == nullptr)
-		return;
+		return false;
 
 	for (char **i = rc; *i != 0; i++)
 		items.push_back(*i);
 
 	PHYSFS_freeList(rc);
+	return true;
 }
 
 void Filesystem::setSymlinksEnabled(bool enable)

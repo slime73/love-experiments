@@ -41,7 +41,7 @@
 #	define LOVE_PATH_SEPARATOR "/"
 #	define LOVE_MAX_PATH _MAX_PATH
 #else
-#	if defined(LOVE_MACOSX) || defined(LOVE_IOS)
+#	if defined(LOVE_MACOS) || defined(LOVE_IOS)
 #		define LOVE_APPDATA_FOLDER "LOVE"
 #	elif defined(LOVE_LINUX)
 #		define LOVE_APPDATA_FOLDER "love"
@@ -231,7 +231,7 @@ public:
 	 * This "native" method returns a table of all
 	 * files in a given directory.
 	 **/
-	virtual void getDirectoryItems(const char *dir, std::vector<std::string> &items) = 0;
+	virtual bool getDirectoryItems(const char *dir, std::vector<std::string> &items) = 0;
 
 	/**
 	 * Enable or disable symbolic link support in love.filesystem.

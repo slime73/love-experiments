@@ -18,9 +18,9 @@
  * 3. This notice may not be removed or altered from any source distribution.
  **/
 
-#include "macosx.h"
+#include "macos.h"
 
-#ifdef LOVE_MACOSX
+#ifdef LOVE_MACOS
 
 #import <Foundation/Foundation.h>
 #import <Cocoa/Cocoa.h>
@@ -33,8 +33,28 @@
 
 namespace love
 {
-namespace macosx
+namespace macos
 {
+
+static std::string getUserDirectory(NSSearchPathDirectory dir)
+{
+	std::string path;
+
+	@autoreleasepool
+	{
+		NSArray<NSURL *> *dirs = [[NSFileManager defaultManager] URLsForDirectory:dir inDomains:NSUserDomainMask];
+
+		if (dirs.count > 0)
+			path = [dirs[0].path UTF8String];
+	}
+
+	return path;
+}
+
+std::string getAppdataDirectory()
+{
+	return getUserDirectory(NSApplicationSupportDirectory);
+}
 
 std::string getLoveInResources()
 {
@@ -96,4 +116,4 @@ void requestAttention(bool continuous)
 } // osx
 } // love
 
-#endif // LOVE_MACOSX
+#endif // LOVE_MACOS

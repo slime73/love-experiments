@@ -189,12 +189,12 @@ StringMap<Shader::Language, Shader::LANGUAGE_MAX_ENUM> Shader::languages(Shader:
 
 StringMap<Shader::BuiltinUniform, Shader::BUILTIN_MAX_ENUM>::Entry Shader::builtinNameEntries[] =
 {
-	{ "MainTex",              BUILTIN_TEXTURE_MAIN                  },
-	{ "love_VideoYChannel",   BUILTIN_TEXTURE_VIDEO_Y               },
-	{ "love_VideoCbChannel",  BUILTIN_TEXTURE_VIDEO_CB              },
-	{ "love_VideoCrChannel",  BUILTIN_TEXTURE_VIDEO_CR              },
-	{ "love_UniformsPerDraw", BUILTIN_UNIFORMS_PER_DRAW             },
-	{ "love_PointSize",       BUILTIN_POINT_SIZE                    },
+	{ "MainTex",              BUILTIN_TEXTURE_MAIN      },
+	{ "love_VideoYChannel",   BUILTIN_TEXTURE_VIDEO_Y   },
+	{ "love_VideoCbChannel",  BUILTIN_TEXTURE_VIDEO_CB  },
+	{ "love_VideoCrChannel",  BUILTIN_TEXTURE_VIDEO_CR  },
+	{ "love_UniformsPerDraw", BUILTIN_UNIFORMS_PER_DRAW },
+	{ "love_PointSize",       BUILTIN_POINT_SIZE        },
 };
 
 StringMap<Shader::BuiltinUniform, Shader::BUILTIN_MAX_ENUM> Shader::builtinNames(Shader::builtinNameEntries, sizeof(Shader::builtinNameEntries));

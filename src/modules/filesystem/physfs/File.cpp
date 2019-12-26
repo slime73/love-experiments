@@ -32,10 +32,14 @@ namespace love
 namespace filesystem
 {
 
-extern bool hack_setupWriteDirectory();
-
 namespace physfs
 {
+
+static bool setupWriteDirectory()
+{
+	auto fs = Module::getInstance<love::filesystem::Filesystem>(Module::M_FILESYSTEM);
+	return fs != nullptr && fs->setupWriteDirectory();
+}
 
 File::File(const std::string &filename)
 	: filename(filename)
@@ -65,7 +69,7 @@ bool File::open(Mode mode)
 		throw love::Exception("Could not open file %s. Does not exist.", filename.c_str());
 
 	// Check whether the write directory is set.
-	if ((mode == MODE_APPEND || mode == MODE_WRITE) && (PHYSFS_getWriteDir() == nullptr) && !hack_setupWriteDirectory())
+	if ((mode == MODE_APPEND || mode == MODE_WRITE) && (PHYSFS_getWriteDir() == nullptr) && !setupWriteDirectory())
 		throw love::Exception("Could not set write directory.");
 
 	// File already open?
@@ -191,26 +195,9 @@ bool File::flush()
 	return PHYSFS_flush(file) != 0;
 }
 
-#ifdef LOVE_WINDOWS
-// MSVC doesn't like the 'this' keyword
-// well, we'll use 'that'.
-// It zigs, we zag.
-inline bool test_eof(File *that, PHYSFS_File *)
-{
-	int64 pos = that->tell();
-	int64 size = that->getSize();
-	return pos == -1 || size == -1 || pos >= size;
-}
-#else
-inline bool test_eof(File *, PHYSFS_File *file)
-{
-	return PHYSFS_eof(file);
-}
-#endif
-
 bool File::isEOF()
 {
-	return file == nullptr || test_eof(this, file);
+	return file == nullptr || PHYSFS_eof(file);
 }
 
 int64 File::tell()

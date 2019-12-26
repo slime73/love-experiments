@@ -31,7 +31,7 @@ namespace graphics
 namespace opengl
 {
 
-static GLenum createFBO(GLuint &framebuffer, TextureType texType, PixelFormat format, GLuint texture, int layers, int mips)
+static GLenum createFBO(GLuint &framebuffer, TextureType texType, PixelFormat format, GLuint texture, int layers, int nb_mips)
 {
 	// get currently bound fbo to reset to it later
 	GLuint current_fbo = gl.getFramebuffer(OpenGL::FRAMEBUFFER_ALL);
@@ -60,7 +60,7 @@ static GLenum createFBO(GLuint &framebuffer, TextureType texType, PixelFormat fo
 		// Make sure all faces and layers of the texture are initialized to
 		// transparent black. This is unfortunately probably pretty slow for
 		// 2D-array and 3D textures with a lot of layers...
-		for (int mip = mips - 1; mip >= 0; mip--)
+		for (int mip = nb_mips - 1; mip >= 0; mip--)
 		{
 			int nlayers = layers;
 			if (texType == TEXTURE_VOLUME)
@@ -245,7 +245,7 @@ bool Canvas::loadVolatile()
 		while (glGetError() != GL_NO_ERROR)
 			/* Clear the error buffer. */;
 
-		bool isSRGB = format == PIXELFORMAT_sRGBA8;
+		bool isSRGB = format == PIXELFORMAT_sRGBA8_UNORM;
 		if (!gl.rawTexStorage(texType, mipmapCount, format, isSRGB, pixelWidth, pixelHeight, texType == TEXTURE_VOLUME ? depth : layers))
 		{
 			status = GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT;
@@ -482,14 +482,14 @@ PixelFormat Canvas::getSizedFormat(PixelFormat format)
 	{
 	case PIXELFORMAT_NORMAL:
 		if (isGammaCorrect())
-			return PIXELFORMAT_sRGBA8;
-		else if (!OpenGL::isPixelFormatSupported(PIXELFORMAT_RGBA8, true, true, false))
+			return PIXELFORMAT_sRGBA8_UNORM;
+		else if (!OpenGL::isPixelFormatSupported(PIXELFORMAT_RGBA8_UNORM, true, true, false))
 			// 32-bit render targets don't have guaranteed support on GLES2.
-			return PIXELFORMAT_RGBA4;
+			return PIXELFORMAT_RGBA4_UNORM;
 		else
-			return PIXELFORMAT_RGBA8;
+			return PIXELFORMAT_RGBA8_UNORM;
 	case PIXELFORMAT_HDR:
-		return PIXELFORMAT_RGBA16F;
+		return PIXELFORMAT_RGBA16_FLOAT;
 	default:
 		return format;
 	}

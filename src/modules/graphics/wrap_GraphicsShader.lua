@@ -30,6 +30,7 @@ local GLSL = {}
 GLSL.VERSION = { -- index using [target][gles]
 	glsl1 = {[false]="#version 120",      [true]="#version 100"},
 	glsl3 = {[false]="#version 330 core", [true]="#version 300 es"},
+	glsl4 = {[false]="#version 430 core", [true]="#version 310 es"},
 }
 
 GLSL.SYNTAX = [[
@@ -396,7 +397,9 @@ function love.graphics._shaderCodeToGLSL(gles, arg1, arg2)
 		end
 	end
 
-	local supportsGLSL3 = love.graphics.getSupported().glsl3
+	local graphicsfeatures = love.graphics.getSupported()
+	local supportsGLSL3 = graphicsfeatures.glsl3
+	local supportsGLSL4 = graphicsfeatures.glsl4
 	local gammacorrect = love.graphics.isGammaCorrect()
 
 	local targetlang = getLanguageTarget(pixelcode or vertexcode)
@@ -405,7 +408,11 @@ function love.graphics._shaderCodeToGLSL(gles, arg1, arg2)
 	end
 
 	if targetlang == "glsl3" and not supportsGLSL3 then
-		error("GLSL 3 shaders are not supported on this system!", 2)
+		error("GLSL 3 shaders are not supported on this system.", 2)
+	end
+
+	if targetlang == "glsl4" and not supportsGLSL4 then
+		error("GLSL 4 shaders are not supported on this system.", 2)
 	end
 
 	if targetlang ~= nil and not GLSL.VERSION[targetlang] then
@@ -427,41 +434,6 @@ function love.graphics._shaderCodeToGLSL(gles, arg1, arg2)
 	end
 
 	return vertexcode, pixelcode
-end
-
-function love.graphics._transformGLSLErrorMessages(message)
-	local shadertype = message:match("Cannot compile (%a+) shader code")
-	local compiling = shadertype ~= nil
-	if not shadertype then
-		shadertype = message:match("Error validating (%a+) shader")
-	end
-	if not shadertype then return message end
-	local lines = {}
-	local prefix = compiling and "Cannot compile " or "Error validating "
-	lines[#lines+1] = prefix..shadertype.." shader code:"
-	for l in message:gmatch("[^\n]+") do
-		-- nvidia: 0(<linenumber>) : error/warning [NUMBER]: <error message>
-		local linenumber, what, message = l:match("^0%((%d+)%)%s*:%s*(%w+)[^:]+:%s*(.+)$")
-		if not linenumber then
-			-- AMD: ERROR 0:<linenumber>: error/warning(#[NUMBER]) [ERRORNAME]: <errormessage>
-			linenumber, what, message = l:match("^%w+: 0:(%d+):%s*(%w+)%([^%)]+%)%s*(.+)$")
-		end
-		if not linenumber then
-			-- macOS (?): ERROR: 0:<linenumber>: <errormessage>
-			what, linenumber, message = l:match("^(%w+): %d+:(%d+): (.+)$")
-		end
-		if not linenumber and l:match("^ERROR:") then
-			what = l
-		end
-		if linenumber and what and message then
-			lines[#lines+1] = ("Line %d: %s: %s"):format(linenumber, what, message)
-		elseif what then
-			lines[#lines+1] = what
-		end
-	end
-	-- did not match any known error messages
-	if #lines == 1 then return message end
-	return table_concat(lines, "\n")
 end
 
 local defaultcode = {

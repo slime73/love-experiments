@@ -18,46 +18,23 @@
  * 3. This notice may not be removed or altered from any source distribution.
  **/
 
-#ifndef LOVE_OSX_H
-#define LOVE_OSX_H
-
-#include "config.h"
-
-#ifdef LOVE_MACOSX
-
-#include <string>
+#include "wrap_NativeFile.h"
+#include "wrap_File.h"
 
 namespace love
 {
-namespace macosx
+namespace filesystem
 {
 
-/**
- * Returns the filepath of the first detected love file in the Resources folder
- * in the main bundle (love.app.)
- * Returns an empty string if no love file is found.
- **/
-std::string getLoveInResources();
+NativeFile *luax_checknativefile(lua_State *L, int idx)
+{
+	return luax_checktype<NativeFile>(L, idx);
+}
 
-/**
- * Checks for drop-file events. Returns the filepath if an event occurred, or
- * an empty string otherwise.
- **/
-std::string checkDropEvents();
+extern "C" int luaopen_nativefile(lua_State *L)
+{
+	return luax_register_type(L, &NativeFile::type, w_File_functions, nullptr);
+}
 
-/**
- * Returns the full path to the executable.
- **/
-std::string getExecutablePath();
-
-/**
- * Bounce the dock icon, if the app isn't in the foreground.
- **/
-void requestAttention(bool continuous);
-
-} // macosx
+} // filesystem
 } // love
-
-#endif // LOVE_MACOSX
-
-#endif // LOVE_OSX_H

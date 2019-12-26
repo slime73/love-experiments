@@ -20,7 +20,7 @@
 
 #include "Event.h"
 
-#include "filesystem/DroppedFile.h"
+#include "filesystem/NativeFile.h"
 #include "filesystem/Filesystem.h"
 #include "keyboard/sdl/Keyboard.h"
 #include "joystick/JoystickModule.h"
@@ -51,7 +51,7 @@ static void windowToDPICoords(double *x, double *y)
 		window->windowToDPICoords(x, y);
 }
 
-#ifndef LOVE_MACOSX
+#ifndef LOVE_MACOS
 static void normalizedToDPICoords(double *x, double *y)
 {
 	double w = 1.0, h = 1.0;
@@ -184,7 +184,7 @@ Message *Event::convert(const SDL_Event &e)
 	const char *txt2;
 	std::map<SDL_Keycode, love::keyboard::Keyboard::Key>::const_iterator keyit;
 
-#ifndef LOVE_MACOSX
+#ifndef LOVE_MACOS
 	love::touch::sdl::Touch *touchmodule = nullptr;
 	love::touch::Touch::TouchInfo touchinfo;
 #endif
@@ -303,7 +303,7 @@ Message *Event::convert(const SDL_Event &e)
 		// screen events, but most touch devices in OS X aren't touch screens
 		// (and SDL doesn't differentiate.) Non-screen touch devices like Mac
 		// trackpads won't give touch coords in the window's coordinate-space.
-#ifndef LOVE_MACOSX
+#ifndef LOVE_MACOS
 		touchinfo.id = (int64) e.tfinger.fingerId;
 		touchinfo.x = e.tfinger.x;
 		touchinfo.y = e.tfinger.y;
@@ -418,8 +418,8 @@ Message *Event::convert(const SDL_Event &e)
 			}
 			else
 			{
-				auto *file = new love::filesystem::DroppedFile(e.drop.file);
-				vargs.emplace_back(&love::filesystem::DroppedFile::type, file);
+				auto *file = new love::filesystem::NativeFile(e.drop.file);
+				vargs.emplace_back(&love::filesystem::NativeFile::type, file);
 				msg = new Message("filedropped", vargs);
 				file->release();
 			}

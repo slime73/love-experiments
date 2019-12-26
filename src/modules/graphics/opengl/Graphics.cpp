@@ -189,8 +189,10 @@ bool Graphics::setMode(int width, int height, int pixelwidth, int pixelheight, b
 
 	gl.setTextureUnit(0);
 
-	// Set pixel row alignment
+	// Set pixel row alignment - code that calls glTexSubImage and glReadPixels
+	// assumes there's no row alignment, but OpenGL defaults to 4 bytes.
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	glPixelStorei(GL_PACK_ALIGNMENT, 1);
 
 	// Always enable seamless cubemap filtering when possible.
 	if (GLAD_VERSION_3_2 || GLAD_ARB_seamless_cube_map)
@@ -978,7 +980,7 @@ void Graphics::present(void *screenshotCallbackData)
 
 			try
 			{
-				img = imagemodule->newImageData(w, h, PIXELFORMAT_RGBA8, screenshot);
+				img = imagemodule->newImageData(w, h, PIXELFORMAT_RGBA8_UNORM, screenshot);
 			}
 			catch (love::Exception &)
 			{
@@ -1387,8 +1389,9 @@ void Graphics::initCapabilities()
 	capabilities.features[FEATURE_PIXEL_SHADER_HIGHP] = gl.isPixelShaderHighpSupported();
 	capabilities.features[FEATURE_SHADER_DERIVATIVES] = GLAD_VERSION_2_0 || GLAD_ES_VERSION_3_0 || GLAD_OES_standard_derivatives;
 	capabilities.features[FEATURE_GLSL3] = GLAD_ES_VERSION_3_0 || gl.isCoreProfile();
+	capabilities.features[FEATURE_GLSL4] = GLAD_ES_VERSION_3_1 || (gl.isCoreProfile() && GLAD_VERSION_4_3);
 	capabilities.features[FEATURE_INSTANCING] = gl.isInstancingSupported();
-	static_assert(FEATURE_MAX_ENUM == 8, "Graphics::initCapabilities must be updated when adding a new graphics feature!");
+	static_assert(FEATURE_MAX_ENUM == 9, "Graphics::initCapabilities must be updated when adding a new graphics feature!");
 
 	capabilities.limits[LIMIT_POINT_SIZE] = gl.getMaxPointSize();
 	capabilities.limits[LIMIT_TEXTURE_SIZE] = gl.getMax2DTextureSize();
