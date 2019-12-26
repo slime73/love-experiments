@@ -233,7 +233,7 @@ void RenderPass::beginPass(DrawContext *context)
 		for (int i = 0; i < rts.colorCount; i++)
 		{
 			auto c = rts.colors[i].canvas.get();
-			if (c != nullptr && c->getPixelFormat() == PIXELFORMAT_sRGBA8)
+			if (c != nullptr && c->getPixelFormat() == PIXELFORMAT_sRGBA8_UNORM)
 			{
 				hasSRGBcanvas = true;
 				break;
@@ -304,7 +304,7 @@ void RenderPass::beginPass(DrawContext *context)
 		if (rts.depthStencil.canvas.get())
 			format = rts.depthStencil.canvas->getPixelFormat();
 		else if (context->isBackbuffer)
-			format = PIXELFORMAT_DEPTH24_STENCIL8;;
+			format = PIXELFORMAT_DEPTH24_UNORM_STENCIL8;;
 
 		if (isPixelFormatDepth(format))
 		{

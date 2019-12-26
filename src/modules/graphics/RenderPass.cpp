@@ -322,9 +322,9 @@ void RenderPass::execute(Graphics *gfx)
 	{
 		PixelFormat dsformat = PIXELFORMAT_STENCIL8;
 		if (rts.autoDepth && rts.autoStencil)
-			dsformat = PIXELFORMAT_DEPTH24_STENCIL8;
-		else if (rts.autoDepth && gfx->isCanvasFormatSupported(PIXELFORMAT_DEPTH24, false))
-			dsformat = PIXELFORMAT_DEPTH24;
+			dsformat = PIXELFORMAT_DEPTH24_UNORM_STENCIL8;
+		else if (rts.autoDepth && gfx->isCanvasFormatSupported(PIXELFORMAT_DEPTH24_UNORM, false))
+			dsformat = PIXELFORMAT_DEPTH24_UNORM;
 		else if (rts.autoStencil)
 			dsformat = PIXELFORMAT_STENCIL8;
 
