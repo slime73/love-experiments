@@ -143,7 +143,7 @@ Status triangulate(const std::vector<love::Vector2> &polygon, std::vector<Triang
 		}
 		else if (++skipped > n_vertices)
 		{
-			throw love::Exception("Cannot triangulate polygon.");
+			return love::setError("Cannot triangulate polygon.");
 		}
 		current = next;
 	}
