@@ -27,6 +27,7 @@
 #include "Object.h"
 #include "Variant.h"
 #include "deprecation.h"
+#include "error.h"
 
 // Lua
 extern "C" {
@@ -704,6 +705,8 @@ int luax_catchexcept(lua_State *L, const T& func, const F& finallyfunc)
 
 	return 0;
 }
+
+int luax_checkerror(lua_State *L, Status status);
 
 /**
  * Compatibility shim for lua_resume

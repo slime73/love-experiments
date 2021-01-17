@@ -246,6 +246,8 @@ set(LOVE_SRC_COMMON
 	src/common/deprecation.cpp
 	src/common/deprecation.h
 	src/common/EnumMap.h
+	src/common/error.cpp
+	src/common/error.h
 	src/common/Exception.cpp
 	src/common/Exception.h
 	src/common/floattypes.cpp

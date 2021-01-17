@@ -113,14 +113,14 @@ RandomGenerator::Seed RandomGenerator::getSeed() const
 	return seed;
 }
 
-void RandomGenerator::setState(const std::string &statestr)
+Status RandomGenerator::setState(const std::string &statestr)
 {
 	// For this implementation we'll accept a hex string representing the
 	// 64-bit state integer xorshift uses.
 
 	// Hex string must start with 0x.
 	if (statestr.find("0x") != 0 || statestr.size() < 3)
-		throw love::Exception("Invalid random state: %s", statestr.c_str());
+		return love::setError("Invalid random state: %s", statestr.c_str());
 
 	Seed state = {};
 
@@ -128,11 +128,13 @@ void RandomGenerator::setState(const std::string &statestr)
 	state.b64 = strtoull(statestr.c_str(), &end, 16);
 
 	if (end != nullptr && *end != 0)
-		throw love::Exception("Invalid random state: %s", statestr.c_str());
+		return love::setError("Invalid random state: %s", statestr.c_str());
 
 	rng_state = state;
 
 	last_randomnormal = std::numeric_limits<double>::infinity();
+
+	return Status::OK;
 }
 
 std::string RandomGenerator::getState() const

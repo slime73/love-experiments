@@ -1134,6 +1134,13 @@ Type *luax_type(lua_State *L, int idx)
 	return Type::byName(luaL_checkstring(L, idx));
 }
 
+int luax_checkerror(lua_State *L, Status status)
+{
+	if (isError(status))
+		return luaL_error(L, "%s", love::getLastError());
+	return 0;
+}
+
 int luax_resume(lua_State *L, int nargs, int* nres)
 {
 #if LUA_VERSION_NUM >= 504

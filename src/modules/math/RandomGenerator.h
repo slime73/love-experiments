@@ -23,7 +23,7 @@
 
 // LOVE
 #include "common/config.h"
-#include "common/Exception.h"
+#include "common/error.h"
 #include "common/math.h"
 #include "common/int.h"
 #include "common/Object.h"
@@ -126,7 +126,7 @@ public:
 	/**
 	 * Set the internal implementation-dependent state value based on a string.
 	 **/
-	void setState(const std::string &statestr);
+	Status setState(const std::string &statestr);
 
 	/**
 	 * Get a string representation of the implementation-dependent internal

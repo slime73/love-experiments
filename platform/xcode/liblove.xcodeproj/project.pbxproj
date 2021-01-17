@@ -64,6 +64,9 @@
 		217DFC101D9F6D490055D849 /* url.lua.h in Headers */ = {isa = PBXBuildFile; fileRef = 217DFBD41D9F6D490055D849 /* url.lua.h */; };
 		217DFC111D9F6D490055D849 /* usocket.c in Sources */ = {isa = PBXBuildFile; fileRef = 217DFBD51D9F6D490055D849 /* usocket.c */; };
 		217DFC121D9F6D490055D849 /* usocket.h in Headers */ = {isa = PBXBuildFile; fileRef = 217DFBD61D9F6D490055D849 /* usocket.h */; };
+		FA004BC525B4DD500051390F /* error.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA004BC325B4DD500051390F /* error.cpp */; };
+		FA004BC625B4DD500051390F /* error.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA004BC325B4DD500051390F /* error.cpp */; };
+		FA004BC725B4DD500051390F /* error.h in Headers */ = {isa = PBXBuildFile; fileRef = FA004BC425B4DD500051390F /* error.h */; };
 		FA0A3A5F23366CE9001C269E /* floattypes.h in Headers */ = {isa = PBXBuildFile; fileRef = FA0A3A5D23366CE9001C269E /* floattypes.h */; };
 		FA0A3A6023366CE9001C269E /* floattypes.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA0A3A5E23366CE9001C269E /* floattypes.cpp */; };
 		FA0A3A6123366CE9001C269E /* floattypes.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA0A3A5E23366CE9001C269E /* floattypes.cpp */; };
@@ -1305,6 +1308,8 @@
 		217DFBD51D9F6D490055D849 /* usocket.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = usocket.c; sourceTree = "<group>"; };
 		217DFBD61D9F6D490055D849 /* usocket.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = usocket.h; sourceTree = "<group>"; };
 		503971A86B7167A91B670FBA /* boot.lua.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = boot.lua.h; sourceTree = "<group>"; };
+		FA004BC325B4DD500051390F /* error.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = error.cpp; sourceTree = "<group>"; };
+		FA004BC425B4DD500051390F /* error.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = error.h; sourceTree = "<group>"; };
 		FA08F5AE16C7525600F007B5 /* liblove-macosx.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = "liblove-macosx.plist"; path = "macosx/liblove-macosx.plist"; sourceTree = "<group>"; };
 		FA0A3A5D23366CE9001C269E /* floattypes.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = floattypes.h; sourceTree = "<group>"; };
 		FA0A3A5E23366CE9001C269E /* floattypes.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = floattypes.cpp; sourceTree = "<group>"; };
@@ -2210,6 +2215,8 @@
 				FA91DA891F377C3900C80E33 /* deprecation.cpp */,
 				FA91DA8A1F377C3900C80E33 /* deprecation.h */,
 				FA0B78FD1A958E3B000E1D17 /* EnumMap.h */,
+				FA004BC325B4DD500051390F /* error.cpp */,
+				FA004BC425B4DD500051390F /* error.h */,
 				FA0B78FE1A958E3B000E1D17 /* Exception.cpp */,
 				FA0B78FF1A958E3B000E1D17 /* Exception.h */,
 				FA0A3A5E23366CE9001C269E /* floattypes.cpp */,
@@ -3907,6 +3914,7 @@
 				FA0B7E621A95902C000E1D17 /* wrap_Physics.h in Headers */,
 				FA0B7DF01A95902C000E1D17 /* Mouse.h in Headers */,
 				FABDA9E62552448300B5C523 /* b2_api.h in Headers */,
+				FA004BC725B4DD500051390F /* error.h in Headers */,
 				217DFBDC1D9F6D490055D849 /* buffer.h in Headers */,
 				FA0B7DAD1A95902C000E1D17 /* STBHandler.h in Headers */,
 				FABDA9BB2552448300B5C523 /* b2_dynamic_tree.h in Headers */,
@@ -4606,6 +4614,7 @@
 				FA0B79331A958E3B000E1D17 /* Object.cpp in Sources */,
 				FAE64A8D2071363500BC7981 /* physfs_platform_apple.m in Sources */,
 				FA0B7E5B1A95902C000E1D17 /* wrap_MotorJoint.cpp in Sources */,
+				FA004BC625B4DD500051390F /* error.cpp in Sources */,
 				FA0B79441A958E3B000E1D17 /* Variant.cpp in Sources */,
 				FA9D8DDA1DEF8411002CD881 /* Stream.cpp in Sources */,
 				FA0B7DD71A95902C000E1D17 /* MathModule.cpp in Sources */,
@@ -5001,6 +5010,7 @@
 				FA0B7E9A1A95902C000E1D17 /* VorbisDecoder.cpp in Sources */,
 				FA0B7E4B1A95902C000E1D17 /* wrap_EdgeShape.cpp in Sources */,
 				FA9D8DD91DEF8411002CD881 /* Stream.cpp in Sources */,
+				FA004BC525B4DD500051390F /* error.cpp in Sources */,
 				FA0B7E241A95902C000E1D17 /* PrismaticJoint.cpp in Sources */,
 				FAC7CD791FE35E95006A60C7 /* physfs.c in Sources */,
 				FAC756FA1E4F99D200B91289 /* Effect.cpp in Sources */,
