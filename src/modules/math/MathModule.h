@@ -28,6 +28,7 @@
 #include "common/math.h"
 #include "common/Vector.h"
 #include "common/int.h"
+#include "common/error.h"
 
 // Noise
 #include "libraries/noise1234/noise1234.h"
@@ -58,7 +59,7 @@ struct Triangle
  * @param polygon Polygon to triangulate. Must not intersect itself.
  * @return List of triangles the polygon is composed of.
  **/
-std::vector<Triangle> triangulate(const std::vector<love::Vector2> &polygon);
+Status triangulate(const std::vector<love::Vector2> &polygon, std::vector<Triangle> &result);
 
 /**
  * Checks whether a polygon is convex.

@@ -87,12 +87,15 @@ namespace love
 namespace math
 {
 
-std::vector<Triangle> triangulate(const std::vector<love::Vector2> &polygon)
+Status triangulate(const std::vector<love::Vector2> &polygon, std::vector<Triangle> &triangles)
 {
 	if (polygon.size() < 3)
-		throw love::Exception("Not a polygon");
+		return love::setError("Not a polygon");
 	else if (polygon.size() == 3)
-		return std::vector<Triangle>(1, Triangle(polygon[0], polygon[1], polygon[2]));
+	{
+		triangles.emplace_back(polygon[0], polygon[1], polygon[2]);
+		return Status::OK;
+	}
 
 	// collect list of connections and record leftmost item to check if the polygon
 	// has the expected winding
@@ -122,7 +125,6 @@ std::vector<Triangle> triangulate(const std::vector<love::Vector2> &polygon)
 	}
 
 	// triangulation according to kong
-	std::vector<Triangle> triangles;
 	size_t n_vertices = polygon.size();
 	size_t current = 1, skipped = 0, next, prev;
 	while (n_vertices > 3)
@@ -149,7 +151,7 @@ std::vector<Triangle> triangulate(const std::vector<love::Vector2> &polygon)
 	prev = prev_idx[current];
 	triangles.push_back(Triangle(polygon[prev], polygon[current], polygon[next]));
 
-	return triangles;
+	return Status::OK;
 }
 
 bool isConvex(const std::vector<love::Vector2> &polygon)

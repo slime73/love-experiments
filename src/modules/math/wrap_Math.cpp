@@ -58,23 +58,7 @@ int w_newRandomGenerator(lua_State *L)
 	RandomGenerator *t = instance()->newRandomGenerator();
 
 	if (lua_gettop(L) > 0)
-	{
-		bool should_error = false;
-
-		try
-		{
-			t->setSeed(s);
-		}
-		catch (love::Exception &e)
-		{
-			t->release();
-			should_error = true;
-			lua_pushstring(L, e.what());
-		}
-
-		if (should_error)
-			return luaL_error(L, "%s", lua_tostring(L, -1));
-	}
+		t->setSeed(s);
 
 	luax_pushtype(L, t);
 	t->release();
@@ -183,12 +167,10 @@ int w_triangulate(lua_State *L)
 
 	std::vector<Triangle> triangles;
 
-	luax_catchexcept(L, [&]() {
-		if (vertices.size() == 3)
-			triangles.push_back(Triangle(vertices[0], vertices[1], vertices[2]));
-		else
-			triangles = triangulate(vertices);
-	});
+	if (vertices.size() == 3)
+		triangles.push_back(Triangle(vertices[0], vertices[1], vertices[2]));
+	else
+		luax_checkerror(L, triangulate(vertices, triangles));
 
 	lua_createtable(L, (int) triangles.size(), 0);
 	for (int i = 0; i < (int) triangles.size(); ++i)
