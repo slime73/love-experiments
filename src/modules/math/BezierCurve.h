@@ -24,6 +24,7 @@
 // LOVE
 #include "common/Object.h"
 #include "common/Vector.h"
+#include "common/error.h"
 #include <vector>
 
 namespace love
@@ -53,19 +54,19 @@ public:
 	/**
 	 * @returns First derivative of the curve.
 	 */
-	BezierCurve getDerivative() const;
+	BezierCurve *getDerivative() const;
 
 	/**
 	 * @returns i'th control point.
 	 **/
-	const Vector2 &getControlPoint(int i) const;
+	Status getControlPoint(int i, Vector2 &point) const;
 
 	/**
 	 * Sets the i'th control point.
 	 * @param i Control point to change.
 	 * @param point New control point.
 	 **/
-	void setControlPoint(int i, const Vector2 &point);
+	Status setControlPoint(int i, const Vector2 &point);
 
 	/**
 	 * Insert a new control point before the i'th control point.
@@ -79,7 +80,7 @@ public:
 	 * Remove the i'th control point from the curve.
 	 * @param i Control point to remove
 	 **/
-	void removeControlPoint(int i);
+	Status removeControlPoint(int i);
 
 	/**
 	 * @returns Number of control points.
@@ -113,7 +114,7 @@ public:
 	 * Evaluates the curve at time t.
 	 * @param t Curve parameter, must satisfy 0 <= t <= 1.
 	 **/
-	Vector2 evaluate(double t) const;
+	Status evaluate(double t, Vector2 &v) const;
 
 	/**
 	 * Get curve segment starting at t1 and ending at t2.
@@ -129,7 +130,7 @@ public:
 	 * @param accuracy The 'fineness' of the curve.
 	 * @returns A polygon chain that approximates the bezier curve.
 	 **/
-	std::vector<Vector2> render(int accuracy = 4) const;
+	Status render(int accuracy, std::vector<Vector2> &points) const;
 
 	/**
 	 * Renders a segment of the curve by subdivision.
@@ -138,11 +139,13 @@ public:
 	 * @param accuracy The 'fineness' of the curve.
 	 * @returns A polygon chain that approximates the segment along the curve
 	 **/
-	std::vector<Vector2> renderSegment(double start, double end, int accuracy = 4) const;
+	Status renderSegment(double start, double end, int accuracy, std::vector<Vector2> &points) const;
 
 private:
+
 	std::vector<Vector2> controlPoints;
-};
+
+}; // BezierCurve
 
 }
 }

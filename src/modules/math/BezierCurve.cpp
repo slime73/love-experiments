@@ -94,24 +94,27 @@ BezierCurve::BezierCurve(const vector<Vector2> &pts)
 }
 
 
-BezierCurve BezierCurve::getDerivative() const
+BezierCurve *BezierCurve::getDerivative() const
 {
 	if (getDegree() < 1)
-		throw Exception("Cannot derive a curve of degree < 1.");
-	// actually we can, it just doesn't make any sense.
+	{
+		// actually we can, it just doesn't make any sense.
+		love::setError("Cannot derive a curve of degree < 1.");
+		return nullptr;
+	}
 
 	vector<Vector2> forward_differences(controlPoints.size()-1);
 	float degree = float(getDegree());
 	for (size_t i = 0; i < forward_differences.size(); ++i)
 		forward_differences[i] = (controlPoints[i+1] - controlPoints[i]) * degree;
 
-	return BezierCurve(forward_differences);
+	return new BezierCurve(forward_differences);
 }
 
-const Vector2 &BezierCurve::getControlPoint(int i) const
+Status BezierCurve::getControlPoint(int i, Vector2 &point) const
 {
 	if (controlPoints.size() == 0)
-		throw Exception("Curve contains no control points.");
+		return love::setError("Curve contains no control points.");
 		
 	while (i < 0)
 		i += controlPoints.size();
@@ -119,13 +122,14 @@ const Vector2 &BezierCurve::getControlPoint(int i) const
 	while ((size_t) i >= controlPoints.size())
 		i -= controlPoints.size();
 
-	return controlPoints[i];
+	point = controlPoints[i];
+	return Status::OK;
 }
 
-void BezierCurve::setControlPoint(int i, const Vector2 &point)
+Status BezierCurve::setControlPoint(int i, const Vector2 &point)
 {
 	if (controlPoints.size() == 0)
-		throw Exception("Curve contains no control points.");
+		return love::setError("Curve contains no control points.");
 
 	while (i < 0)
 		i += controlPoints.size();
@@ -134,6 +138,7 @@ void BezierCurve::setControlPoint(int i, const Vector2 &point)
 		i -= controlPoints.size();
 
 	controlPoints[i] = point;
+	return Status::OK;
 }
 
 void BezierCurve::insertControlPoint(const Vector2 &point, int i)
@@ -150,10 +155,10 @@ void BezierCurve::insertControlPoint(const Vector2 &point, int i)
 	controlPoints.insert(controlPoints.begin() + i, point);
 }
 
-void BezierCurve::removeControlPoint(int i)
+Status BezierCurve::removeControlPoint(int i)
 {
 	if (controlPoints.size() == 0)
-		throw Exception("No control points to remove.");
+		return love::setError("No control points to remove.");
 
 	while (i < 0)
 		i += controlPoints.size();
@@ -162,6 +167,7 @@ void BezierCurve::removeControlPoint(int i)
 		i -= controlPoints.size();
 
 	controlPoints.erase(controlPoints.begin() + i);
+	return Status::OK;
 }
 
 void BezierCurve::translate(const Vector2 &t)
@@ -187,12 +193,12 @@ void BezierCurve::scale(double s, const Vector2 &center)
 		controlPoints[i] = (controlPoints[i] - center) * s + center;
 }
 
-Vector2 BezierCurve::evaluate(double t) const
+Status BezierCurve::evaluate(double t, Vector2 &v) const
 {
 	if (t < 0 || t > 1)
-		throw Exception("Invalid evaluation parameter: must be between 0 and 1");
+		return love::setError("Invalid evaluation parameter: must be between 0 and 1");
 	if (controlPoints.size() < 2)
-		throw Exception("Invalid Bezier curve: Not enough control points.");
+		return love::setError("Invalid Bezier curve: Not enough control points.");
 
 	// de casteljau
 	vector<Vector2> points(controlPoints);
@@ -200,15 +206,23 @@ Vector2 BezierCurve::evaluate(double t) const
 		for (size_t i = 0; i < controlPoints.size() - step; ++i)
 			points[i] = points[i] * (1-t) + points[i+1] * t;
 
-	return points[0];
+	v = points[0];
+	return Status::OK;
 }
 
 BezierCurve* BezierCurve::getSegment(double t1, double t2) const
 {
 	if (t1 < 0 || t2 > 1)
-		throw Exception("Invalid segment parameters: must be between 0 and 1");
+	{
+		love::setError("Invalid segment parameters: must be between 0 and 1");
+		return nullptr;
+	}
+
 	if (t2 <= t1)
-		throw Exception("Invalid segment parameters: t1 must be smaller than t2");
+	{
+		love::setError("Invalid segment parameters: t1 must be smaller than t2");
+		return nullptr;
+	}
 
 	// First, sudivide the curve at t2, then subdivide the "left"
 	// sub-curve at t1/t2. The "right" curve is the segment.
@@ -241,19 +255,19 @@ BezierCurve* BezierCurve::getSegment(double t1, double t2) const
 	return new BezierCurve(right);
 }
 
-vector<Vector2> BezierCurve::render(int accuracy) const
+Status BezierCurve::render(int accuracy, std::vector<Vector2> &points) const
 {
 	if (controlPoints.size() < 2)
-		throw Exception("Invalid Bezier curve: Not enough control points.");
-	vector<Vector2> vertices(controlPoints);
-	subdivide(vertices, accuracy);
-	return vertices;
+		return love::setError("Invalid Bezier curve: Not enough control points.");
+	points = controlPoints;
+	subdivide(points, accuracy);
+	return Status::OK;
 }
 
-vector<Vector2> BezierCurve::renderSegment(double start, double end, int accuracy) const
+Status BezierCurve::renderSegment(double start, double end, int accuracy, std::vector<Vector2> &points) const
 {
 	if (controlPoints.size() < 2)
-		throw Exception("Invalid Bezier curve: Not enough control points.");
+		return love::setError("Invalid Bezier curve: Not enough control points.");
 	vector<Vector2> vertices(controlPoints);
 	subdivide(vertices, accuracy);
 	if (start == end)
@@ -264,15 +278,16 @@ vector<Vector2> BezierCurve::renderSegment(double start, double end, int accurac
 	{
 		size_t start_idx = size_t(start * vertices.size());
 		size_t end_idx = size_t(end * vertices.size() + 0.5);
-		return std::vector<Vector2>(vertices.begin() + start_idx, vertices.begin() + end_idx);
+		points = std::vector<Vector2>(vertices.begin() + start_idx, vertices.begin() + end_idx);
 	}
 	else if (end > start)
 	{
 		size_t start_idx = size_t(end * vertices.size() + 0.5);
 		size_t end_idx = size_t(start * vertices.size());
-		return std::vector<Vector2>(vertices.begin() + start_idx, vertices.begin() + end_idx);
+		points = std::vector<Vector2>(vertices.begin() + start_idx, vertices.begin() + end_idx);
 	}
-	return vertices;
+	points = vertices;
+	return Status::OK;
 }
 
 } // namespace math

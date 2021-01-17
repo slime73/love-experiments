@@ -708,6 +708,15 @@ int luax_catchexcept(lua_State *L, const T& func, const F& finallyfunc)
 
 int luax_checkerror(lua_State *L, Status status);
 
+// Error on null
+template <typename T>
+T *luax_checkerror(lua_State *L, T *object)
+{
+	if (object == nullptr)
+		luax_checkerror(L, Status::ERROR);
+	return object;
+}
+
 /**
  * Compatibility shim for lua_resume
  * Exported because it's used in the launcher

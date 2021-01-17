@@ -29,7 +29,7 @@ namespace love
 enum class Status
 {
 	OK,
-	ERROR,
+	ERROR
 };
 
 inline bool isError(Status s) { return s != Status::OK; }
