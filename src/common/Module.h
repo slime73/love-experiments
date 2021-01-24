@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -38,6 +38,7 @@ public:
 
 	enum ModuleType
 	{
+		M_UNKNOWN = -1, // Use this for modules outside of LOVE's source code.
 		M_AUDIO,
 		M_DATA,
 		M_EVENT,
@@ -99,7 +100,7 @@ public:
 	template <typename T>
 	static T *getInstance(ModuleType type)
 	{
-		return (T *) instances[type];
+		return type != M_UNKNOWN ? (T *) instances[type] : nullptr;
 	}
 
 private:

@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2006-2019 LOVE Development Team
+Copyright (c) 2006-2020 LOVE Development Team
 
 This software is provided 'as-is', without any express or implied
 warranty.  In no event will the authors be held liable for any damages
@@ -400,7 +400,6 @@ function love.init()
 			borderless = false,
 			resizable = false,
 			centered = true,
-			highdpi = false,
 			usedpiscale = true,
 		},
 		modules = {
@@ -433,6 +432,7 @@ function love.init()
 		externalstorage = false, -- Only relevant for Android.
 		accelerometerjoystick = true, -- Only relevant for Android / iOS.
 		gammacorrect = false,
+		highdpi = false,
 	}
 
 	-- Console hack, part 1.
@@ -468,6 +468,10 @@ function love.init()
 
 	if love._setGammaCorrect then
 		love._setGammaCorrect(c.gammacorrect)
+	end
+
+	if love._setHighDPIAllowed then
+		love._setHighDPIAllowed(c.highdpi)
 	end
 
 	if love._setAudioMixWithSystem then
@@ -532,6 +536,7 @@ function love.init()
 
 	-- Setup window here.
 	if c.window and c.modules.window then
+		love.window.setTitle(c.window.title or c.title)
 		assert(love.window.setMode(c.window.width, c.window.height,
 		{
 			fullscreen = c.window.fullscreen,
@@ -546,12 +551,11 @@ function love.init()
 			borderless = c.window.borderless,
 			centered = c.window.centered,
 			display = c.window.display,
-			highdpi = c.window.highdpi,
+			highdpi = c.window.highdpi, -- deprecated
 			usedpiscale = c.window.usedpiscale,
 			x = c.window.x,
 			y = c.window.y,
 		}), "Could not set window mode")
-		love.window.setTitle(c.window.title or c.title)
 		if c.window.icon then
 			assert(love.image, "If an icon is set in love.conf, love.image must be loaded!")
 			love.window.setIcon(love.image.newImageData(c.window.icon))
@@ -598,7 +602,7 @@ function love.run()
 			for name, a,b,c,d,e,f in love.event.poll() do
 				if name == "quit" then
 					if not love.quit or not love.quit() then
-						return a or 0
+						return a or 0, b
 					end
 				end
 				love.handlers[name](a,b,c,d,e,f)
@@ -673,7 +677,7 @@ function love.errhand(msg)
 	love.graphics.reset()
 	local font = love.graphics.setNewFont(14)
 
-	love.graphics.setColor(1, 1, 1, 1)
+	love.graphics.setColor(1, 1, 1)
 
 	local trace = debug.traceback()
 
@@ -799,8 +803,8 @@ return function()
 	func = earlyinit
 
 	while func do
-		local _, retval = xpcall(func, deferErrhand)
-		if retval then return retval end
+		local _, retval, restartvalue = xpcall(func, deferErrhand)
+		if retval then return retval, restartvalue end
 		coroutine.yield()
 	end
 

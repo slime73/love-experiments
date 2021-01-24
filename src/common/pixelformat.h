@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -33,29 +33,32 @@ enum PixelFormat
 	PIXELFORMAT_NORMAL,
 	PIXELFORMAT_HDR,
 
-	// "regular" formats
+	// 1-channel normal formats
 	PIXELFORMAT_R8_UNORM,
+	PIXELFORMAT_R16_UNORM,
+	PIXELFORMAT_R16_FLOAT,
+	PIXELFORMAT_R32_FLOAT,
+
+	// 2-channel normal formats
 	PIXELFORMAT_RG8_UNORM,
+	PIXELFORMAT_LA8_UNORM, // Same as RG8, but accessed as (L, L, L, A)
+	PIXELFORMAT_RG16_UNORM,
+	PIXELFORMAT_RG16_FLOAT,
+	PIXELFORMAT_RG32_FLOAT,
+
+	// 4-channel normal formats
 	PIXELFORMAT_RGBA8_UNORM,
 	PIXELFORMAT_sRGBA8_UNORM,
-	PIXELFORMAT_R16_UNORM,
-	PIXELFORMAT_RG16_UNORM,
 	PIXELFORMAT_RGBA16_UNORM,
-	PIXELFORMAT_R16_FLOAT,
-	PIXELFORMAT_RG16_FLOAT,
 	PIXELFORMAT_RGBA16_FLOAT,
-	PIXELFORMAT_R32_FLOAT,
-	PIXELFORMAT_RG32_FLOAT,
 	PIXELFORMAT_RGBA32_FLOAT,
-
-	PIXELFORMAT_LA8_UNORM, // Same as RG8, but accessed as (L, L, L, A)
 
 	// packed formats
 	PIXELFORMAT_RGBA4_UNORM,    // LSB->MSB: [a, b, g, r]
 	PIXELFORMAT_RGB5A1_UNORM,   // LSB->MSB: [a, b, g, r]
 	PIXELFORMAT_RGB565_UNORM,   // LSB->MSB: [b, g, r]
 	PIXELFORMAT_RGB10A2_UNORM,  // LSB->MSB: [r, g, b, a]
-	PIXELFORMAT_RG11B10_FLOAT, // LSB->MSB: [r, g, b]
+	PIXELFORMAT_RG11B10_FLOAT,  // LSB->MSB: [r, g, b]
 
 	// depth/stencil formats
 	PIXELFORMAT_STENCIL8,
@@ -106,8 +109,22 @@ enum PixelFormat
 	PIXELFORMAT_MAX_ENUM
 };
 
+struct PixelFormatInfo
+{
+	int components;
+	size_t blockWidth;
+	size_t blockHeight;
+	size_t blockSize;
+	bool color;
+	bool depth;
+	bool stencil;
+	bool compressed;
+};
+
 bool getConstant(PixelFormat in, const char *&out);
 bool getConstant(const char *in, PixelFormat &out);
+
+const PixelFormatInfo &getPixelFormatInfo(PixelFormat format);
 
 /**
  * Gets whether the specified pixel format is a compressed type.
@@ -130,10 +147,46 @@ bool isPixelFormatDepth(PixelFormat format);
 bool isPixelFormatStencil(PixelFormat format);
 
 /**
- * Gets the size in bytes of the specified pixel format.
- * NOTE: Currently returns 0 for compressed formats.
+ * Gets the sRGB version of a linear pixel format, if applicable.
  **/
-size_t getPixelFormatSize(PixelFormat format);
+PixelFormat getSRGBPixelFormat(PixelFormat format);
+
+/**
+ * Gets the linear version of a sRGB pixel format, if applicable.
+ **/
+PixelFormat getLinearPixelFormat(PixelFormat format);
+
+/**
+ * Gets the block size in bytes of the specified pixel format.
+ * This is the size in bytes of a pixel for uncompressed formats, but *not*
+ * for compressed formats!
+ **/
+size_t getPixelFormatBlockSize(PixelFormat format);
+
+/**
+ * Gets the size in bytes of a row of an uncompressed pixel format.
+ **/
+size_t getPixelFormatUncompressedRowSize(PixelFormat format, int width);
+
+/**
+ * Gets the size in bytes of a row of a compressed pixel format. This is the
+ * number of blocks used by the given width, multiplied by the block size. The
+ * number of rows of blocks for a given height can be computed by
+ * getPixelFormatCompressedBlockRowCount.
+ **/
+size_t getPixelFormatCompressedBlockRowSize(PixelFormat format, int width);
+
+/**
+ * Gets the number of rows of blocks the given compressed pixel format will use,
+ * for the given height in pixels.
+ **/
+size_t getPixelFormatCompressedBlockRowCount(PixelFormat format, int height);
+
+/**
+ * Gets the size in bytes of a slice (width x height 2D plane) which uses the
+ * given pixel format.
+ **/
+size_t getPixelFormatSliceSize(PixelFormat format, int width, int height);
 
 /**
  * Gets the number of color components in the given pixel format.

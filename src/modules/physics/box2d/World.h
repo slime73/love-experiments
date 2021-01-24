@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -31,7 +31,7 @@
 #include <unordered_map>
 
 // Box2D
-#include <Box2D/Box2D.h>
+#include <box2d/Box2D.h>
 
 namespace love
 {
@@ -107,7 +107,7 @@ public:
 	public:
 		RayCastCallback(World *world, lua_State *L, int idx);
 		~RayCastCallback();
-		virtual float32 ReportFixture(b2Fixture *fixture, const b2Vec2 &point, const b2Vec2 &normal, float32 fraction);
+		virtual float ReportFixture(b2Fixture *fixture, const b2Vec2 &point, const b2Vec2 &normal, float fraction);
 	private:
 		World *world;
 		lua_State *L;

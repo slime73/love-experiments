@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -183,7 +183,7 @@ World::RayCastCallback::~RayCastCallback()
 {
 }
 
-float32 World::RayCastCallback::ReportFixture(b2Fixture *fixture, const b2Vec2 &point, const b2Vec2 &normal, float32 fraction)
+float World::RayCastCallback::ReportFixture(b2Fixture *fixture, const b2Vec2 &point, const b2Vec2 &normal, float fraction)
 {
 	if (L != nullptr)
 	{
@@ -201,7 +201,7 @@ float32 World::RayCastCallback::ReportFixture(b2Fixture *fixture, const b2Vec2 &
 		lua_call(L, 6, 1);
 		if (!lua_isnumber(L, -1))
 			luaL_error(L, "Raycast callback didn't return a number!");
-		float32 fraction = (float32) lua_tonumber(L, -1);
+		float fraction = (float) lua_tonumber(L, -1);
 		lua_pop(L, 1);
 		return fraction;
 	}

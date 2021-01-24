@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -33,16 +33,18 @@ love::Type Text::type("Text", &Drawable::type);
 Text::Text(Font *font, const std::vector<Font::ColoredString> &text)
 	: font(font)
 	, vertexAttributes(Font::vertexFormat, 0)
-	, vertex_buffer(nullptr)
-	, vert_offset(0)
-	, texture_cache_id((uint32) -1)
+	, vertexData(nullptr)
+	, modifiedVertices()
+	, vertOffset(0)
+	, textureCacheID((uint32) -1)
 {
 	set(text);
 }
 
 Text::~Text()
 {
-	delete vertex_buffer;
+	if (vertexData != nullptr)
+		free(vertexData);
 }
 
 void Text::uploadVertices(const std::vector<Font::GlyphVertex> &vertices, size_t vertoffset)
@@ -51,31 +53,40 @@ void Text::uploadVertices(const std::vector<Font::GlyphVertex> &vertices, size_t
 	size_t datasize = vertices.size() * sizeof(Font::GlyphVertex);
 
 	// If we haven't created a VBO or the vertices are too big, make a new one.
-	if (datasize > 0 && (!vertex_buffer || (offset + datasize) > vertex_buffer->getSize()))
+	if (datasize > 0 && (!vertexBuffer || (offset + datasize) > vertexBuffer->getSize()))
 	{
 		// Make it bigger than necessary to reduce potential future allocations.
 		size_t newsize = size_t((offset + datasize) * 1.5);
 
-		if (vertex_buffer != nullptr)
-			newsize = std::max(size_t(vertex_buffer->getSize() * 1.5), newsize);
+		if (vertexBuffer != nullptr)
+			newsize = std::max(size_t(vertexBuffer->getSize() * 1.5), newsize);
 
 		auto gfx = Module::getInstance<Graphics>(Module::M_GRAPHICS);
-		Buffer *new_buffer = gfx->newBuffer(newsize, nullptr, BUFFER_VERTEX, vertex::USAGE_DYNAMIC, 0);
 
-		if (vertex_buffer != nullptr)
-			vertex_buffer->copyTo(0, vertex_buffer->getSize(), new_buffer, 0);
+		Buffer::Settings settings(BUFFERUSAGEFLAG_VERTEX, BUFFERDATAUSAGE_DYNAMIC);
+		auto decl = Buffer::getCommonFormatDeclaration(Font::vertexFormat);
+		Buffer *newbuffer = gfx->newBuffer(settings, decl, nullptr, newsize, 0);
 
-		delete vertex_buffer;
-		vertex_buffer = new_buffer;
+		void *newdata = nullptr;
+		if (vertexData != nullptr)
+			newdata = realloc(vertexData, newsize);
+		else
+			newdata = malloc(newsize);
 
-		vertexBuffers.set(0, vertex_buffer, 0);
+		if (newdata == nullptr)
+			throw love::Exception("Out of memory.");
+		else
+			vertexData = (uint8 *) newdata;
+
+		vertexBuffer = newbuffer;
+
+		vertexBuffers.set(0, vertexBuffer, 0);
 	}
 
-	if (vertex_buffer != nullptr && datasize > 0)
+	if (vertexData != nullptr && datasize > 0)
 	{
-		uint8 *bufferdata = (uint8 *) vertex_buffer->map();
-		memcpy(bufferdata + offset, &vertices[0], datasize);
-		// We unmap when we draw, to avoid unnecessary full map()/unmap() calls.
+		memcpy(vertexData + offset, &vertices[0], datasize);
+		modifiedVertices.encapsulate(offset, datasize);
 	}
 }
 
@@ -83,85 +94,85 @@ void Text::regenerateVertices()
 {
 	// If the font's texture cache was invalidated then we need to recreate the
 	// text's vertices, since glyph texcoords might have changed.
-	if (font->getTextureCacheID() != texture_cache_id)
+	if (font->getTextureCacheID() != textureCacheID)
 	{
-		std::vector<TextData> textdata = text_data;
+		std::vector<TextData> textdata = textData;
 
 		clear();
 
 		for (const TextData &t : textdata)
 			addTextData(t);
 
-		texture_cache_id = font->getTextureCacheID();
+		textureCacheID = font->getTextureCacheID();
 	}
 }
 
 void Text::addTextData(const TextData &t)
 {
 	std::vector<Font::GlyphVertex> vertices;
-	std::vector<Font::DrawCommand> new_commands;
+	std::vector<Font::DrawCommand> newcommands;
 
-	Font::TextInfo text_info;
+	Font::TextInfo textinfo;
 
 	Colorf constantcolor = Colorf(1.0f, 1.0f, 1.0f, 1.0f);
 
 	// We only have formatted text if the align mode is valid.
 	if (t.align == Font::ALIGN_MAX_ENUM)
-		new_commands = font->generateVertices(t.codepoints, constantcolor, vertices, 0.0f, Vector2(0.0f, 0.0f), &text_info);
+		newcommands = font->generateVertices(t.codepoints, constantcolor, vertices, 0.0f, Vector2(0.0f, 0.0f), &textinfo);
 	else
-		new_commands = font->generateVerticesFormatted(t.codepoints, constantcolor, t.wrap, t.align, vertices, &text_info);
+		newcommands = font->generateVerticesFormatted(t.codepoints, constantcolor, t.wrap, t.align, vertices, &textinfo);
 
-	size_t voffset = vert_offset;
+	size_t voffset = vertOffset;
 
 	// Must be before the early exit below.
-	if (!t.append_vertices)
+	if (!t.appendVertices)
 	{
 		voffset = 0;
-		vert_offset = 0;
-		draw_commands.clear();
-		text_data.clear();
+		vertOffset = 0;
+		drawCommands.clear();
+		textData.clear();
 	}
 
 	if (vertices.empty())
 		return;
 
-	if (t.use_matrix)
+	if (t.useMatrix)
 		t.matrix.transformXY(&vertices[0], &vertices[0], (int) vertices.size());
 
 	uploadVertices(vertices, voffset);
 
-	if (!new_commands.empty())
+	if (!newcommands.empty())
 	{
 		// The start vertex should be adjusted to account for the vertex offset.
-		for (Font::DrawCommand &cmd : new_commands)
+		for (Font::DrawCommand &cmd : newcommands)
 			cmd.startvertex += (int) voffset;
 
-		auto firstcmd = new_commands.begin();
+		auto firstcmd = newcommands.begin();
 
 		// If the first draw command in the new list has the same texture as the
 		// last one in the existing list we're building and its vertices are
 		// in-order, we can combine them (saving a draw call.)
-		if (!draw_commands.empty())
+		if (!drawCommands.empty())
 		{
-			auto prevcmd = draw_commands.back();
+			auto prevcmd = drawCommands.back();
 			if (prevcmd.texture == firstcmd->texture && (prevcmd.startvertex + prevcmd.vertexcount) == firstcmd->startvertex)
 			{
-				draw_commands.back().vertexcount += firstcmd->vertexcount;
+				drawCommands.back().vertexcount += firstcmd->vertexcount;
 				++firstcmd;
 			}
 		}
 
 		// Append the new draw commands to the list we're building.
-		draw_commands.insert(draw_commands.end(), firstcmd, new_commands.end());
+		drawCommands.insert(drawCommands.end(), firstcmd, newcommands.end());
 	}
 
-	vert_offset = voffset + vertices.size();
+	vertOffset = voffset + vertices.size();
 
-	text_data.push_back(t);
-	text_data.back().text_info = text_info;
+	textData.push_back(t);
+	textData.back().textInfo = textinfo;
 
 	// Font::generateVertices can invalidate the font's texture cache.
-	if (font->getTextureCacheID() != texture_cache_id)
+	if (font->getTextureCacheID() != textureCacheID)
 		regenerateVertices();
 }
 
@@ -193,15 +204,15 @@ int Text::addf(const std::vector<Font::ColoredString> &text, float wrap, Font::A
 
 	addTextData({codepoints, wrap, align, {}, true, true, m});
 
-	return (int) text_data.size() - 1;
+	return (int) textData.size() - 1;
 }
 
 void Text::clear()
 {
-	text_data.clear();
-	draw_commands.clear();
-	texture_cache_id = font->getTextureCacheID();
-	vert_offset = 0;
+	textData.clear();
+	drawCommands.clear();
+	textureCacheID = font->getTextureCacheID();
+	vertOffset = 0;
 }
 
 void Text::setFont(Font *f)
@@ -210,7 +221,7 @@ void Text::setFont(Font *f)
 	
 	// Invalidate the texture cache ID since the font is different. We also have
 	// to re-upload all the vertices based on the new font's textures.
-	texture_cache_id = (uint32) -1;
+	textureCacheID = (uint32) -1;
 	regenerateVertices();
 }
 
@@ -222,47 +233,67 @@ Font *Text::getFont() const
 int Text::getWidth(int index) const
 {
 	if (index < 0)
-		index = std::max((int) text_data.size() - 1, 0);
+		index = std::max((int) textData.size() - 1, 0);
 
-	if (index >= (int) text_data.size())
+	if (index >= (int) textData.size())
 		return 0;
 
-	return text_data[index].text_info.width;
+	return textData[index].textInfo.width;
 }
 
 int Text::getHeight(int index) const
 {
 	if (index < 0)
-		index = std::max((int) text_data.size() - 1, 0);
+		index = std::max((int) textData.size() - 1, 0);
 
-	if (index >= (int) text_data.size())
+	if (index >= (int) textData.size())
 		return 0;
 
-	return text_data[index].text_info.height;
+	return textData[index].textInfo.height;
 }
 
 void Text::draw(Graphics *gfx, const Matrix4 &m)
 {
-	if (vertex_buffer == nullptr || draw_commands.empty())
+	if (vertexBuffer == nullptr || vertexData == nullptr || drawCommands.empty())
 		return;
 
-	gfx->flushStreamDraws();
+	gfx->flushBatchedDraws();
 
 	if (Shader::isDefaultActive())
 		Shader::attachDefault(Shader::STANDARD_DEFAULT);
 
+	Texture *firsttex = nullptr;
+	if (!drawCommands.empty())
+		firsttex = drawCommands[0].texture;
+
 	if (Shader::current)
-		Shader::current->checkMainTextureType(TEXTURE_2D, false);
+		Shader::current->validateDrawState(PRIMITIVE_TRIANGLES, firsttex);
 
 	// Re-generate the text if the Font's texture cache was invalidated.
-	if (font->getTextureCacheID() != texture_cache_id)
+	if (font->getTextureCacheID() != textureCacheID)
 		regenerateVertices();
 
-	vertex_buffer->unmap(); // Make sure all pending data is flushed to the GPU.
+	int totalverts = 0;
+	for (const Font::DrawCommand &cmd : drawCommands)
+		totalverts = std::max(cmd.startvertex + cmd.vertexcount, totalverts);
+
+	// Make sure all pending data is uploaded to the GPU.
+	if (modifiedVertices.isValid())
+	{
+		size_t offset = modifiedVertices.getOffset();
+		size_t size = modifiedVertices.getSize();
+
+		if (vertexBuffer->getDataUsage() == BUFFERDATAUSAGE_STREAM)
+			vertexBuffer->fill(0, vertexBuffer->getSize(), vertexData);
+		else
+			vertexBuffer->fill(offset, size, vertexData + offset);
+
+		modifiedVertices.invalidate();
+	}
 
 	Graphics::TempTransform transform(gfx, m);
 
-	for (const Font::DrawCommand &cmd : draw_commands)
+	for (const Font::DrawCommand &cmd : drawCommands)
 		gfx->drawQuads(cmd.startvertex / 4, cmd.vertexcount / 4, vertexAttributes, vertexBuffers, cmd.texture);
 }
 

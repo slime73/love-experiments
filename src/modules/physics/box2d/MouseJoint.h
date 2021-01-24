@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -76,26 +76,44 @@ public:
 	float getMaxForce() const;
 
 	/**
-	 * Sets the response speed.
+	 * Sets the response speed. Independent of mass
 	 **/
 	void setFrequency(float hz);
 
 	/**
-	 * Gets the response speed.
+	 * Gets the response speed. Independent of mass
 	 **/
 	float getFrequency() const;
 
 	/**
-	 * Sets the damping ratio.
-	 * 0 = no damping, 1 = critical damping.
+	 * Set the spring damping ratio. Independent of mass
 	 **/
-	void setDampingRatio(float d);
+	void setDampingRatio(float ratio);
 
 	/**
-	 * Gets the damping ratio.
-	 * 0 = no damping, 1 = critical damping.
+	 * Get the spring damping ratio. Independent of mass
 	 **/
 	float getDampingRatio() const;
+
+	/**
+	 * Sets the response speed. Dependent of mass
+	 **/
+	void setStiffness(float k);
+
+	/**
+	 * Gets the response speed. Dependent of mass
+	 **/
+	float getStiffness() const;
+
+	/**
+	 * Set the spring damping. Dependent of mass
+	 **/
+	void setDamping(float ratio);
+
+	/**
+	 * Get the spring damping. Dependent of mass
+	 **/
+	float getDamping() const;
 
 	virtual Body *getBodyA() const;
 	virtual Body *getBodyB() const;

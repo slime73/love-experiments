@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -35,26 +35,6 @@ namespace love
 {
 namespace macos
 {
-
-static std::string getUserDirectory(NSSearchPathDirectory dir)
-{
-	std::string path;
-
-	@autoreleasepool
-	{
-		NSArray<NSURL *> *dirs = [[NSFileManager defaultManager] URLsForDirectory:dir inDomains:NSUserDomainMask];
-
-		if (dirs.count > 0)
-			path = [dirs[0].path UTF8String];
-	}
-
-	return path;
-}
-
-std::string getAppdataDirectory()
-{
-	return getUserDirectory(NSApplicationSupportDirectory);
-}
 
 std::string getLoveInResources()
 {
@@ -92,14 +72,6 @@ std::string checkDropEvents()
 	SDL_QuitSubSystem(SDL_INIT_VIDEO);
 
 	return dropstr;
-}
-
-std::string getExecutablePath()
-{
-	@autoreleasepool
-	{
-		return std::string([NSBundle mainBundle].executablePath.UTF8String);
-	}
 }
 
 void requestAttention(bool continuous)

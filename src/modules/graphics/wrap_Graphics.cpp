@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -37,17 +37,13 @@
 #include <cassert>
 #include <cstring>
 #include <cstdlib>
+#include <sstream>
 
 #include <algorithm>
 
 // Shove the wrap_Graphics.lua code directly into a raw string literal.
 static const char graphics_lua[] =
 #include "wrap_Graphics.lua"
-;
-
-// This is in a separate file because VS2013 has a 16KB limit for raw strings..
-static const char graphics_shader_lua[] =
-#include "wrap_GraphicsShader.lua"
 ;
 
 namespace love
@@ -169,7 +165,7 @@ int w_discard(lua_State *L)
 	else
 	{
 		bool discardcolor = luax_optboolean(L, 1, true);
-		size_t numbuffers = std::max((size_t) 1, instance()->getCanvas().colors.size());
+		size_t numbuffers = std::max((size_t) 1, instance()->getRenderTargets().colors.size());
 		colorbuffers = std::vector<bool>(numbuffers, discardcolor);
 	}
 
@@ -249,10 +245,10 @@ int w_getDPIScale(lua_State *L)
 static Graphics::RenderTarget checkRenderTarget(lua_State *L, int idx)
 {
 	lua_rawgeti(L, idx, 1);
-	Graphics::RenderTarget target(luax_checkcanvas(L, -1), 0);
+	Graphics::RenderTarget target(luax_checktexture(L, -1), 0);
 	lua_pop(L, 1);
 
-	TextureType type = target.canvas->getTextureType();
+	TextureType type = target.texture->getTextureType();
 	if (type == TEXTURE_2D_ARRAY || type == TEXTURE_VOLUME)
 		target.slice = luax_checkintflag(L, idx, "layer") - 1;
 	else if (type == TEXTURE_CUBE)
@@ -271,7 +267,7 @@ int w_setCanvas(lua_State *L)
 	// called with none -> reset to default buffer
 	if (lua_isnoneornil(L, 1))
 	{
-		instance()->setCanvas();
+		instance()->setRenderTarget();
 		return 0;
 	}
 
@@ -292,10 +288,10 @@ int w_setCanvas(lua_State *L)
 				targets.colors.push_back(checkRenderTarget(L, -1));
 			else
 			{
-				targets.colors.emplace_back(luax_checkcanvas(L, -1), 0);
+				targets.colors.emplace_back(luax_checktexture(L, -1), 0);
 
-				if (targets.colors.back().canvas->getTextureType() != TEXTURE_2D)
-					return luaL_error(L, "Non-2D canvases must use the table-of-tables variant of setCanvas.");
+				if (targets.colors.back().texture->getTextureType() != TEXTURE_2D)
+					return luaL_error(L, "Non-2D textures must use the table-of-tables variant of setCanvas.");
 			}
 
 			lua_pop(L, 1);
@@ -311,21 +307,21 @@ int w_setCanvas(lua_State *L)
 		else if (dstype == LUA_TBOOLEAN)
 			targets.temporaryRTFlags |= luax_toboolean(L, -1) ? (tempdepthflag | tempstencilflag) : 0;
 		else if (dstype != LUA_TNONE && dstype != LUA_TNIL)
-			targets.depthStencil.canvas = luax_checkcanvas(L, -1);
+			targets.depthStencil.texture = luax_checktexture(L, -1);
 		lua_pop(L, 1);
 
-		if (targets.depthStencil.canvas == nullptr && (targets.temporaryRTFlags & tempdepthflag) == 0)
+		if (targets.depthStencil.texture == nullptr && (targets.temporaryRTFlags & tempdepthflag) == 0)
 			targets.temporaryRTFlags |= luax_boolflag(L, 1, "depth", false) ? tempdepthflag : 0;
 
-		if (targets.depthStencil.canvas == nullptr && (targets.temporaryRTFlags & tempstencilflag) == 0)
+		if (targets.depthStencil.texture == nullptr && (targets.temporaryRTFlags & tempstencilflag) == 0)
 			targets.temporaryRTFlags |= luax_boolflag(L, 1, "stencil", false) ? tempstencilflag : 0;
 	}
 	else
 	{
 		for (int i = 1; i <= lua_gettop(L); i++)
 		{
-			Graphics::RenderTarget target(luax_checkcanvas(L, i), 0);
-			TextureType type = target.canvas->getTextureType();
+			Graphics::RenderTarget target(luax_checktexture(L, i), 0);
+			TextureType type = target.texture->getTextureType();
 
 			if (i == 1 && type != TEXTURE_2D)
 			{
@@ -348,10 +344,10 @@ int w_setCanvas(lua_State *L)
 	}
 
 	luax_catchexcept(L, [&]() {
-		if (targets.getFirstTarget().canvas != nullptr)
-			instance()->setCanvas(targets);
+		if (targets.getFirstTarget().texture != nullptr)
+			instance()->setRenderTargets(targets);
 		else
-			instance()->setCanvas();
+			instance()->setRenderTarget();
 	});
 	
 	return 0;
@@ -361,10 +357,10 @@ static void pushRenderTarget(lua_State *L, const Graphics::RenderTarget &rt)
 {
 	lua_createtable(L, 1, 2);
 
-	luax_pushtype(L, rt.canvas);
+	luax_pushtype(L, rt.texture);
 	lua_rawseti(L, -2, 1);
 
-	TextureType type = rt.canvas->getTextureType();
+	TextureType type = rt.texture->getTextureType();
 
 	if (type == TEXTURE_2D_ARRAY || type == TEXTURE_VOLUME)
 	{
@@ -383,7 +379,7 @@ static void pushRenderTarget(lua_State *L, const Graphics::RenderTarget &rt)
 
 int w_getCanvas(lua_State *L)
 {
-	Graphics::RenderTargets targets = instance()->getCanvas();
+	Graphics::RenderTargets targets = instance()->getRenderTargets();
 	int ntargets = (int) targets.colors.size();
 
 	if (ntargets == 0)
@@ -392,13 +388,13 @@ int w_getCanvas(lua_State *L)
 		return 1;
 	}
 
-	bool shouldUseTablesVariant = targets.depthStencil.canvas != nullptr;
+	bool shouldUseTablesVariant = targets.depthStencil.texture != nullptr;
 
 	if (!shouldUseTablesVariant)
 	{
 		for (const auto &rt : targets.colors)
 		{
-			if (rt.mipmap != 0 || rt.canvas->getTextureType() != TEXTURE_2D)
+			if (rt.mipmap != 0 || rt.texture->getTextureType() != TEXTURE_2D)
 			{
 				shouldUseTablesVariant = true;
 				break;
@@ -416,7 +412,7 @@ int w_getCanvas(lua_State *L)
 			lua_rawseti(L, -2, i + 1);
 		}
 
-		if (targets.depthStencil.canvas != nullptr)
+		if (targets.depthStencil.texture != nullptr)
 		{
 			pushRenderTarget(L, targets.depthStencil);
 			lua_setfield(L, -2, "depthstencil");
@@ -427,7 +423,7 @@ int w_getCanvas(lua_State *L)
 	else
 	{
 		for (const auto &rt : targets.colors)
-			luax_pushtype(L, rt.canvas);
+			luax_pushtype(L, rt.texture);
 
 		return ntargets;
 	}
@@ -700,30 +696,6 @@ static void parseDPIScale(Data *d, float *dpiscale)
 	}
 }
 
-static Image::Settings w__optImageSettings(lua_State *L, int idx, bool &setdpiscale)
-{
-	Image::Settings s;
-
-	setdpiscale = false;
-	if (!lua_isnoneornil(L, idx))
-	{
-		luax_checktablefields<Image::SettingType>(L, idx, "image setting name", Image::getConstant);
-
-		s.mipmaps = luax_boolflag(L, idx, Image::getConstant(Image::SETTING_MIPMAPS), s.mipmaps);
-		s.linear = luax_boolflag(L, idx, Image::getConstant(Image::SETTING_LINEAR), s.linear);
-
-		lua_getfield(L, idx, Image::getConstant(Image::SETTING_DPI_SCALE));
-		if (lua_isnumber(L, -1))
-		{
-			s.dpiScale = (float) lua_tonumber(L, -1);
-			setdpiscale = true;
-		}
-		lua_pop(L, 1);
-	}
-
-	return s;
-}
-
 static std::pair<StrongRef<image::ImageData>, StrongRef<image::CompressedImageData>>
 getImageData(lua_State *L, int idx, bool allowcompressed, float *dpiscale)
 {
@@ -757,283 +729,492 @@ getImageData(lua_State *L, int idx, bool allowcompressed, float *dpiscale)
 	return std::make_pair(idata, cdata);
 }
 
-static int w__pushNewImage(lua_State *L, Image::Slices &slices, const Image::Settings &settings)
+static int w__pushNewTexture(lua_State *L, Texture::Slices *slices, const Texture::Settings &settings)
 {
-	StrongRef<Image> i;
+	StrongRef<Texture> i;
 	luax_catchexcept(L,
-		[&]() { i.set(instance()->newImage(slices, settings), Acquire::NORETAIN); },
-		[&](bool) { slices.clear(); }
+		[&]() { i.set(instance()->newTexture(settings, slices), Acquire::NORETAIN); },
+		[&](bool) { if (slices) slices->clear(); }
 	);
 
 	luax_pushtype(L, i);
 	return 1;
 }
 
-int w_newCubeImage(lua_State *L)
+static void luax_checktexturesettings(lua_State *L, int idx, bool opt, bool checkType, bool checkDimensions, OptionalBool forceRenderTarget, Texture::Settings &s, bool &setdpiscale)
+{
+	setdpiscale = false;
+	if (forceRenderTarget.hasValue)
+		s.renderTarget = forceRenderTarget.value;
+
+	if (opt && lua_isnoneornil(L, idx))
+		return;
+
+	luax_checktablefields<Texture::SettingType>(L, idx, "texture setting name", Texture::getConstant);
+
+	if (!forceRenderTarget.hasValue)
+		s.renderTarget = luax_boolflag(L, idx, Texture::getConstant(Texture::SETTING_RENDER_TARGET), s.renderTarget);
+
+	lua_getfield(L, idx, Texture::getConstant(Texture::SETTING_FORMAT));
+	if (!lua_isnoneornil(L, -1))
+	{
+		const char *str = luaL_checkstring(L, -1);
+		if (!getConstant(str, s.format))
+			luax_enumerror(L, "pixel format", str);
+	}
+	lua_pop(L, 1);
+
+	if (checkType)
+	{
+		lua_getfield(L, idx, Texture::getConstant(Texture::SETTING_TYPE));
+		if (!lua_isnoneornil(L, -1))
+		{
+			const char *str = luaL_checkstring(L, -1);
+			if (!Texture::getConstant(str, s.type))
+				luax_enumerror(L, "texture type", Texture::getConstants(s.type), str);
+		}
+		lua_pop(L, 1);
+	}
+
+	if (checkDimensions)
+	{
+		s.width = luax_checkintflag(L, idx, Texture::getConstant(Texture::SETTING_WIDTH));
+		s.height = luax_checkintflag(L, idx, Texture::getConstant(Texture::SETTING_HEIGHT));
+		if (s.type == TEXTURE_2D_ARRAY || s.type == TEXTURE_VOLUME)
+			s.layers = luax_checkintflag(L, idx, Texture::getConstant(Texture::SETTING_LAYERS));
+	}
+
+	lua_getfield(L, idx, Texture::getConstant(Texture::SETTING_MIPMAPS));
+	if (!lua_isnoneornil(L, -1))
+	{
+		if (lua_type(L, -1) == LUA_TBOOLEAN)
+			s.mipmaps = luax_toboolean(L, -1) ? Texture::MIPMAPS_MANUAL : Texture::MIPMAPS_NONE;
+		else
+		{
+			const char *str = luaL_checkstring(L, -1);
+			if (!Texture::getConstant(str, s.mipmaps))
+				luax_enumerror(L, "Texture mipmap mode", Texture::getConstants(s.mipmaps), str);
+		}
+	}
+	lua_pop(L, 1);
+
+	s.linear = luax_boolflag(L, idx, Texture::getConstant(Texture::SETTING_LINEAR), s.linear);
+	s.msaa = luax_intflag(L, idx, Texture::getConstant(Texture::SETTING_MSAA), s.msaa);
+
+	lua_getfield(L, idx, Texture::getConstant(Texture::SETTING_READABLE));
+	if (!lua_isnoneornil(L, -1))
+		s.readable.set(luax_checkboolean(L, -1));
+	lua_pop(L, 1);
+
+	lua_getfield(L, idx, Texture::getConstant(Texture::SETTING_DPI_SCALE));
+	if (lua_isnumber(L, -1))
+	{
+		s.dpiScale = (float) lua_tonumber(L, -1);
+		setdpiscale = true;
+	}
+	lua_pop(L, 1);
+}
+
+int w_newCanvas(lua_State *L)
 {
 	luax_checkgraphicscreated(L);
 
-	Image::Slices slices(TEXTURE_CUBE);
+	Texture::Settings s;
 
-	bool dpiscaleset = false;
-	Image::Settings settings = w__optImageSettings(L, 2, dpiscaleset);
-	float *autodpiscale = dpiscaleset ? nullptr : &settings.dpiScale;
+	OptionalBool forceRenderTarget(true);
+	bool setDPIScale = false;
 
-	auto imagemodule = Module::getInstance<love::image::Image>(Module::M_IMAGE);
-
-	if (!lua_istable(L, 1))
+	if (lua_istable(L, 1))
 	{
-		auto data = getImageData(L, 1, true, autodpiscale);
-
-		std::vector<StrongRef<love::image::ImageData>> faces;
-
-		if (data.first.get())
-		{
-			luax_catchexcept(L, [&](){ faces = imagemodule->newCubeFaces(data.first); });
-
-			for (int i = 0; i < (int) faces.size(); i++)
-				slices.set(i, 0, faces[i]);
-		}
-		else
-			slices.add(data.second, 0, 0, true, settings.mipmaps);
+		luax_checktexturesettings(L, 1, false, true, true, forceRenderTarget, s, setDPIScale);
 	}
 	else
 	{
-		int tlen = (int) luax_objlen(L, 1);
+		// check if width and height are given. else default to screen dimensions.
+		s.width  = (int) luaL_optinteger(L, 1, instance()->getWidth());
+		s.height = (int) luaL_optinteger(L, 2, instance()->getHeight());
 
-		if (luax_isarrayoftables(L, 1))
+		int startidx = 3;
+
+		if (lua_isnumber(L, 3))
 		{
-			if (tlen != 6)
-				return luaL_error(L, "Cubemap images must have 6 faces.");
-
-			for (int face = 0; face < tlen; face++)
-			{
-				lua_rawgeti(L, 1, face + 1);
-				luaL_checktype(L, -1, LUA_TTABLE);
-
-				int miplen = std::max(1, (int) luax_objlen(L, -1));
-
-				for (int mip = 0; mip < miplen; mip++)
-				{
-					lua_rawgeti(L, -1, mip + 1);
-
-					auto data = getImageData(L, -1, true, face == 0 && mip == 0 ? autodpiscale : nullptr);
-					if (data.first.get())
-						slices.set(face, mip, data.first);
-					else
-						slices.set(face, mip, data.second->getSlice(0, 0));
-
-					lua_pop(L, 1);
-				}
-			}
+			s.layers = (int) luaL_checkinteger(L, 3);
+			s.type = TEXTURE_2D_ARRAY;
+			startidx = 4;
 		}
-		else
-		{
-			bool usemipmaps = false;
 
-			for (int i = 0; i < tlen; i++)
+		luax_checktexturesettings(L, startidx, true, true, false, forceRenderTarget, s, setDPIScale);
+	}
+
+	// Default to the screen's current pixel density scale.
+	if (!setDPIScale)
+		s.dpiScale = instance()->getScreenDPIScale();
+
+	Texture *texture = nullptr;
+	luax_catchexcept(L, [&](){ texture = instance()->newTexture(s); });
+
+	luax_pushtype(L, texture);
+	texture->release();
+	return 1;
+}
+
+int w_newTexture(lua_State *L)
+{
+	luax_checkgraphicscreated(L);
+
+	Texture::Slices slices(TEXTURE_2D);
+	Texture::Slices *slicesref = &slices;
+
+	Texture::Settings settings;
+	settings.type = TEXTURE_2D;
+	bool dpiscaleset = false;
+
+	if (lua_type(L, 1) == LUA_TNUMBER)
+	{
+		slicesref = nullptr;
+
+		settings.width = (int) luaL_checkinteger(L, 1);
+		settings.height = (int) luaL_checkinteger(L, 2);
+
+		int startidx = 3;
+
+		if (lua_type(L, 3) == LUA_TNUMBER)
+		{
+			settings.layers = (int) luaL_checkinteger(L, 3);
+			settings.type = TEXTURE_2D_ARRAY;
+			startidx = 4;
+		}
+
+		luax_checktexturesettings(L, startidx, true, true, false, OptionalBool(), settings, dpiscaleset);
+	}
+	else
+	{
+		luax_checktexturesettings(L, 2, true, false, false, OptionalBool(), settings, dpiscaleset);
+		float *autodpiscale = dpiscaleset ? nullptr : &settings.dpiScale;
+
+		if (lua_istable(L, 1))
+		{
+			int n = std::max(1, (int) luax_objlen(L, 1));
+			for (int i = 0; i < n; i++)
 			{
 				lua_rawgeti(L, 1, i + 1);
-
 				auto data = getImageData(L, -1, true, i == 0 ? autodpiscale : nullptr);
-
 				if (data.first.get())
-				{
-					if (usemipmaps || data.first->getWidth() != data.first->getHeight())
-					{
-						usemipmaps = true;
-
-						std::vector<StrongRef<love::image::ImageData>> faces;
-						luax_catchexcept(L, [&](){ faces = imagemodule->newCubeFaces(data.first); });
-
-						for (int face = 0; face < (int) faces.size(); face++)
-							slices.set(face, i, faces[i]);
-					}
-					else
-						slices.set(i, 0, data.first);
-				}
+					slices.set(0, i, data.first);
 				else
-					slices.add(data.second, i, 0, false, settings.mipmaps);
+					slices.set(0, i, data.second->getSlice(0, 0));
 			}
+			lua_pop(L, n);
 		}
-
-		lua_pop(L, tlen);
+		else
+		{
+			auto data = getImageData(L, 1, true, autodpiscale);
+			if (data.first.get())
+				slices.set(0, 0, data.first);
+			else
+				slices.add(data.second, 0, 0, false, settings.mipmaps != Texture::MIPMAPS_NONE);
+		}
 	}
 
-	return w__pushNewImage(L, slices, settings);
+	return w__pushNewTexture(L, slicesref, settings);
 }
 
-int w_newArrayImage(lua_State *L)
+int w_newCubeTexture(lua_State *L)
 {
 	luax_checkgraphicscreated(L);
 
-	Image::Slices slices(TEXTURE_2D_ARRAY);
+	Texture::Slices slices(TEXTURE_CUBE);
+	Texture::Slices *slicesref = &slices;
 
+	Texture::Settings settings;
+	settings.type = TEXTURE_CUBE;
 	bool dpiscaleset = false;
-	Image::Settings settings = w__optImageSettings(L, 2, dpiscaleset);
-	float *autodpiscale = dpiscaleset ? nullptr : &settings.dpiScale;
 
-	if (lua_istable(L, 1))
+	if (lua_type(L, 1) == LUA_TNUMBER)
 	{
-		int tlen = std::max(1, (int) luax_objlen(L, 1));
-
-		if (luax_isarrayoftables(L, 1))
-		{
-			for (int slice = 0; slice < tlen; slice++)
-			{
-				lua_rawgeti(L, 1, slice + 1);
-				luaL_checktype(L, -1, LUA_TTABLE);
-
-				int miplen = std::max(1, (int) luax_objlen(L, -1));
-
-				for (int mip = 0; mip < miplen; mip++)
-				{
-					lua_rawgeti(L, -1, mip + 1);
-
-					auto data = getImageData(L, -1, true, slice == 0 && mip == 0 ? autodpiscale : nullptr);
-					if (data.first.get())
-						slices.set(slice, mip, data.first);
-					else
-						slices.set(slice, mip, data.second->getSlice(0, 0));
-
-					lua_pop(L, 1);
-				}
-			}
-		}
-		else
-		{
-			for (int slice = 0; slice < tlen; slice++)
-			{
-				lua_rawgeti(L, 1, slice + 1);
-				auto data = getImageData(L, -1, true, slice == 0 ? autodpiscale : nullptr);
-				if (data.first.get())
-					slices.set(slice, 0, data.first);
-				else
-					slices.add(data.second, slice, 0, false, settings.mipmaps);
-			}
-		}
-
-		lua_pop(L, tlen);
+		slicesref = nullptr;
+		settings.width = settings.height = (int) luaL_checkinteger(L, 1);
+		luax_checktexturesettings(L, 2, true, false, false, OptionalBool(), settings, dpiscaleset);
 	}
 	else
 	{
-		auto data = getImageData(L, 1, true, autodpiscale);
-		if (data.first.get())
-			slices.set(0, 0, data.first);
+		luax_checktexturesettings(L, 2, true, false, false, OptionalBool(), settings, dpiscaleset);
+		float *autodpiscale = dpiscaleset ? nullptr : &settings.dpiScale;
+
+		auto imagemodule = Module::getInstance<love::image::Image>(Module::M_IMAGE);
+
+		if (!lua_istable(L, 1))
+		{
+			auto data = getImageData(L, 1, true, autodpiscale);
+
+			std::vector<StrongRef<love::image::ImageData>> faces;
+
+			if (data.first.get())
+			{
+				luax_catchexcept(L, [&](){ faces = imagemodule->newCubeFaces(data.first); });
+
+				for (int i = 0; i < (int) faces.size(); i++)
+					slices.set(i, 0, faces[i]);
+			}
+			else
+				slices.add(data.second, 0, 0, true, settings.mipmaps != Texture::MIPMAPS_NONE);
+		}
 		else
-			slices.add(data.second, 0, 0, true, settings.mipmaps);
+		{
+			int tlen = (int) luax_objlen(L, 1);
+
+			if (luax_isarrayoftables(L, 1))
+			{
+				if (tlen != 6)
+					return luaL_error(L, "Cubemap images must have 6 faces.");
+
+				for (int face = 0; face < tlen; face++)
+				{
+					lua_rawgeti(L, 1, face + 1);
+					luaL_checktype(L, -1, LUA_TTABLE);
+
+					int miplen = std::max(1, (int) luax_objlen(L, -1));
+
+					for (int mip = 0; mip < miplen; mip++)
+					{
+						lua_rawgeti(L, -1, mip + 1);
+
+						auto data = getImageData(L, -1, true, face == 0 && mip == 0 ? autodpiscale : nullptr);
+						if (data.first.get())
+							slices.set(face, mip, data.first);
+						else
+							slices.set(face, mip, data.second->getSlice(0, 0));
+
+						lua_pop(L, 1);
+					}
+				}
+			}
+			else
+			{
+				bool usemipmaps = false;
+
+				for (int i = 0; i < tlen; i++)
+				{
+					lua_rawgeti(L, 1, i + 1);
+
+					auto data = getImageData(L, -1, true, i == 0 ? autodpiscale : nullptr);
+
+					if (data.first.get())
+					{
+						if (usemipmaps || data.first->getWidth() != data.first->getHeight())
+						{
+							usemipmaps = true;
+
+							std::vector<StrongRef<love::image::ImageData>> faces;
+							luax_catchexcept(L, [&](){ faces = imagemodule->newCubeFaces(data.first); });
+
+							for (int face = 0; face < (int) faces.size(); face++)
+								slices.set(face, i, faces[i]);
+						}
+						else
+							slices.set(i, 0, data.first);
+					}
+					else
+						slices.add(data.second, i, 0, false, settings.mipmaps != Texture::MIPMAPS_NONE);
+				}
+			}
+
+			lua_pop(L, tlen);
+		}
 	}
 
-	return w__pushNewImage(L, slices, settings);
+	return w__pushNewTexture(L, slicesref, settings);
 }
 
-int w_newVolumeImage(lua_State *L)
+int w_newArrayTexture(lua_State *L)
+{
+	luax_checkgraphicscreated(L);
+
+	Texture::Slices slices(TEXTURE_2D_ARRAY);
+	Texture::Slices *slicesref = &slices;
+
+	Texture::Settings settings;
+	settings.type = TEXTURE_2D_ARRAY;
+	bool dpiscaleset = false;
+
+	if (lua_type(L, 1) == LUA_TNUMBER)
+	{
+		slicesref = nullptr;
+		settings.width = (int) luaL_checkinteger(L, 1);
+		settings.height = (int) luaL_checkinteger(L, 2);
+		settings.layers = (int) luaL_checkinteger(L, 3);
+		luax_checktexturesettings(L, 4, true, false, false, OptionalBool(), settings, dpiscaleset);
+	}
+	else
+	{
+		luax_checktexturesettings(L, 2, true, false, false, OptionalBool(), settings, dpiscaleset);
+		float *autodpiscale = dpiscaleset ? nullptr : &settings.dpiScale;
+
+		if (lua_istable(L, 1))
+		{
+			int tlen = std::max(1, (int) luax_objlen(L, 1));
+
+			if (luax_isarrayoftables(L, 1))
+			{
+				for (int slice = 0; slice < tlen; slice++)
+				{
+					lua_rawgeti(L, 1, slice + 1);
+					luaL_checktype(L, -1, LUA_TTABLE);
+
+					int miplen = std::max(1, (int) luax_objlen(L, -1));
+
+					for (int mip = 0; mip < miplen; mip++)
+					{
+						lua_rawgeti(L, -1, mip + 1);
+
+						auto data = getImageData(L, -1, true, slice == 0 && mip == 0 ? autodpiscale : nullptr);
+						if (data.first.get())
+							slices.set(slice, mip, data.first);
+						else
+							slices.set(slice, mip, data.second->getSlice(0, 0));
+
+						lua_pop(L, 1);
+					}
+				}
+			}
+			else
+			{
+				for (int slice = 0; slice < tlen; slice++)
+				{
+					lua_rawgeti(L, 1, slice + 1);
+					auto data = getImageData(L, -1, true, slice == 0 ? autodpiscale : nullptr);
+					if (data.first.get())
+						slices.set(slice, 0, data.first);
+					else
+						slices.add(data.second, slice, 0, false, settings.mipmaps != Texture::MIPMAPS_NONE);
+				}
+			}
+
+			lua_pop(L, tlen);
+		}
+		else
+		{
+			auto data = getImageData(L, 1, true, autodpiscale);
+			if (data.first.get())
+				slices.set(0, 0, data.first);
+			else
+				slices.add(data.second, 0, 0, true, settings.mipmaps != Texture::MIPMAPS_NONE);
+		}
+	}
+
+	return w__pushNewTexture(L, slicesref, settings);
+}
+
+int w_newVolumeTexture(lua_State *L)
 {
 	luax_checkgraphicscreated(L);
 
 	auto imagemodule = Module::getInstance<love::image::Image>(Module::M_IMAGE);
 
-	Image::Slices slices(TEXTURE_VOLUME);
+	Texture::Slices slices(TEXTURE_VOLUME);
+	Texture::Slices *slicesref = &slices;
 
+	Texture::Settings settings;
+	settings.type = TEXTURE_VOLUME;
 	bool dpiscaleset = false;
-	Image::Settings settings = w__optImageSettings(L, 2, dpiscaleset);
-	float *autodpiscale = dpiscaleset ? nullptr : &settings.dpiScale;
 
-	if (lua_istable(L, 1))
+	if (lua_type(L, 1) == LUA_TNUMBER)
 	{
-		int tlen = std::max(1, (int) luax_objlen(L, 1));
-
-		if (luax_isarrayoftables(L, 1))
-		{
-			for (int mip = 0; mip < tlen; mip++)
-			{
-				lua_rawgeti(L, 1, mip + 1);
-				luaL_checktype(L, -1, LUA_TTABLE);
-
-				int slicelen = std::max(1, (int) luax_objlen(L, -1));
-
-				for (int slice = 0; slice < slicelen; slice++)
-				{
-					lua_rawgeti(L, -1, mip + 1);
-
-					auto data = getImageData(L, -1, true, slice == 0 && mip == 0 ? autodpiscale : nullptr);
-					if (data.first.get())
-						slices.set(slice, mip, data.first);
-					else
-						slices.set(slice, mip, data.second->getSlice(0, 0));
-
-					lua_pop(L, 1);
-				}
-			}
-		}
-		else
-		{
-			for (int layer = 0; layer < tlen; layer++)
-			{
-				lua_rawgeti(L, 1, layer + 1);
-				auto data = getImageData(L, -1, true, layer == 0 ? autodpiscale : nullptr);
-				if (data.first.get())
-					slices.set(layer, 0, data.first);
-				else
-					slices.add(data.second, layer, 0, false, settings.mipmaps);
-			}
-		}
-
-		lua_pop(L, tlen);
+		slicesref = nullptr;
+		settings.width = (int) luaL_checkinteger(L, 1);
+		settings.height = (int) luaL_checkinteger(L, 2);
+		settings.layers = (int) luaL_checkinteger(L, 3);
+		luax_checktexturesettings(L, 4, true, false, false, OptionalBool(), settings, dpiscaleset);
 	}
 	else
 	{
-		auto data = getImageData(L, 1, true, autodpiscale);
+		luax_checktexturesettings(L, 2, true, false, false, OptionalBool(), settings, dpiscaleset);
+		float *autodpiscale = dpiscaleset ? nullptr : &settings.dpiScale;
 
-		if (data.first.get())
+		if (lua_istable(L, 1))
 		{
-			std::vector<StrongRef<love::image::ImageData>> layers;
-			luax_catchexcept(L, [&](){ layers = imagemodule->newVolumeLayers(data.first); });
+			int tlen = std::max(1, (int) luax_objlen(L, 1));
 
-			for (int i = 0; i < (int) layers.size(); i++)
-				slices.set(i, 0, layers[i]);
+			if (luax_isarrayoftables(L, 1))
+			{
+				for (int mip = 0; mip < tlen; mip++)
+				{
+					lua_rawgeti(L, 1, mip + 1);
+					luaL_checktype(L, -1, LUA_TTABLE);
+
+					int slicelen = std::max(1, (int) luax_objlen(L, -1));
+
+					for (int slice = 0; slice < slicelen; slice++)
+					{
+						lua_rawgeti(L, -1, slice + 1);
+
+						auto data = getImageData(L, -1, true, slice == 0 && mip == 0 ? autodpiscale : nullptr);
+						if (data.first.get())
+							slices.set(slice, mip, data.first);
+						else
+							slices.set(slice, mip, data.second->getSlice(0, 0));
+
+						lua_pop(L, 1);
+					}
+				}
+			}
+			else
+			{
+				for (int layer = 0; layer < tlen; layer++)
+				{
+					lua_rawgeti(L, 1, layer + 1);
+					auto data = getImageData(L, -1, true, layer == 0 ? autodpiscale : nullptr);
+					if (data.first.get())
+						slices.set(layer, 0, data.first);
+					else
+						slices.add(data.second, layer, 0, false, settings.mipmaps != Texture::MIPMAPS_NONE);
+				}
+			}
+
+			lua_pop(L, tlen);
 		}
 		else
-			slices.add(data.second, 0, 0, true, settings.mipmaps);
+		{
+			auto data = getImageData(L, 1, true, autodpiscale);
+
+			if (data.first.get())
+			{
+				std::vector<StrongRef<love::image::ImageData>> layers;
+				luax_catchexcept(L, [&](){ layers = imagemodule->newVolumeLayers(data.first); });
+
+				for (int i = 0; i < (int) layers.size(); i++)
+					slices.set(i, 0, layers[i]);
+			}
+			else
+				slices.add(data.second, 0, 0, true, settings.mipmaps != Texture::MIPMAPS_NONE);
+		}
 	}
 
-	return w__pushNewImage(L, slices, settings);
+	return w__pushNewTexture(L, slicesref, settings);
 }
 
 int w_newImage(lua_State *L)
 {
-	luax_checkgraphicscreated(L);
+	//luax_markdeprecated(L, "love.graphics.newImage", API_FUNCTION, DEPRECATED_RENAMED, "love.graphics.newTexture");
+	return w_newTexture(L);
+}
 
-	Image::Slices slices(TEXTURE_2D);
+int w_newCubeImage(lua_State *L)
+{
+	//luax_markdeprecated(L, "love.graphics.newCubeImage", API_FUNCTION, DEPRECATED_RENAMED, "love.graphics.newCubeTexture");
+	return w_newCubeTexture(L);
+}
 
-	bool dpiscaleset = false;
-	Image::Settings settings = w__optImageSettings(L, 2, dpiscaleset);
-	float *autodpiscale = dpiscaleset ? nullptr : &settings.dpiScale;
+int w_newArrayImage(lua_State *L)
+{
+	//luax_markdeprecated(L, "love.graphics.newArrayImage", API_FUNCTION, DEPRECATED_RENAMED, "love.graphics.newArrayTexture");
+	return w_newArrayTexture(L);
+}
 
-	if (lua_istable(L, 1))
-	{
-		int n = std::max(1, (int) luax_objlen(L, 1));
-		for (int i = 0; i < n; i++)
-		{
-			lua_rawgeti(L, 1, i + 1);
-			auto data = getImageData(L, -1, true, i == 0 ? autodpiscale : nullptr);
-			if (data.first.get())
-				slices.set(0, i, data.first);
-			else
-				slices.set(0, i, data.second->getSlice(0, 0));
-		}
-		lua_pop(L, n);
-	}
-	else
-	{
-		auto data = getImageData(L, 1, true, autodpiscale);
-		if (data.first.get())
-			slices.set(0, 0, data.first);
-		else
-			slices.add(data.second, 0, 0, false, settings.mipmaps);
-	}
-
-	return w__pushNewImage(L, slices, settings);
+int w_newVolumeImage(lua_State *L)
+{
+	//luax_markdeprecated(L, "love.graphics.newVolumeImage", API_FUNCTION, DEPRECATED_RENAMED, "love.graphics.newVolumeTexture");
+	return w_newVolumeTexture(L);
 }
 
 int w_newQuad(lua_State *L)
@@ -1102,7 +1283,7 @@ int w_newFont(lua_State *L)
 	love::font::Rasterizer *rasterizer = luax_checktype<love::font::Rasterizer>(L, 1);
 
 	luax_catchexcept(L, [&]() {
-		font = instance()->newFont(rasterizer, instance()->getDefaultFilter()); }
+		font = instance()->newFont(rasterizer); }
 	);
 
 	// Push the type.
@@ -1114,9 +1295,6 @@ int w_newFont(lua_State *L)
 int w_newImageFont(lua_State *L)
 {
 	luax_checkgraphicscreated(L);
-
-	// filter for glyphs
-	Texture::Filter filter = instance()->getDefaultFilter();
 
 	// Convert to Rasterizer if necessary.
 	if (!luax_istype(L, 1, love::font::Rasterizer::type))
@@ -1133,7 +1311,7 @@ int w_newImageFont(lua_State *L)
 	love::font::Rasterizer *rasterizer = luax_checktype<love::font::Rasterizer>(L, 1);
 
 	// Create the font.
-	Font *font = instance()->newFont(rasterizer, filter);
+	Font *font = instance()->newFont(rasterizer);
 
 	// Push the type.
 	luax_pushtype(L, font);
@@ -1147,12 +1325,12 @@ int w_newSpriteBatch(lua_State *L)
 
 	Texture *texture = luax_checktexture(L, 1);
 	int size = (int) luaL_optinteger(L, 2, 1000);
-	vertex::Usage usage = vertex::USAGE_DYNAMIC;
+	BufferDataUsage usage = BUFFERDATAUSAGE_DYNAMIC;
 	if (lua_gettop(L) > 2)
 	{
 		const char *usagestr = luaL_checkstring(L, 3);
-		if (!vertex::getConstant(usagestr, usage))
-			return luax_enumerror(L, "usage hint", vertex::getConstants(usage), usagestr);
+		if (!getConstant(usagestr, usage))
+			return luax_enumerror(L, "usage hint", getConstants(usage), usagestr);
 	}
 
 	SpriteBatch *t = nullptr;
@@ -1184,80 +1362,7 @@ int w_newParticleSystem(lua_State *L)
 	return 1;
 }
 
-int w_newCanvas(lua_State *L)
-{
-	luax_checkgraphicscreated(L);
-
-	Canvas::Settings settings;
-
-	// check if width and height are given. else default to screen dimensions.
-	settings.width  = (int) luaL_optinteger(L, 1, instance()->getWidth());
-	settings.height = (int) luaL_optinteger(L, 2, instance()->getHeight());
-
-	// Default to the screen's current pixel density scale.
-	settings.dpiScale = instance()->getScreenDPIScale();
-
-	int startidx = 3;
-
-	if (lua_isnumber(L, 3))
-	{
-		settings.layers = (int) luaL_checkinteger(L, 3);
-		settings.type = TEXTURE_2D_ARRAY;
-		startidx = 4;
-	}
-
-	if (!lua_isnoneornil(L, startidx))
-	{
-		luax_checktablefields<Canvas::SettingType>(L, startidx, "canvas setting name", Canvas::getConstant);
-
-		settings.dpiScale = (float) luax_numberflag(L, startidx, Canvas::getConstant(Canvas::SETTING_DPI_SCALE), settings.dpiScale);
-		settings.msaa = luax_intflag(L, startidx, Canvas::getConstant(Canvas::SETTING_MSAA), settings.msaa);
-
-		lua_getfield(L, startidx, Canvas::getConstant(Canvas::SETTING_FORMAT));
-		if (!lua_isnoneornil(L, -1))
-		{
-			const char *str = luaL_checkstring(L, -1);
-			if (!getConstant(str, settings.format))
-				return luax_enumerror(L, "pixel format", str);
-		}
-		lua_pop(L, 1);
-
-		lua_getfield(L, startidx, Canvas::getConstant(Canvas::SETTING_TYPE));
-		if (!lua_isnoneornil(L, -1))
-		{
-			const char *str = luaL_checkstring(L, -1);
-			if (!Texture::getConstant(str, settings.type))
-				return luax_enumerror(L, "texture type", Texture::getConstants(settings.type), str);
-		}
-		lua_pop(L, 1);
-
-		lua_getfield(L, startidx, Canvas::getConstant(Canvas::SETTING_READABLE));
-		if (!lua_isnoneornil(L, -1))
-		{
-			settings.readable.hasValue = true;
-			settings.readable.value = luax_checkboolean(L, -1);
-		}
-		lua_pop(L, 1);
-
-		lua_getfield(L, startidx, Canvas::getConstant(Canvas::SETTING_MIPMAPS));
-		if (!lua_isnoneornil(L, -1))
-		{
-			const char *str = luaL_checkstring(L, -1);
-			if (!Canvas::getConstant(str, settings.mipmaps))
-				return luax_enumerror(L, "Canvas mipmap mode", Canvas::getConstants(settings.mipmaps), str);
-		}
-		lua_pop(L, 1);
-	}
-
-	Canvas *canvas = nullptr;
-	luax_catchexcept(L, [&](){ canvas = instance()->newCanvas(settings); });
-
-	luax_pushtype(L, canvas);
-	canvas->release();
-	return 1;
-}
-
-static int w_getShaderSource(lua_State *L, int startidx, bool gles, std::string &vertexsource, std::string &pixelsource)
+static int w_getShaderSource(lua_State *L, int startidx, std::vector<std::string> &stages)
 {
 	using namespace love::filesystem;
 
@@ -1317,61 +1422,23 @@ static int w_getShaderSource(lua_State *L, int startidx, bool gles, std::string 
 	if (!(has_arg1 || has_arg2))
 		luaL_checkstring(L, startidx);
 
-	luax_getfunction(L, "graphics", "_shaderCodeToGLSL");
-
-	// push vertexcode and pixelcode strings to the top of the stack
-	lua_pushboolean(L, gles);
-
 	if (has_arg1)
-		lua_pushvalue(L, startidx + 0);
-	else
-		lua_pushnil(L);
-
+		stages.push_back(luax_checkstring(L, startidx + 0));
 	if (has_arg2)
-		lua_pushvalue(L, startidx + 1);
-	else
-		lua_pushnil(L);
-
-	// call effectCodeToGLSL, returned values will be at the top of the stack
-	if (lua_pcall(L, 3, 2, 0) != 0)
-		return luaL_error(L, "%s", lua_tostring(L, -1));
-
-	// vertex shader code
-	if (lua_isstring(L, -2))
-		vertexsource = luax_checkstring(L, -2);
-	else if (has_arg1 && has_arg2)
-		return luaL_error(L, "Could not parse vertex shader code (missing 'position' function?)");
-
-	// pixel shader code
-	if (lua_isstring(L, -1))
-		pixelsource = luax_checkstring(L, -1);
-	else if (has_arg1 && has_arg2)
-		return luaL_error(L, "Could not parse pixel shader code (missing 'effect' function?)");
-
-	if (vertexsource.empty() && pixelsource.empty())
-	{
-		// Original args had source code, but effectCodeToGLSL couldn't translate it
-		for (int i = startidx; i < startidx + 2; i++)
-		{
-			if (lua_isstring(L, i))
-				return luaL_argerror(L, i, "missing 'position' or 'effect' function?");
-		}
-	}
+		stages.push_back(luax_checkstring(L, startidx + 1));
 
 	return 0;
 }
 
 int w_newShader(lua_State *L)
 {
-	bool gles = instance()->getRenderer() == Graphics::RENDERER_OPENGLES;
-
-	std::string vertexsource, pixelsource;
-	w_getShaderSource(L, 1, gles, vertexsource, pixelsource);
+	std::vector<std::string> stages;
+	w_getShaderSource(L, 1, stages);
 
 	bool should_error = false;
 	try
 	{
-		Shader *shader = instance()->newShader(vertexsource, pixelsource);
+		Shader *shader = instance()->newShader(stages);
 		luax_pushtype(L, shader);
 		shader->release();
 	}
@@ -1395,14 +1462,14 @@ int w_validateShader(lua_State *L)
 {
 	bool gles = luax_checkboolean(L, 1);
 
-	std::string vertexsource, pixelsource;
-	w_getShaderSource(L, 2, gles, vertexsource, pixelsource);
+	std::vector<std::string> stages;
+	w_getShaderSource(L, 2, stages);
 
 	bool success = true;
 	std::string err;
 	try
 	{
-		success = instance()->validateShader(gles, vertexsource, pixelsource, err);
+		success = instance()->validateShader(gles, stages, err);
 	}
 	catch (love::Exception &e)
 	{
@@ -1421,22 +1488,308 @@ int w_validateShader(lua_State *L)
 	return 1;
 }
 
-static vertex::Usage luax_optmeshusage(lua_State *L, int idx, vertex::Usage def)
+static BufferDataUsage luax_optdatausage(lua_State *L, int idx, BufferDataUsage def)
 {
 	const char *usagestr = lua_isnoneornil(L, idx) ? nullptr : luaL_checkstring(L, idx);
 
-	if (usagestr && !vertex::getConstant(usagestr, def))
-		luax_enumerror(L, "usage hint", vertex::getConstants(def), usagestr);
+	if (usagestr && !getConstant(usagestr, def))
+		luax_enumerror(L, "usage hint", getConstants(def), usagestr);
 
 	return def;
+}
+
+static void luax_optbuffersettings(lua_State *L, int idx, Buffer::Settings &settings)
+{
+	if (lua_isnoneornil(L, idx))
+		return;
+
+	luaL_checktype(L, idx, LUA_TTABLE);
+
+	lua_getfield(L, idx, "usage");
+	settings.dataUsage = luax_optdatausage(L, -1, settings.dataUsage);
+	lua_pop(L, 1);
+}
+
+static void luax_checkbufferformat(lua_State *L, int idx, std::vector<Buffer::DataDeclaration> &format)
+{
+	if (lua_type(L, idx) == LUA_TSTRING)
+	{
+		Buffer::DataDeclaration decl("", DATAFORMAT_MAX_ENUM);
+		const char *formatstr = luaL_checkstring(L, idx);
+		if (!getConstant(formatstr, decl.format))
+			luax_enumerror(L, "data format", getConstants(decl.format), formatstr);
+		format.push_back(decl);
+		return;
+	}
+
+	luaL_checktype(L, idx, LUA_TTABLE);
+	int tablelen = luax_objlen(L, idx);
+
+	for (int i = 1; i <= tablelen; i++)
+	{
+		lua_rawgeti(L, idx, i);
+		luaL_checktype(L, -1, LUA_TTABLE);
+
+		Buffer::DataDeclaration decl("", DATAFORMAT_MAX_ENUM);
+
+		lua_getfield(L, -1, "name");
+		if (!lua_isnoneornil(L, -1))
+			decl.name = luax_checkstring(L, -1);
+		lua_pop(L, 1);
+
+		lua_getfield(L, -1, "format");
+		if (lua_type(L, -1) != LUA_TSTRING)
+		{
+			std::ostringstream ss;
+			ss << "'format' field expected in array element #";
+			ss << i;
+			ss << " of format table";
+			std::string str = ss.str();
+			luaL_argerror(L, idx, str.c_str());
+		}
+		const char *formatstr = luaL_checkstring(L, -1);
+		if (!getConstant(formatstr, decl.format))
+			luax_enumerror(L, "data format", getConstants(decl.format), formatstr);
+		lua_pop(L, 1);
+
+		decl.arrayLength = luax_intflag(L, -1, "arraylength", 0);
+
+		format.push_back(decl);
+		lua_pop(L, 1);
+	}
+}
+
+static Buffer *luax_newbuffer(lua_State *L, int idx, Buffer::Settings settings, const std::vector<Buffer::DataDeclaration> &format)
+{
+	size_t arraylength = 0;
+	size_t bytesize = 0;
+	Data *data = nullptr;
+	const void *initialdata = nullptr;
+
+	int ncomponents = 0;
+	for (const Buffer::DataDeclaration &decl : format)
+		ncomponents += getDataFormatInfo(decl.format).components;
+
+	if (luax_istype(L, idx, Data::type))
+	{
+		data = luax_checktype<Data>(L, idx);
+		initialdata = data->getData();
+		bytesize = data->getSize();
+	}
+
+	bool tableoftables = false;
+
+	if (lua_istable(L, idx))
+	{
+		arraylength = luax_objlen(L, idx);
+
+		lua_rawgeti(L, idx, 1);
+		tableoftables = lua_istable(L, -1);
+		lua_pop(L, 1);
+
+		if (!tableoftables)
+		{
+			if (arraylength % ncomponents != 0)
+				luaL_error(L, "Array length in flat array variant of newBuffer must be a multiple of the total number of components (%d)", ncomponents);
+			arraylength /= ncomponents;
+		}
+	}
+	else if (data == nullptr)
+	{
+		lua_Integer len = luaL_checkinteger(L, idx);
+		if (len <= 0)
+			luaL_argerror(L, idx, "number of elements must be greater than 0");
+		arraylength = (size_t) len;
+		settings.zeroInitialize = true;
+	}
+
+	Buffer *b = nullptr;
+	luax_catchexcept(L, [&] { b = instance()->newBuffer(settings, format, initialdata, bytesize, arraylength); });
+
+	if (lua_istable(L, idx))
+	{
+		Buffer::Mapper mapper(*b);
+		char *data = (char *) mapper.data;
+		const auto &members = b->getDataMembers();
+		size_t stride = b->getArrayStride();
+
+		if (tableoftables)
+		{
+			for (size_t i = 0; i < arraylength; i++)
+			{
+				// get arraydata[index]
+				lua_rawgeti(L, 2, i + 1);
+				luaL_checktype(L, -1, LUA_TTABLE);
+
+				// get arraydata[index][j]
+				for (int j = 1; j <= ncomponents; j++)
+					lua_rawgeti(L, -j, j);
+
+				int idx = -ncomponents;
+
+				for (const Buffer::DataMember &member : members)
+				{
+					luax_writebufferdata(L, idx, member.decl.format, data + member.offset);
+					idx += member.info.components;
+				}
+
+				lua_pop(L, ncomponents + 1);
+				data += stride;
+			}
+		}
+		else // Flat array
+		{
+			for (size_t i = 0; i < arraylength; i++)
+			{
+				// get arraydata[arrayindex * ncomponents + componentindex]
+				for (int componentindex = 1; componentindex <= ncomponents; componentindex++)
+					lua_rawgeti(L, 2, i * ncomponents + componentindex);
+
+				int idx = -ncomponents;
+
+				for (const Buffer::DataMember &member : members)
+				{
+					luax_writebufferdata(L, idx, member.decl.format, data + member.offset);
+					idx += member.info.components;
+				}
+
+				lua_pop(L, ncomponents);
+				data += stride;
+			}
+		}
+	}
+
+	return b;
+}
+
+int w_newBuffer(lua_State *L)
+{
+	Buffer::Settings settings(0, BUFFERDATAUSAGE_DYNAMIC);
+
+	luaL_checktype(L, 3, LUA_TTABLE);
+
+	for (int i = 0; i < BUFFERUSAGE_MAX_ENUM; i++)
+	{
+		BufferUsage bufferusage = (BufferUsage) i;
+		const char *tname = nullptr;
+		if (!getConstant(bufferusage, tname))
+			continue;
+		if (luax_boolflag(L, 3, tname, false))
+			settings.usageFlags = (BufferUsageFlags)(settings.usageFlags | (1u << i));
+	}
+
+	luax_optbuffersettings(L, 3, settings);
+
+	std::vector<Buffer::DataDeclaration> format;
+	luax_checkbufferformat(L, 1, format);
+
+	Buffer *b = luax_newbuffer(L, 2, settings, format);
+
+	luax_pushtype(L, b);
+	b->release();
+	return 1;
+}
+
+int w_newVertexBuffer(lua_State *L)
+{
+	Buffer::Settings settings(BUFFERUSAGEFLAG_VERTEX, BUFFERDATAUSAGE_DYNAMIC);
+	luax_optbuffersettings(L, 3, settings);
+
+	std::vector<Buffer::DataDeclaration> format;
+	luax_checkbufferformat(L, 1, format);
+
+	Buffer *b = luax_newbuffer(L, 2, settings, format);
+
+	luax_pushtype(L, b);
+	b->release();
+	return 1;
+}
+
+int w_newIndexBuffer(lua_State *L)
+{
+	Buffer::Settings settings(BUFFERUSAGEFLAG_INDEX, BUFFERDATAUSAGE_DYNAMIC);
+	luax_optbuffersettings(L, 3, settings);
+
+	size_t arraylength = 0;
+	size_t bytesize = 0;
+	DataFormat format = DATAFORMAT_UINT16;
+	Data *data = nullptr;
+	const void *initialdata = nullptr;
+
+	if (luax_istype(L, 1, Data::type))
+	{
+		data = luax_checktype<Data>(L, 1);
+		initialdata = data->getData();
+		bytesize = data->getSize();
+	}
+
+	if (lua_istable(L, 1))
+	{
+		arraylength = luax_objlen(L, 1);
+
+		// Scan array for invalid types and the max value.
+		lua_Integer maxvalue = 0;
+		for (size_t i = 0; i < arraylength; i++)
+		{
+			lua_rawgeti(L, 1, i + 1);
+			lua_Integer v = luaL_checkinteger(L, -1);
+			lua_pop(L, 1);
+			if (v < 0)
+				return luaL_argerror(L, 1, "expected positive integer values in array");
+			else
+				maxvalue = std::max(maxvalue, v);
+		}
+
+		format = getIndexDataFormat(getIndexDataTypeFromMax(maxvalue));
+	}
+	else if (data == nullptr)
+	{
+		lua_Integer len = luaL_checkinteger(L, 1);
+		if (len <= 0)
+			return luaL_argerror(L, 1, "number of elements must be greater than 0");
+		arraylength = (size_t) len;
+		settings.zeroInitialize = true;
+	}
+
+	if (data != nullptr || !lua_isnoneornil(L, 2))
+	{
+		const char *formatstr = luaL_checkstring(L, 2);
+		if (!getConstant(formatstr, format))
+			return luax_enumerror(L, "index data format", getConstants(format), formatstr);
+	}
+
+	Buffer *b = nullptr;
+	luax_catchexcept(L, [&] { b = instance()->newBuffer(settings, format, initialdata, bytesize, arraylength); });
+
+	if (lua_istable(L, 1))
+	{
+		Buffer::Mapper mapper(*b);
+		uint16 *u16data = (uint16 *) mapper.data;
+		uint32 *u32data = (uint32 *) mapper.data;
+
+		for (size_t i = 0; i < arraylength; i++)
+		{
+			lua_rawgeti(L, 1, i + 1);
+			lua_Integer v = luaL_checkinteger(L, -1);
+			lua_pop(L, 1);
+			if (format == DATAFORMAT_UINT16)
+				u16data[i] = (uint16) v;
+			else
+				u32data[i] = (uint32) v;
+		}
+	}
+
+	luax_pushtype(L, b);
+	b->release();
+	return 1;
 }
 
 static PrimitiveType luax_optmeshdrawmode(lua_State *L, int idx, PrimitiveType def)
 {
 	const char *modestr = lua_isnoneornil(L, idx) ? nullptr : luaL_checkstring(L, idx);
 
-	if (modestr && !vertex::getConstant(modestr, def))
-		luax_enumerror(L, "mesh draw mode", vertex::getConstants(def), modestr);
+	if (modestr && !getConstant(modestr, def))
+		luax_enumerror(L, "mesh draw mode", getConstants(def), modestr);
 
 	return def;
 }
@@ -1446,7 +1799,9 @@ static Mesh *newStandardMesh(lua_State *L)
 	Mesh *t = nullptr;
 
 	PrimitiveType drawmode = luax_optmeshdrawmode(L, 2, PRIMITIVE_TRIANGLE_FAN);
-	vertex::Usage usage = luax_optmeshusage(L, 3, vertex::USAGE_DYNAMIC);
+	BufferDataUsage usage = luax_optdatausage(L, 3, BUFFERDATAUSAGE_DYNAMIC);
+
+	std::vector<Buffer::DataDeclaration> format = Mesh::getDefaultVertexFormat();
 
 	// First argument is a table of standard vertices, or the number of
 	// standard vertices.
@@ -1486,12 +1841,12 @@ static Mesh *newStandardMesh(lua_State *L)
 			vertices.push_back(v);
 		}
 
-		luax_catchexcept(L, [&](){ t = instance()->newMesh(vertices, drawmode, usage); });
+		luax_catchexcept(L, [&](){ t = instance()->newMesh(format, vertices.data(), vertices.size() * sizeof(Vertex), drawmode, usage); });
 	}
 	else
 	{
 		int count = (int) luaL_checkinteger(L, 1);
-		luax_catchexcept(L, [&](){ t = instance()->newMesh(count, drawmode, usage); });
+		luax_catchexcept(L, [&](){ t = instance()->newMesh(format, count, drawmode, usage); });
 	}
 
 	return t;
@@ -1503,10 +1858,10 @@ static Mesh *newCustomMesh(lua_State *L)
 
 	// First argument is the vertex format, second is a table of vertices or
 	// the number of vertices.
-	std::vector<Mesh::AttribFormat> vertexformat;
+	std::vector<Buffer::DataDeclaration> vertexformat;
 
 	PrimitiveType drawmode = luax_optmeshdrawmode(L, 3, PRIMITIVE_TRIANGLE_FAN);
-	vertex::Usage usage = luax_optmeshusage(L, 4, vertex::USAGE_DYNAMIC);
+	BufferDataUsage usage = luax_optdatausage(L, 4, BUFFERDATAUSAGE_DYNAMIC);
 
 	lua_rawgeti(L, 1, 1);
 	if (!lua_istable(L, -1))
@@ -1525,25 +1880,53 @@ static Mesh *newCustomMesh(lua_State *L)
 		for (int j = 1; j <= 3; j++)
 			lua_rawgeti(L, -j, j);
 
-		Mesh::AttribFormat format;
-		format.name = luaL_checkstring(L, -3);
+		const char *name = luaL_checkstring(L, -3);
 
+		DataFormat format = DATAFORMAT_MAX_ENUM;
 		const char *tname = luaL_checkstring(L, -2);
-		if (!vertex::getConstant(tname, format.type))
+
+		if (!lua_isnoneornil(L, -1))
 		{
-			luax_enumerror(L, "Mesh vertex data type name", vertex::getConstants(format.type), tname);
-			return nullptr;
+			int components = (int) luaL_checkinteger(L, -1);
+
+			// Check deprecated format names.
+			if (strcmp(tname, "byte") == 0 || strcmp(tname, "unorm8") == 0)
+			{
+				if (components == 4)
+					format = DATAFORMAT_UNORM8_VEC4;
+				else
+					luaL_error(L, "Invalid component count (%d) for vertex data type %s", components, tname);
+			}
+			else if (strcmp(tname, "unorm16") == 0)
+			{
+				if (components == 2)
+					format = DATAFORMAT_UNORM16_VEC2;
+				else if (components == 4)
+					format = DATAFORMAT_UNORM16_VEC4;
+				else
+					luaL_error(L, "Invalid component count (%d) for vertex data type %s", components, tname);
+
+			}
+			else if (strcmp(tname, "float") == 0)
+			{
+				if (components == 1)
+					format = DATAFORMAT_FLOAT;
+				else if (components == 2)
+					format = DATAFORMAT_FLOAT_VEC2;
+				else if (components == 3)
+					format = DATAFORMAT_FLOAT_VEC3;
+				else if (components == 4)
+					format = DATAFORMAT_FLOAT_VEC4;
+				else
+					luaL_error(L, "Invalid component count (%d) for vertex data type %s", components, tname);
+			}
 		}
 
-		format.components = (int) luaL_checkinteger(L, -1);
-		if (format.components <= 0 || format.components > 4)
-		{
-			luaL_error(L, "Number of vertex attribute components must be between 1 and 4 (got %d)", format.components);
-			return nullptr;
-		}
+		if (format == DATAFORMAT_MAX_ENUM && !getConstant(tname, format))
+			luax_enumerror(L, "vertex data format", getConstants(format), tname);
 
 		lua_pop(L, 4);
-		vertexformat.push_back(format);
+		vertexformat.emplace_back(name, format);
 	}
 
 	if (lua_isnumber(L, 2))
@@ -1568,16 +1951,13 @@ static Mesh *newCustomMesh(lua_State *L)
 		}
 		lua_pop(L, 1);
 
-		int vertexcomponents = 0;
-		for (const Mesh::AttribFormat &format : vertexformat)
-			vertexcomponents += format.components;
-
 		size_t numvertices = luax_objlen(L, 2);
 
 		luax_catchexcept(L, [&](){ t = instance()->newMesh(vertexformat, numvertices, drawmode, usage); });
 
-		// Maximum possible data size for a single vertex attribute.
-		char data[sizeof(float) * 4];
+		char *data = (char *) t->getVertexData();
+		size_t stride = t->getVertexStride();
+		const auto &members = t->getVertexFormat();
 
 		for (size_t vertindex = 0; vertindex < numvertices; vertindex++)
 		{
@@ -1588,29 +1968,28 @@ static Mesh *newCustomMesh(lua_State *L)
 			int n = 0;
 			for (size_t i = 0; i < vertexformat.size(); i++)
 			{
-				int components = vertexformat[i].components;
+				const auto &member = members[i];
+				const auto &info = getDataFormatInfo(member.decl.format);
 
 				// get vertices[vertindex][n]
-				for (int c = 0; c < components; c++)
+				for (int c = 0; c < info.components; c++)
 				{
 					n++;
 					lua_rawgeti(L, -(c + 1), n);
 				}
 
+				size_t offset = vertindex * stride + member.offset;
+
 				// Fetch the values from Lua and store them in data buffer.
-				luax_writeAttributeData(L, -components, vertexformat[i].type, components, data);
+				luax_writebufferdata(L, -info.components, member.decl.format, data + offset);
 
-				lua_pop(L, components);
-
-				luax_catchexcept(L,
-					[&](){ t->setVertexAttribute(vertindex, i, data, sizeof(float) * 4); },
-					[&](bool diderror){ if (diderror) t->release(); }
-				);
+				lua_pop(L, info.components);
 			}
 
 			lua_pop(L, 1); // pop vertices[vertindex]
 		}
 
+		t->setVertexDataModified(0, stride * numvertices);
 		t->flush();
 	}
 
@@ -1777,7 +2156,7 @@ int w_getFont(lua_State *L)
 
 int w_setColorMask(lua_State *L)
 {
-	Graphics::ColorMask mask;
+	ColorChannelMask mask;
 
 	if (lua_gettop(L) <= 1 && lua_isnoneornil(L, 1))
 	{
@@ -1799,7 +2178,7 @@ int w_setColorMask(lua_State *L)
 
 int w_getColorMask(lua_State *L)
 {
-	Graphics::ColorMask mask = instance()->getColorMask();
+	ColorChannelMask mask = instance()->getColorMask();
 
 	luax_pushboolean(L, mask.r);
 	luax_pushboolean(L, mask.g);
@@ -1811,17 +2190,17 @@ int w_getColorMask(lua_State *L)
 
 int w_setBlendMode(lua_State *L)
 {
-	Graphics::BlendMode mode;
+	BlendMode mode;
 	const char *str = luaL_checkstring(L, 1);
-	if (!Graphics::getConstant(str, mode))
-		return luax_enumerror(L, "blend mode", Graphics::getConstants(mode), str);
+	if (!getConstant(str, mode))
+		return luax_enumerror(L, "blend mode", getConstants(mode), str);
 
-	Graphics::BlendAlpha alphamode = Graphics::BLENDALPHA_MULTIPLY;
+	BlendAlpha alphamode = BLENDALPHA_MULTIPLY;
 	if (!lua_isnoneornil(L, 2))
 	{
 		const char *alphastr = luaL_checkstring(L, 2);
-		if (!Graphics::getConstant(alphastr, alphamode))
-			return luax_enumerror(L, "blend alpha mode", Graphics::getConstants(alphamode), alphastr);
+		if (!getConstant(alphastr, alphamode))
+			return luax_enumerror(L, "blend alpha mode", getConstants(alphamode), alphastr);
 	}
 
 	luax_catchexcept(L, [&](){ instance()->setBlendMode(mode, alphamode); });
@@ -1833,13 +2212,13 @@ int w_getBlendMode(lua_State *L)
 	const char *str;
 	const char *alphastr;
 
-	Graphics::BlendAlpha alphamode;
-	Graphics::BlendMode mode = instance()->getBlendMode(alphamode);
+	BlendAlpha alphamode;
+	BlendMode mode = instance()->getBlendMode(alphamode);
 
-	if (!Graphics::getConstant(mode, str))
+	if (!getConstant(mode, str))
 		return luaL_error(L, "Unknown blend mode");
 
-	if (!Graphics::getConstant(alphamode, alphastr))
+	if (!getConstant(alphamode, alphastr))
 		return luaL_error(L, "Unknown blend alpha mode");
 
 	lua_pushstring(L, str);
@@ -1847,71 +2226,151 @@ int w_getBlendMode(lua_State *L)
 	return 2;
 }
 
+static BlendOperation luax_checkblendop(lua_State *L, int idx)
+{
+	BlendOperation op = BLENDOP_ADD;
+	const char *str = luaL_checkstring(L, idx);
+	if (!getConstant(str, op))
+		luax_enumerror(L, "blend operation", getConstants(op), str);
+	return op;
+}
+
+static BlendFactor luax_checkblendfactor(lua_State *L, int idx)
+{
+	BlendFactor factor = BLENDFACTOR_ZERO;
+	const char *str = luaL_checkstring(L, idx);
+	if (!getConstant(str, factor))
+		luax_enumerror(L, "blend factor", getConstants(factor), str);
+	return factor;
+}
+
+static void luax_pushblendop(lua_State *L, BlendOperation op)
+{
+	const char *str;
+	if (!getConstant(op, str))
+		luaL_error(L, "unknown blend operation");
+	lua_pushstring(L, str);
+}
+
+static void luax_pushblendfactor(lua_State *L, BlendFactor factor)
+{
+	const char *str;
+	if (!getConstant(factor, str))
+		luaL_error(L, "unknown blend factor");
+	lua_pushstring(L, str);
+}
+
+int w_setBlendState(lua_State *L)
+{
+	BlendState state;
+
+	if (!lua_isnoneornil(L, 1))
+	{
+		state.enable = true;
+		if (lua_gettop(L) >= 4)
+		{
+			state.operationRGB = luax_checkblendop(L, 1);
+			state.operationA = luax_checkblendop(L, 2);
+			state.srcFactorRGB = luax_checkblendfactor(L, 3);
+			state.srcFactorA = luax_checkblendfactor(L, 4);
+			state.dstFactorRGB = luax_checkblendfactor(L, 5);
+			state.dstFactorA = luax_checkblendfactor(L, 6);
+		}
+		else
+		{
+			state.operationRGB = state.operationA = luax_checkblendop(L, 1);
+			state.srcFactorRGB = state.srcFactorA = luax_checkblendfactor(L, 2);
+			state.dstFactorRGB = state.dstFactorA = luax_checkblendfactor(L, 3);
+		}
+	}
+
+	luax_catchexcept(L, [&](){ instance()->setBlendState(state); });
+	return 0;
+}
+
+int w_getBlendState(lua_State *L)
+{
+	const BlendState &state = instance()->getBlendState();
+
+	if (state.enable)
+	{
+		luax_pushblendop(L, state.operationRGB);
+		luax_pushblendop(L, state.operationA);
+		luax_pushblendfactor(L, state.srcFactorRGB);
+		luax_pushblendfactor(L, state.srcFactorA);
+		luax_pushblendfactor(L, state.dstFactorRGB);
+		luax_pushblendfactor(L, state.dstFactorA);
+	}
+	else
+	{
+		for (int i = 0; i < 6; i++)
+			lua_pushnil(L);
+	}
+
+	return 6;
+}
+
 int w_setDefaultFilter(lua_State *L)
 {
-	Texture::Filter f;
+	SamplerState s = instance()->getDefaultSamplerState();
 
 	const char *minstr = luaL_checkstring(L, 1);
 	const char *magstr = luaL_optstring(L, 2, minstr);
 
-	if (!Texture::getConstant(minstr, f.min))
-		return luax_enumerror(L, "filter mode", Texture::getConstants(f.min), minstr);
-	if (!Texture::getConstant(magstr, f.mag))
-		return luax_enumerror(L, "filter mode", Texture::getConstants(f.mag), magstr);
+	if (!SamplerState::getConstant(minstr, s.minFilter))
+		return luax_enumerror(L, "filter mode", SamplerState::getConstants(s.minFilter), minstr);
+	if (!SamplerState::getConstant(magstr, s.magFilter))
+		return luax_enumerror(L, "filter mode", SamplerState::getConstants(s.magFilter), magstr);
 
-	f.anisotropy = (float) luaL_optnumber(L, 3, 1.0);
+	s.maxAnisotropy = std::min(std::max(1, (int) luaL_optnumber(L, 3, 1.0)), LOVE_UINT8_MAX);
 
-	instance()->setDefaultFilter(f);
-
+	instance()->setDefaultSamplerState(s);
 	return 0;
 }
 
 int w_getDefaultFilter(lua_State *L)
 {
-	const Texture::Filter &f = instance()->getDefaultFilter();
+	const SamplerState &s = instance()->getDefaultSamplerState();
 	const char *minstr;
 	const char *magstr;
-	if (!Texture::getConstant(f.min, minstr))
+	if (!SamplerState::getConstant(s.minFilter, minstr))
 		return luaL_error(L, "Unknown minification filter mode");
-	if (!Texture::getConstant(f.mag, magstr))
+	if (!SamplerState::getConstant(s.magFilter, magstr))
 		return luaL_error(L, "Unknown magnification filter mode");
 	lua_pushstring(L, minstr);
 	lua_pushstring(L, magstr);
-	lua_pushnumber(L, f.anisotropy);
+	lua_pushnumber(L, s.maxAnisotropy);
 	return 3;
 }
 
 int w_setDefaultMipmapFilter(lua_State *L)
 {
-	Texture::FilterMode filter = Texture::FILTER_NONE;
+	SamplerState s = instance()->getDefaultSamplerState();
+	s.mipmapFilter = SamplerState::MIPMAP_FILTER_NONE;
 	if (!lua_isnoneornil(L, 1))
 	{
 		const char *str = luaL_checkstring(L, 1);
-		if (!Texture::getConstant(str, filter))
-			return luax_enumerror(L, "filter mode", Texture::getConstants(filter), str);
+		if (!SamplerState::getConstant(str, s.mipmapFilter))
+			return luax_enumerror(L, "filter mode", SamplerState::getConstants(s.mipmapFilter), str);
 	}
 
-	float sharpness = (float) luaL_optnumber(L, 2, 0);
+	s.lodBias = -((float) luaL_optnumber(L, 2, 0.0));
 
-	instance()->setDefaultMipmapFilter(filter, sharpness);
-
+	instance()->setDefaultSamplerState(s);
 	return 0;
 }
 
 int w_getDefaultMipmapFilter(lua_State *L)
 {
-	Texture::FilterMode filter;
-	float sharpness;
-
-	instance()->getDefaultMipmapFilter(&filter, &sharpness);
+	const SamplerState &s = instance()->getDefaultSamplerState();
 
 	const char *str;
-	if (Texture::getConstant(filter, str))
+	if (SamplerState::getConstant(s.mipmapFilter, str))
 		lua_pushstring(L, str);
 	else
 		lua_pushnil(L);
 
-	lua_pushnumber(L, sharpness);
+	lua_pushnumber(L, -s.lodBias);
 
 	return 2;
 }
@@ -2023,8 +2482,8 @@ int w_setMeshCullMode(lua_State *L)
 	const char *str = luaL_checkstring(L, 1);
 	CullMode mode;
 
-	if (!vertex::getConstant(str, mode))
-		return luax_enumerror(L, "cull mode", vertex::getConstants(mode), str);
+	if (!getConstant(str, mode))
+		return luax_enumerror(L, "cull mode", getConstants(mode), str);
 
 	luax_catchexcept(L, [&]() { instance()->setMeshCullMode(mode); });
 	return 0;
@@ -2034,7 +2493,7 @@ int w_getMeshCullMode(lua_State *L)
 {
 	CullMode mode = instance()->getMeshCullMode();
 	const char *str;
-	if (!vertex::getConstant(mode, str))
+	if (!getConstant(mode, str))
 		return luaL_error(L, "Unknown cull mode");
 	lua_pushstring(L, str);
 	return 1;
@@ -2043,10 +2502,10 @@ int w_getMeshCullMode(lua_State *L)
 int w_setFrontFaceWinding(lua_State *L)
 {
 	const char *str = luaL_checkstring(L, 1);
-	vertex::Winding winding;
+	Winding winding;
 
-	if (!vertex::getConstant(str, winding))
-		return luax_enumerror(L, "vertex winding", vertex::getConstants(winding), str);
+	if (!getConstant(str, winding))
+		return luax_enumerror(L, "vertex winding", getConstants(winding), str);
 
 	luax_catchexcept(L, [&]() { instance()->setFrontFaceWinding(winding); });
 	return 0;
@@ -2054,9 +2513,9 @@ int w_setFrontFaceWinding(lua_State *L)
 
 int w_getFrontFaceWinding(lua_State *L)
 {
-	vertex::Winding winding = instance()->getFrontFaceWinding();
+	Winding winding = instance()->getFrontFaceWinding();
 	const char *str;
-	if (!vertex::getConstant(winding, str))
+	if (!getConstant(winding, str))
 		return luaL_error(L, "Unknown vertex winding");
 	lua_pushstring(L, str);
 	return 1;
@@ -2098,46 +2557,6 @@ int w_getShader(lua_State *L)
 	return 1;
 }
 
-int w_setDefaultShaderCode(lua_State *L)
-{
-	for (int i = 0; i < 2; i++)
-	{
-		luaL_checktype(L, i + 1, LUA_TTABLE);
-
-		for (int lang = 0; lang < Shader::LANGUAGE_MAX_ENUM; lang++)
-		{
-			const char *langname;
-			if (!Shader::getConstant((Shader::Language) lang, langname))
-				continue;
-
-			lua_getfield(L, i + 1, langname);
-
-			lua_getfield(L, -1, "vertex");
-			lua_getfield(L, -2, "pixel");
-			lua_getfield(L, -3, "videopixel");
-			lua_getfield(L, -4, "arraypixel");
-
-			std::string vertex = luax_checkstring(L, -4);
-			std::string pixel = luax_checkstring(L, -3);
-			std::string videopixel = luax_checkstring(L, -2);
-			std::string arraypixel = luax_checkstring(L, -1);
-
-			lua_pop(L, 5);
-
-			Graphics::defaultShaderCode[Shader::STANDARD_DEFAULT][lang][i].source[ShaderStage::STAGE_VERTEX] = vertex;
-			Graphics::defaultShaderCode[Shader::STANDARD_DEFAULT][lang][i].source[ShaderStage::STAGE_PIXEL] = pixel;
-
-			Graphics::defaultShaderCode[Shader::STANDARD_VIDEO][lang][i].source[ShaderStage::STAGE_VERTEX] = vertex;
-			Graphics::defaultShaderCode[Shader::STANDARD_VIDEO][lang][i].source[ShaderStage::STAGE_PIXEL] = videopixel;
-
-			Graphics::defaultShaderCode[Shader::STANDARD_ARRAY][lang][i].source[ShaderStage::STAGE_VERTEX] = vertex;
-			Graphics::defaultShaderCode[Shader::STANDARD_ARRAY][lang][i].source[ShaderStage::STAGE_PIXEL] = arraypixel;
-		}
-	}
-
-	return 0;
-}
-
 int w_getSupported(lua_State *L)
 {
 	const Graphics::Capabilities &caps = instance()->getCapabilities();
@@ -2156,6 +2575,45 @@ int w_getSupported(lua_State *L)
 			continue;
 
 		luax_pushboolean(L, caps.features[i]);
+		lua_setfield(L, -2, name);
+	}
+
+	return 1;
+}
+
+int w_getTextureFormats(lua_State *L)
+{
+	luaL_checktype(L, 1, LUA_TTABLE);
+
+	bool rt = luax_checkboolflag(L, 1, Texture::getConstant(Texture::SETTING_RENDER_TARGET));
+	bool linear = luax_boolflag(L, 1, Texture::getConstant(Texture::SETTING_LINEAR), false);
+
+	OptionalBool readable;
+	lua_getfield(L, 1, Texture::getConstant(Texture::SETTING_READABLE));
+	if (!lua_isnoneornil(L, -1))
+		readable.set(luax_checkboolean(L, -1));
+	lua_pop(L, 1);
+
+	if (lua_istable(L, 2))
+		lua_pushvalue(L, 2);
+	else
+		lua_createtable(L, 0, (int) PIXELFORMAT_MAX_ENUM);
+
+	for (int i = 0; i < (int) PIXELFORMAT_MAX_ENUM; i++)
+	{
+		PixelFormat format = (PixelFormat) i;
+		const char *name = nullptr;
+
+		if (format == PIXELFORMAT_UNKNOWN || !love::getConstant(format, name))
+			continue;
+
+		if (rt && isPixelFormatDepth(format))
+			continue;
+
+		bool formatReadable = readable.get(!isPixelFormatDepthStencil(format));
+		bool sRGB = isGammaCorrect() && !linear;
+
+		luax_pushboolean(L, instance()->isPixelFormatSupported(format, rt, formatReadable, sRGB));
 		lua_setfield(L, -2, name);
 	}
 
@@ -2186,6 +2644,8 @@ static int w__getFormats(lua_State *L, int idx, bool (*isFormatSupported)(PixelF
 
 int w_getCanvasFormats(lua_State *L)
 {
+	luax_markdeprecated(L, "love.graphics.getCanvasFormats", API_FUNCTION, DEPRECATED_REPLACED, "love.graphics.getTextureFormats");
+
 	bool (*supported)(PixelFormat);
 
 	int idx = 1;
@@ -2196,14 +2656,14 @@ int w_getCanvasFormats(lua_State *L)
 		{
 			supported = [](PixelFormat format) -> bool
 			{
-				return instance()->isCanvasFormatSupported(format, true);
+				return instance()->isPixelFormatSupported(format, true, true, false);
 			};
 		}
 		else
 		{
 			supported = [](PixelFormat format) -> bool
 			{
-				return instance()->isCanvasFormatSupported(format, false);
+				return instance()->isPixelFormatSupported(format, true, false, false);
 			};
 		}
 	}
@@ -2211,7 +2671,8 @@ int w_getCanvasFormats(lua_State *L)
 	{
 		supported = [](PixelFormat format) -> bool
 		{
-			return instance()->isCanvasFormatSupported(format);
+			bool readable = !isPixelFormatDepthStencil(format);
+			return instance()->isPixelFormatSupported(format, true, readable, false);
 		};
 	}
 
@@ -2220,9 +2681,11 @@ int w_getCanvasFormats(lua_State *L)
 
 int w_getImageFormats(lua_State *L)
 {
+	luax_markdeprecated(L, "love.graphics.getImageFormats", API_FUNCTION, DEPRECATED_REPLACED, "love.graphics.getTextureFormats");
+
 	const auto supported = [](PixelFormat format) -> bool
 	{
-		return instance()->isImageFormatSupported(format);
+		return instance()->isPixelFormatSupported(format, false, true, false);
 	};
 
 	const auto ignore = [](PixelFormat format) -> bool
@@ -2308,17 +2771,14 @@ int w_getStats(lua_State *L)
 	lua_pushinteger(L, stats.drawCallsBatched);
 	lua_setfield(L, -2, "drawcallsbatched");
 
-	lua_pushinteger(L, stats.canvasSwitches);
+	lua_pushinteger(L, stats.renderTargetSwitches);
 	lua_setfield(L, -2, "canvasswitches");
 
 	lua_pushinteger(L, stats.shaderSwitches);
 	lua_setfield(L, -2, "shaderswitches");
 
-	lua_pushinteger(L, stats.canvases);
-	lua_setfield(L, -2, "canvases");
-
-	lua_pushinteger(L, stats.images);
-	lua_setfield(L, -2, "images");
+	lua_pushinteger(L, stats.textures);
+	lua_setfield(L, -2, "textures");
 
 	lua_pushinteger(L, stats.fonts);
 	lua_setfield(L, -2, "fonts");
@@ -2643,7 +3103,7 @@ int w_rectangle(lua_State *L)
 
 	if (lua_isnoneornil(L, 6))
 	{
-		instance()->rectangle(mode, x, y, w, h);
+		luax_catchexcept(L, [&](){ instance()->rectangle(mode, x, y, w, h); });
 		return 0;
 	}
 
@@ -2795,9 +3255,30 @@ int w_polygon(lua_State *L)
 	return 0;
 }
 
+int w_copyBuffer(lua_State *L)
+{
+	Buffer *source = luax_checkbuffer(L, 1);
+	Buffer *dest = luax_checkbuffer(L, 2);
+
+	ptrdiff_t sourceoffset = luaL_optinteger(L, 3, 0);
+	ptrdiff_t destoffset = luaL_optinteger(L, 4, 0);
+
+	ptrdiff_t size = std::min(source->getSize() - sourceoffset, dest->getSize() - destoffset);
+	if (!lua_isnoneornil(L, 5))
+		size = luaL_checkinteger(L, 5);
+
+	if (sourceoffset < 0 || destoffset < 0)
+		return luaL_error(L, "copyBuffer offsets cannot be negative.");
+	if (size <= 0)
+		return luaL_error(L, "copyBuffer size must be greater than 0.");
+
+	luax_catchexcept(L, [&](){ instance()->copyBuffer(source, dest, sourceoffset, destoffset, size); });
+	return 0;
+}
+
 int w_flushBatch(lua_State *)
 {
-	instance()->flushStreamDraws();
+	instance()->flushBatchedDraws();
 	return 0;
 }
 
@@ -2913,17 +3394,20 @@ static const luaL_Reg functions[] =
 	{ "discard", w_discard },
 	{ "present", w_present },
 
-	{ "newImage", w_newImage },
-	{ "newArrayImage", w_newArrayImage },
-	{ "newVolumeImage", w_newVolumeImage },
-	{ "newCubeImage", w_newCubeImage },
+	{ "newCanvas", w_newCanvas },
+	{ "newTexture", w_newTexture },
+	{ "newCubeTexture", w_newCubeTexture },
+	{ "newArrayTexture", w_newArrayTexture },
+	{ "newVolumeTexture", w_newVolumeTexture },
 	{ "newQuad", w_newQuad },
 	{ "newFont", w_newFont },
 	{ "newImageFont", w_newImageFont },
 	{ "newSpriteBatch", w_newSpriteBatch },
 	{ "newParticleSystem", w_newParticleSystem },
-	{ "newCanvas", w_newCanvas },
 	{ "newShader", w_newShader },
+	{ "newBuffer", w_newBuffer },
+	{ "newVertexBuffer", w_newVertexBuffer },
+	{ "newIndexBuffer", w_newIndexBuffer },
 	{ "newMesh", w_newMesh },
 	{ "newText", w_newText },
 	{ "_newVideo", w_newVideo },
@@ -2946,6 +3430,8 @@ static const luaL_Reg functions[] =
 	{ "getColorMask", w_getColorMask },
 	{ "setBlendMode", w_setBlendMode },
 	{ "getBlendMode", w_getBlendMode },
+	{ "setBlendState", w_setBlendState },
+	{ "getBlendState", w_getBlendState },
 	{ "setDefaultFilter", w_setDefaultFilter },
 	{ "getDefaultFilter", w_getDefaultFilter },
 	{ "setDefaultMipmapFilter", w_setDefaultMipmapFilter },
@@ -2969,11 +3455,9 @@ static const luaL_Reg functions[] =
 
 	{ "setShader", w_setShader },
 	{ "getShader", w_getShader },
-	{ "_setDefaultShaderCode", w_setDefaultShaderCode },
 
 	{ "getSupported", w_getSupported },
-	{ "getCanvasFormats", w_getCanvasFormats },
-	{ "getImageFormats", w_getImageFormats },
+	{ "getTextureFormats", w_getTextureFormats },
 	{ "getRendererInfo", w_getRendererInfo },
 	{ "getSystemLimits", w_getSystemLimits },
 	{ "getTextureTypes", w_getTextureTypes },
@@ -2987,6 +3471,8 @@ static const luaL_Reg functions[] =
 
 	{ "print", w_print },
 	{ "printf", w_printf },
+
+	{ "copyBuffer", w_copyBuffer },
 
 	{ "isCreated", w_isCreated },
 	{ "isActive", w_isActive },
@@ -3030,6 +3516,14 @@ static const luaL_Reg functions[] =
 	{ "transformPoint", w_transformPoint },
 	{ "inverseTransformPoint", w_inverseTransformPoint },
 
+	// Deprecated
+	{ "newImage", w_newImage },
+	{ "newArrayImage", w_newArrayImage },
+	{ "newVolumeImage", w_newVolumeImage },
+	{ "newCubeImage", w_newCubeImage },
+	{ "getCanvasFormats", w_getCanvasFormats },
+	{ "getImageFormats", w_getImageFormats },
+
 	{ 0, 0 }
 };
 
@@ -3044,11 +3538,10 @@ static const lua_CFunction types[] =
 	luaopen_drawable,
 	luaopen_texture,
 	luaopen_font,
-	luaopen_image,
 	luaopen_quad,
+	luaopen_graphicsbuffer,
 	luaopen_spritebatch,
 	luaopen_particlesystem,
-	luaopen_canvas,
 	luaopen_shader,
 	luaopen_mesh,
 	luaopen_text,
@@ -3076,11 +3569,6 @@ extern "C" int luaopen_love_graphics(lua_State *L)
 	int n = luax_register_module(L, w);
 
 	if (luaL_loadbuffer(L, (const char *)graphics_lua, sizeof(graphics_lua), "wrap_Graphics.lua") == 0)
-		lua_call(L, 0, 0);
-	else
-		lua_error(L);
-
-	if (luaL_loadbuffer(L, (const char *)graphics_shader_lua, sizeof(graphics_shader_lua), "wrap_GraphicsShader.lua") == 0)
 		lua_call(L, 0, 0);
 	else
 		lua_error(L);

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -36,10 +36,6 @@
 
 #ifdef LOVE_ANDROID
 #include <SDL.h>
-extern "C"
-{
-#include "luajit.h"
-}
 #endif // LOVE_ANDROID
 
 #ifdef LOVE_LEGENDARY_CONSOLE_IO_HACK
@@ -67,6 +63,11 @@ extern "C"
 // For love::graphics::setGammaCorrect.
 #ifdef LOVE_ENABLE_GRAPHICS
 #	include "graphics/Graphics.h"
+#endif
+
+// For love::window::setHighDPIAllowed
+#ifdef LOVE_ENABLE_WINDOW
+#	include "window/Window.h"
 #endif
 
 // For love::audio::Audio::setMixWithSystem.
@@ -322,6 +323,14 @@ static int w__setGammaCorrect(lua_State *L)
 	return 0;
 }
 
+static int w__setHighDPIAllowed(lua_State *L)
+{
+#ifdef LOVE_ENABLE_WINDOW
+	love::window::setHighDPIAllowed((bool) lua_toboolean(L, 1));
+#endif
+	return 0;
+}
+
 static int w__setAudioMixWithSystem(lua_State *L)
 {
 	bool success = false;
@@ -362,6 +371,23 @@ static int w_deprecation__gc(lua_State *)
 	return 0;
 }
 
+static void luax_addcompatibilityalias(lua_State *L, const char *module, const char *name, const char *alias)
+{
+	lua_getglobal(L, module);
+	if (lua_istable(L, -1))
+	{
+		lua_getfield(L, -1, alias);
+		bool hasalias = !lua_isnoneornil(L, -1);
+		lua_pop(L, 1);
+		if (!hasalias)
+		{
+			lua_getfield(L, -1, name);
+			lua_setfield(L, -2, alias);
+		}
+	}
+	lua_pop(L, 1);
+}
+
 int luaopen_love(lua_State *L)
 {
 	love::luax_insistpinnedthread(L);
@@ -383,7 +409,6 @@ int luaopen_love(lua_State *L)
 	lua_setfield(L, -2, "_version_codename");
 
 #ifdef LOVE_ANDROID
-	luaJIT_setmode(L, 0, LUAJIT_MODE_ENGINE | LUAJIT_MODE_OFF);
 	lua_register(L, "print", w_print_sdl_log);
 #endif
 
@@ -399,6 +424,9 @@ int luaopen_love(lua_State *L)
 
 	lua_pushcfunction(L, w__setGammaCorrect);
 	lua_setfield(L, -2, "_setGammaCorrect");
+
+	lua_pushcfunction(L, w__setHighDPIAllowed);
+	lua_setfield(L, -2, "_setHighDPIAllowed");
 
 	// Exposed here because we need to be able to call it before the audio
 	// module is initialized.
@@ -468,6 +496,13 @@ int luaopen_love(lua_State *L)
 	// Necessary for Data-creating methods to work properly in Data subclasses.
 	love::luax_require(L, "love.data");
 	lua_pop(L, 1);
+
+#if LUA_VERSION_NUM <= 501
+	// These are deprecated in Lua 5.1. LuaJIT 2.1 removes them, but code
+	// written assuming LuaJIT 2.0 or Lua 5.1 is used might still rely on them.
+	luax_addcompatibilityalias(L, "math", "fmod", "mod");
+	luax_addcompatibilityalias(L, "string", "gmatch", "gfind");
+#endif
 
 #ifdef LOVE_ENABLE_LUASOCKET
 	love::luasocket::__open(L);

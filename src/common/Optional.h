@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -44,6 +44,16 @@ struct Optional
 	{
 		value = val;
 		hasValue = true;
+	}
+
+	T get(T defaultVal)
+	{
+		return hasValue ? value : defaultVal;
+	}
+
+	void clear()
+	{
+		hasValue = false;
 	}
 };
 

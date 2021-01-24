@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -25,6 +25,10 @@
 
 #include <cstdlib>
 #include <iostream>
+
+#ifdef LOVE_IOS
+#include "common/ios.h"
+#endif
 
 namespace love
 {
@@ -189,10 +193,18 @@ Audio::Audio()
 
 	poolThread = new PoolThread(pool);
 	poolThread->start();
+	
+#ifdef LOVE_IOS
+	love::ios::initAudioSessionInterruptionHandler();
+#endif
+        
 }
 
 Audio::~Audio()
 {
+#ifdef LOVE_IOS
+	love::ios::destroyAudioSessionInterruptionHandler();
+#endif
 	poolThread->setFinish();
 	poolThread->wait();
 
@@ -291,6 +303,17 @@ void Audio::pause(const std::vector<love::audio::Source*> &sources)
 std::vector<love::audio::Source*> Audio::pause()
 {
 	return Source::pause(pool);
+}
+
+void Audio::pauseContext()
+{
+	alcMakeContextCurrent(nullptr);
+}
+
+void Audio::resumeContext()
+{
+	if (context && alcGetCurrentContext() != context)
+		alcMakeContextCurrent(context);
 }
 
 void Audio::setVolume(float volume)

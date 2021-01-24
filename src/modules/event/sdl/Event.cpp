@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -161,11 +161,11 @@ void Event::exceptionIfInRenderPass(const char *name)
 {
 	// Some core OS graphics functionality (e.g. swap buffers on some platforms)
 	// happens inside SDL_PumpEvents - which is called by SDL_PollEvent and
-	// friends. It's probably a bad idea to call those functions while a Canvas
+	// friends. It's probably a bad idea to call those functions while a RT
 	// is active.
 	auto gfx = Module::getInstance<graphics::Graphics>(Module::M_GRAPHICS);
-	if (gfx != nullptr && gfx->isCanvasActive())
-		throw love::Exception("%s cannot be called while a Canvas is active in love.graphics.", name);
+	if (gfx != nullptr && gfx->isRenderTargetActive())
+		throw love::Exception("%s cannot be called while a render target is active in love.graphics.", name);
 }
 
 Message *Event::convert(const SDL_Event &e)

@@ -20,7 +20,7 @@
 
 #include "RenderPass.h"
 #include "Graphics.h"
-#include "Canvas.h"
+#include "Texture.h"
 #include "OpenGL.h"
 
 namespace love
@@ -59,10 +59,6 @@ static GLenum getGLBlendFactor(BlendFactor factor)
 		case BLENDFACTOR_DST_ALPHA: return GL_DST_ALPHA;
 		case BLENDFACTOR_ONE_MINUS_DST_ALPHA: return GL_ONE_MINUS_DST_ALPHA;
 		case BLENDFACTOR_SRC_ALPHA_SATURATED: return GL_SRC_ALPHA_SATURATE;
-		case BLENDFACTOR_SRC1_COLOR: return GL_SRC1_COLOR;
-		case BLENDFACTOR_ONE_MINUS_SRC1_COLOR: return GL_ONE_MINUS_SRC1_COLOR;
-		case BLENDFACTOR_SRC1_ALPHA: return GL_SRC1_ALPHA;
-		case BLENDFACTOR_ONE_MINUS_SRC1_ALPHA: return GL_ONE_MINUS_SRC1_ALPHA;
 		case BLENDFACTOR_MAX_ENUM: return 0;
 	}
 	return 0;
@@ -208,12 +204,12 @@ void RenderPass::beginPass(DrawContext *context)
 		for (int i = 0; i < rts.colorCount; i++)
 		{
 			const auto &rt = rts.colors[i];
-			cachedRTs.add(rt.canvas.get(), rt.slice, rt.mipmap);
+			cachedRTs.add(rt.texture.get(), rt.slice, rt.mipmap);
 		}
 
 		const auto &ds = rts.depthStencil;
-		if (ds.canvas.get())
-			cachedRTs.add(ds.canvas.get(), ds.slice, ds.mipmap);
+		if (ds.texture.get())
+			cachedRTs.add(ds.texture.get(), ds.slice, ds.mipmap);
 
 		fbo = gl.getCachedFBO(cachedRTs);
 
@@ -232,7 +228,7 @@ void RenderPass::beginPass(DrawContext *context)
 
 		for (int i = 0; i < rts.colorCount; i++)
 		{
-			auto c = rts.colors[i].canvas.get();
+			auto c = rts.colors[i].texture.get();
 			if (c != nullptr && c->getPixelFormat() == PIXELFORMAT_sRGBA8_UNORM)
 			{
 				hasSRGBcanvas = true;
@@ -301,8 +297,8 @@ void RenderPass::beginPass(DrawContext *context)
 	{
 		// TODO: backbuffer depth/stencil pixel format.
 		PixelFormat format = PIXELFORMAT_UNKNOWN;
-		if (rts.depthStencil.canvas.get())
-			format = rts.depthStencil.canvas->getPixelFormat();
+		if (rts.depthStencil.texture.get())
+			format = rts.depthStencil.texture->getPixelFormat();
 		else if (context->isBackbuffer)
 			format = PIXELFORMAT_DEPTH24_UNORM_STENCIL8;;
 
@@ -350,21 +346,21 @@ void RenderPass::beginPass(DrawContext *context)
 void RenderPass::endPass(DrawContext *context)
 {
 	const auto &rts = context->renderTargets;
-	auto depthstencil = rts.depthStencil.canvas.get();
+	auto depthstencil = rts.depthStencil.texture.get();
 
 	discardIfNeeded(context, PASS_END);
 
 	// Resolve MSAA buffers. MSAA is only supported for 2D render targets so we
 	// don't have to worry about resolving to slices.
-	if (!context->isBackbuffer && rts.colorCount > 0 && rts.colors[0].canvas->getMSAA() > 1)
+	if (!context->isBackbuffer && rts.colorCount > 0 && rts.colors[0].texture->getMSAA() > 1)
 	{
 		int mip = rts.colors[0].mipmap;
-		int w = rts.colors[0].canvas->getPixelWidth(mip);
-		int h = rts.colors[0].canvas->getPixelHeight(mip);
+		int w = rts.colors[0].texture->getPixelWidth(mip);
+		int h = rts.colors[0].texture->getPixelHeight(mip);
 
 		for (int i = 0; i < rts.colorCount; i++)
 		{
-			Canvas *c = (Canvas *) rts.colors[i].canvas.get();
+			Texture *c = (Texture *) rts.colors[i].texture.get();
 
 			if (!c->isReadable())
 				continue;
@@ -382,7 +378,7 @@ void RenderPass::endPass(DrawContext *context)
 
 	if (depthstencil != nullptr && depthstencil->getMSAA() > 1 && depthstencil->isReadable())
 	{
-		gl.bindFramebuffer(OpenGL::FRAMEBUFFER_DRAW, ((Canvas *) depthstencil)->getFBO());
+		gl.bindFramebuffer(OpenGL::FRAMEBUFFER_DRAW, ((Texture *) depthstencil)->getFBO());
 
 		if (GLAD_APPLE_framebuffer_multisample)
 			glResolveMultisampleFramebufferAPPLE();
@@ -498,11 +494,11 @@ void RenderPass::applyState(DrawContext *context)
 
 	if (diff & STATEBIT_FACEWINDING)
 	{
-		vertex::Winding winding = state.winding;
+		Winding winding = state.winding;
 		if (!context->isBackbuffer)
-			winding = winding == vertex::WINDING_CW ? vertex::WINDING_CCW : vertex::WINDING_CW;
+			winding = winding == WINDING_CW ? WINDING_CCW : WINDING_CW;
 
-		glFrontFace(winding == vertex::WINDING_CW ? GL_CW : GL_CCW);
+		glFrontFace(winding == WINDING_CW ? GL_CW : GL_CCW);
 	}
 
 	if (diff & STATEBIT_COLORMASK)
@@ -539,7 +535,7 @@ void RenderPass::draw(PrimitiveType primType, int indexCount, int instanceCount,
 	GLenum glprimtype = getGLPrimitiveType(primType);
 	GLenum gldatatype = getGLIndexDataType(indexType);
 
-	gl.bindBuffer(BUFFER_INDEX, indexBuffer->getHandle());
+	gl.bindBuffer(BUFFERUSAGE_INDEX, indexBuffer->getHandle());
 
 	if (instanceCount > 1)
 		glDrawElementsInstanced(glprimtype, indexCount, gldatatype, gloffset, instanceCount);
@@ -547,11 +543,11 @@ void RenderPass::draw(PrimitiveType primType, int indexCount, int instanceCount,
 		glDrawElements(glprimtype, indexCount, gldatatype, gloffset);
 }
 
-static inline void advanceVertexOffsets(const vertex::Attributes &attributes, vertex::BufferBindings &buffers, int vertexcount)
+static inline void advanceVertexOffsets(const VertexAttributes &attributes, BufferBindings &buffers, int vertexcount)
 {
 	uint32 touchedbuffers = 0;
 
-	for (unsigned int i = 0; i < vertex::Attributes::MAX; i++)
+	for (unsigned int i = 0; i < VertexAttributes::MAX; i++)
 	{
 		if (!attributes.isEnabled(i))
 			continue;
@@ -573,7 +569,7 @@ void RenderPass::drawQuads(int start, int count, Resource *quadIndexBuffer)
 	const int MAX_VERTICES_PER_DRAW = LOVE_UINT16_MAX;
 	const int MAX_QUADS_PER_DRAW    = MAX_VERTICES_PER_DRAW / 4;
 
-	gl.bindBuffer(BUFFER_INDEX, quadIndexBuffer->getHandle());
+	gl.bindBuffer(BUFFERUSAGE_INDEX, quadIndexBuffer->getHandle());
 
 	if (gl.isBaseVertexSupported())
 	{
@@ -592,7 +588,7 @@ void RenderPass::drawQuads(int start, int count, Resource *quadIndexBuffer)
 	}
 	else
 	{
-		vertex::BufferBindings bufferscopy = currentBuffers;
+		BufferBindings bufferscopy = currentBuffers;
 		if (start > 0)
 			advanceVertexOffsets(currentAttributes, bufferscopy, start * 4);
 

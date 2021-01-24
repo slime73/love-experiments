@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -26,7 +26,7 @@
 #include "physics/Joint.h"
 
 // Box2D
-#include <Box2D/Box2D.h>
+#include <box2d/Box2D.h>
 
 namespace love
 {
@@ -103,7 +103,7 @@ public:
 	 **/
 	float getReactionTorque(float dt);
 
-	bool isActive() const;
+	bool isEnabled() const;
 
 	bool getCollideConnected() const;
 

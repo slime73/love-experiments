@@ -49,7 +49,6 @@ namespace graphics
 class Graphics;
 class Texture;
 class Quad;
-class Canvas;
 class Mesh;
 class Shader;
 class Font;
@@ -71,7 +70,7 @@ struct RenderPassAttachment
 		END_MAX_ENUM
 	};
 
-	StrongRef<Canvas> canvas;
+	StrongRef<Texture> texture;
 	int slice = 0;
 	int mipmap = 0;
 
@@ -102,17 +101,26 @@ struct RenderPassAttachments
 
 	bool isBackbuffer() const
 	{
-		return getFirstTarget().canvas.get() == nullptr;
+		return getFirstTarget().texture.get() == nullptr;
 	}
 };
 
-// The members in here must respect uniform buffer alignment/padding rules.
-struct BuiltinUniformData
+// State that affects a graphics backend.
+struct RenderState
 {
-	Matrix4 transformMatrix;
-	Matrix4 projectionMatrix;
-	Vector4 screenSizeParams;
-	Colorf constantColor;
+	BlendState blend;
+	ScissorState scissor;
+	StencilState stencil;
+	DepthState depth;
+
+	CullMode meshCullMode = CULL_NONE;
+	Winding winding = WINDING_CCW;
+
+	Shader *shader = nullptr;
+
+	ColorChannelMask colorChannelMask;
+
+	bool wireframe = false;
 };
 
 struct DrawContext
@@ -120,9 +128,9 @@ struct DrawContext
 	uint32 stateDiff = 0xFFFFFFFF;
 	RenderState state;
 
-	vertex::Attributes vertexAttributes;
+	VertexAttributes vertexAttributes;
 
-	BuiltinUniformData builtinUniforms;
+	Shader::BuiltinUniformData builtinUniforms;
 
 	RenderPassAttachments renderTargets;
 
@@ -202,8 +210,8 @@ public:
 	struct BatchedDrawCommand
 	{
 		PrimitiveType primitiveType = PRIMITIVE_TRIANGLES;
-		vertex::CommonFormat vertexFormats[2];
-		vertex::TriangleIndexMode indexMode = vertex::TriangleIndexMode::NONE;
+		CommonFormat vertexFormats[2];
+		TriangleIndexMode indexMode = TRIANGLEINDEX_NONE;
 		int vertexCount = 0;
 		Texture *texture = nullptr;
 		Shader::StandardShader standardShaderType = Shader::STANDARD_DEFAULT;
@@ -211,7 +219,7 @@ public:
 		BatchedDrawCommand()
 		{
 			// VS2013 can't initialize arrays in the above manner...
-			vertexFormats[1] = vertexFormats[0] = vertex::CommonFormat::NONE;
+			vertexFormats[1] = vertexFormats[0] = CommonFormat::NONE;
 		}
 	};
 
@@ -343,7 +351,7 @@ private:
 		StreamBuffer *indexBuffer = nullptr;
 
 		PrimitiveType primitiveMode = PRIMITIVE_TRIANGLES;
-		vertex::CommonFormat formats[2];
+		CommonFormat formats[2];
 		StrongRef<Texture> texture;
 		Shader::StandardShader standardShaderType = Shader::STANDARD_DEFAULT;
 		int vertexCount = 0;
@@ -355,7 +363,7 @@ private:
 		BatchedDrawState()
 		{
 			vb[0] = vb[1] = nullptr;
-			formats[0] = formats[1] = vertex::CommonFormat::NONE;
+			formats[0] = formats[1] = CommonFormat::NONE;
 			vbMap[0] = vbMap[1] = StreamBuffer::MapInfo();
 		}
 	};

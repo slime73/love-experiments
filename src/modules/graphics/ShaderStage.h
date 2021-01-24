@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -44,6 +44,7 @@ class ShaderStage : public love::Object, public Volatile, public Resource
 {
 public:
 
+	// Order is used for stages array in ShaderStage.cpp
 	enum StageType
 	{
 		STAGE_VERTEX,
@@ -61,6 +62,7 @@ public:
 
 	static bool getConstant(const char *in, StageType &out);
 	static bool getConstant(StageType in, const char *&out);
+	static const char *getConstant(StageType in);
 
 protected:
 

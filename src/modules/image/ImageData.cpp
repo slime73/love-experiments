@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -84,7 +84,7 @@ love::image::ImageData *ImageData::clone() const
 
 void ImageData::create(int width, int height, PixelFormat format, void *data)
 {
-	size_t datasize = width * height * getPixelFormatSize(format);
+	size_t datasize = getPixelFormatSliceSize(format, width, height);
 
 	try
 	{
@@ -140,7 +140,7 @@ void ImageData::decode(Data *data)
 			throw love::Exception("Could not decode data to ImageData: unsupported encoded format");
 	}
 
-	if (decodedimage.size != decodedimage.width * decodedimage.height * getPixelFormatSize(decodedimage.format))
+	if (decodedimage.size != getPixelFormatSliceSize(decodedimage.format, decodedimage.width, decodedimage.height))
 	{
 		decoder->freeRawPixels(decodedimage.data);
 		throw love::Exception("Could not convert image!");
@@ -782,7 +782,7 @@ love::thread::Mutex *ImageData::getMutex() const
 
 size_t ImageData::getPixelSize() const
 {
-	return getPixelFormatSize(format);
+	return getPixelFormatBlockSize(format);
 }
 
 bool ImageData::validPixelFormat(PixelFormat format)

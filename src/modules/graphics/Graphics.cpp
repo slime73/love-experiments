@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -104,7 +104,10 @@ bool isDebugEnabled()
 
 love::Type Graphics::type("graphics", &Module::type);
 
-Graphics::DefaultShaderCode Graphics::defaultShaderCode[Shader::STANDARD_MAX_ENUM][Shader::LANGUAGE_MAX_ENUM][2];
+Graphics::DisplayState::DisplayState()
+{
+	defaultSamplerState.mipmapFilter = SamplerState::MIPMAP_FILTER_LINEAR;
+}
 
 Graphics::Graphics()
 	: width(0)
@@ -114,9 +117,9 @@ Graphics::Graphics()
 	, created(false)
 	, active(true)
 	, writingToStencil(false)
-	, streamBufferState()
+	, batchedDrawState()
 	, projectionMatrix()
-	, canvasSwitchCount(0)
+	, renderTargetSwitchCount(0)
 	, drawCalls(0)
 	, drawCallsBatched(0)
 	, quadIndexBuffer(nullptr)
@@ -157,9 +160,9 @@ Graphics::~Graphics()
 
 	defaultFont.set(nullptr);
 
-	delete streamBufferState.vb[0];
-	delete streamBufferState.vb[1];
-	delete streamBufferState.indexBuffer;
+	delete batchedDrawState.vb[0];
+	delete batchedDrawState.vb[1];
+	delete batchedDrawState.indexBuffer;
 
 	for (int i = 0; i < (int) ShaderStage::STAGE_MAX_ENUM; i++)
 		cachedShaderStages[i].clear();
@@ -173,10 +176,12 @@ void Graphics::createQuadIndexBuffer()
 		return;
 
 	size_t size = sizeof(uint16) * (LOVE_UINT16_MAX / 4) * 6;
-	quadIndexBuffer = newBuffer(size, nullptr, BUFFER_INDEX, vertex::USAGE_STATIC, 0);
+
+	Buffer::Settings settings(BUFFERUSAGEFLAG_INDEX, BUFFERDATAUSAGE_STATIC);
+	quadIndexBuffer = newBuffer(settings, DATAFORMAT_UINT16, nullptr, size, 0);
 
 	Buffer::Mapper map(*quadIndexBuffer);
-	vertex::fillIndices(vertex::TriangleIndexMode::QUADS, 0, LOVE_UINT16_MAX, (uint16 *) map.get());
+	fillIndices(TRIANGLEINDEX_QUADS, 0, LOVE_UINT16_MAX, (uint16 *) map.data);
 }
 
 Quad *Graphics::newQuad(Quad::Viewport v, double sw, double sh)
@@ -184,19 +189,19 @@ Quad *Graphics::newQuad(Quad::Viewport v, double sw, double sh)
 	return new Quad(v, sw, sh);
 }
 
-Font *Graphics::newFont(love::font::Rasterizer *data, const Texture::Filter &filter)
+Font *Graphics::newFont(love::font::Rasterizer *data)
 {
-	return new Font(data, filter);
+	return new Font(data, states.back().defaultSamplerState);
 }
 
-Font *Graphics::newDefaultFont(int size, font::TrueTypeRasterizer::Hinting hinting, const Texture::Filter &filter)
+Font *Graphics::newDefaultFont(int size, font::TrueTypeRasterizer::Hinting hinting)
 {
 	auto fontmodule = Module::getInstance<font::Font>(M_FONT);
 	if (!fontmodule)
 		throw love::Exception("Font module has not been loaded.");
 
 	StrongRef<font::Rasterizer> r(fontmodule->newTrueTypeRasterizer(size, hinting), Acquire::NORETAIN);
-	return newFont(r.get(), filter);
+	return newFont(r.get());
 }
 
 Video *Graphics::newVideo(love::video::VideoStream *stream, float dpiscale)
@@ -204,7 +209,7 @@ Video *Graphics::newVideo(love::video::VideoStream *stream, float dpiscale)
 	return new Video(this, stream, dpiscale);
 }
 
-love::graphics::SpriteBatch *Graphics::newSpriteBatch(Texture *texture, int size, vertex::Usage usage)
+love::graphics::SpriteBatch *Graphics::newSpriteBatch(Texture *texture, int size, BufferDataUsage usage)
 {
 	return new SpriteBatch(this, texture, size, usage);
 }
@@ -214,13 +219,8 @@ love::graphics::ParticleSystem *Graphics::newParticleSystem(Texture *texture, in
 	return new ParticleSystem(texture, size);
 }
 
-ShaderStage *Graphics::newShaderStage(ShaderStage::StageType stage, const std::string &optsource)
+ShaderStage *Graphics::newShaderStage(ShaderStage::StageType stage, const std::string &source, const Shader::SourceInfo &info)
 {
-	if (stage == ShaderStage::STAGE_MAX_ENUM)
-		throw love::Exception("Invalid shader stage.");
-
-	const std::string &source = optsource.empty() ? getCurrentDefaultShaderCode().source[stage] : optsource;
-
 	ShaderStage *s = nullptr;
 	std::string cachekey;
 
@@ -241,7 +241,8 @@ ShaderStage *Graphics::newShaderStage(ShaderStage::StageType stage, const std::s
 
 	if (s == nullptr)
 	{
-		s = newShaderStageInternal(stage, cachekey, source, getRenderer() == RENDERER_OPENGLES);
+		std::string glsl = Shader::createShaderStageCode(this, stage, source, info);
+		s = newShaderStageInternal(stage, cachekey, glsl, getRenderer() == RENDERER_OPENGLES);
 		if (!cachekey.empty())
 			cachedShaderStages[stage][cachekey] = s;
 	}
@@ -249,35 +250,69 @@ ShaderStage *Graphics::newShaderStage(ShaderStage::StageType stage, const std::s
 	return s;
 }
 
-Shader *Graphics::newShader(const std::string &vertex, const std::string &pixel)
+Shader *Graphics::newShader(const std::vector<std::string> &stagessource)
 {
-	if (vertex.empty() && pixel.empty())
-		throw love::Exception("Error creating shader: no source code!");
+	StrongRef<ShaderStage> stages[ShaderStage::STAGE_MAX_ENUM] = {};
 
-	StrongRef<ShaderStage> vertexstage(newShaderStage(ShaderStage::STAGE_VERTEX, vertex), Acquire::NORETAIN);
-	StrongRef<ShaderStage> pixelstage(newShaderStage(ShaderStage::STAGE_PIXEL, pixel), Acquire::NORETAIN);
+	bool validstages[ShaderStage::STAGE_MAX_ENUM] = {};
+	validstages[ShaderStage::STAGE_VERTEX] = true;
+	validstages[ShaderStage::STAGE_PIXEL] = true;
 
-	return newShaderInternal(vertexstage.get(), pixelstage.get());
+	for (const std::string &source : stagessource)
+	{
+		Shader::SourceInfo info = Shader::getSourceInfo(source);
+		bool isanystage = false;
+
+		for (int i = 0; i < ShaderStage::STAGE_MAX_ENUM; i++)
+		{
+			if (!validstages[i])
+				continue;
+
+			if (info.stages[i] != Shader::ENTRYPOINT_NONE)
+			{
+				isanystage = true;
+				stages[i].set(newShaderStage((ShaderStage::StageType) i, source, info), Acquire::NORETAIN);
+			}
+		}
+
+		if (!isanystage)
+			throw love::Exception("Could not parse shader code (missing 'position' or 'effect' function?)");
+	}
+
+	for (int i = 0; i < ShaderStage::STAGE_MAX_ENUM; i++)
+	{
+		auto stype = (ShaderStage::StageType) i;
+		if (validstages[i] && stages[i].get() == nullptr)
+		{
+			const std::string &source = Shader::getDefaultCode(Shader::STANDARD_DEFAULT, stype);
+			Shader::SourceInfo info = Shader::getSourceInfo(source);
+			stages[i].set(newShaderStage(stype, source, info), Acquire::NORETAIN);
+		}
+
+	}
+
+	return newShaderInternal(stages[ShaderStage::STAGE_VERTEX], stages[ShaderStage::STAGE_PIXEL]);
 }
 
-Mesh *Graphics::newMesh(const std::vector<Vertex> &vertices, PrimitiveType drawmode, vertex::Usage usage)
+Buffer *Graphics::newBuffer(const Buffer::Settings &settings, DataFormat format, const void *data, size_t size, size_t arraylength)
 {
-	return newMesh(Mesh::getDefaultVertexFormat(), &vertices[0], vertices.size() * sizeof(Vertex), drawmode, usage);
+	std::vector<Buffer::DataDeclaration> dataformat = {{"", format, 0}};
+	return newBuffer(settings, dataformat, data, size, arraylength);
 }
 
-Mesh *Graphics::newMesh(int vertexcount, PrimitiveType drawmode, vertex::Usage usage)
-{
-	return newMesh(Mesh::getDefaultVertexFormat(), vertexcount, drawmode, usage);
-}
-
-love::graphics::Mesh *Graphics::newMesh(const std::vector<Mesh::AttribFormat> &vertexformat, int vertexcount, PrimitiveType drawmode, vertex::Usage usage)
+Mesh *Graphics::newMesh(const std::vector<Buffer::DataDeclaration> &vertexformat, int vertexcount, PrimitiveType drawmode, BufferDataUsage usage)
 {
 	return new Mesh(this, vertexformat, vertexcount, drawmode, usage);
 }
 
-love::graphics::Mesh *Graphics::newMesh(const std::vector<Mesh::AttribFormat> &vertexformat, const void *data, size_t datasize, PrimitiveType drawmode, vertex::Usage usage)
+Mesh *Graphics::newMesh(const std::vector<Buffer::DataDeclaration> &vertexformat, const void *data, size_t datasize, PrimitiveType drawmode, BufferDataUsage usage)
 {
 	return new Mesh(this, vertexformat, data, datasize, drawmode, usage);
+}
+
+Mesh *Graphics::newMesh(const std::vector<Mesh::BufferAttribute> &attributes, PrimitiveType drawmode)
+{
+	return new Mesh(attributes, drawmode);
 }
 
 love::graphics::Text *Graphics::newText(graphics::Font *font, const std::vector<Font::ColoredString> &text)
@@ -290,26 +325,44 @@ void Graphics::cleanupCachedShaderStage(ShaderStage::StageType type, const std::
 	cachedShaderStages[type].erase(hashkey);
 }
 
-bool Graphics::validateShader(bool gles, const std::string &vertex, const std::string &pixel, std::string &err)
+bool Graphics::validateShader(bool gles, const std::vector<std::string> &stagessource, std::string &err)
 {
-	if (vertex.empty() && pixel.empty())
-	{
-		err = "Error validating shader: no source code!";
-		return false;
-	}
+	StrongRef<ShaderStage> stages[ShaderStage::STAGE_MAX_ENUM] = {};
 
-	StrongRef<ShaderStage> vertexstage;
-	StrongRef<ShaderStage> pixelstage;
+	bool validstages[ShaderStage::STAGE_MAX_ENUM] = {};
+	validstages[ShaderStage::STAGE_VERTEX] = true;
+	validstages[ShaderStage::STAGE_PIXEL] = true;
 
 	// Don't use cached shader stages, since the gles flag may not match the
 	// current renderer.
-	if (!vertex.empty())
-		vertexstage.set(new ShaderStageForValidation(this, ShaderStage::STAGE_VERTEX, vertex, gles), Acquire::NORETAIN);
+	for (const std::string &source : stagessource)
+	{
+		Shader::SourceInfo info = Shader::getSourceInfo(source);
+		bool isanystage = false;
 
-	if (!pixel.empty())
-		pixelstage.set(new ShaderStageForValidation(this, ShaderStage::STAGE_PIXEL, pixel, gles), Acquire::NORETAIN);
+		for (int i = 0; i < ShaderStage::STAGE_MAX_ENUM; i++)
+		{
+			auto stype = (ShaderStage::StageType) i;
 
-	return Shader::validate(vertexstage.get(), pixelstage.get(), err);
+			if (!validstages[i])
+				continue;
+
+			if (info.stages[i] != Shader::ENTRYPOINT_NONE)
+			{
+				isanystage = true;
+				std::string glsl = Shader::createShaderStageCode(this, stype, source, info);
+				stages[i].set(new ShaderStageForValidation(this, stype, glsl, gles), Acquire::NORETAIN);
+			}
+		}
+
+		if (!isanystage)
+		{
+			err = "Could not parse shader code (missing 'position' or 'effect' function?)";
+			return false;
+		}
+	}
+
+	return Shader::validate(stages[ShaderStage::STAGE_VERTEX], stages[ShaderStage::STAGE_PIXEL], err);
 }
 
 int Graphics::getWidth() const
@@ -335,8 +388,8 @@ int Graphics::getPixelHeight() const
 double Graphics::getCurrentDPIScale() const
 {
 	const auto &rt = states.back().renderTargets.getFirstTarget();
-	if (rt.canvas.get())
-		return rt.canvas->getDPIScale();
+	if (rt.texture.get())
+		return rt.texture->getDPIScale();
 
 	return getScreenDPIScale();
 }
@@ -376,7 +429,7 @@ void Graphics::restoreState(const DisplayState &s)
 	setColor(s.color);
 	setBackgroundColor(s.backgroundColor);
 
-	setBlendMode(s.blendMode, s.blendAlphaMode);
+	setBlendState(s.blend);
 
 	setLineWidth(s.lineWidth);
 	setLineStyle(s.lineStyle);
@@ -397,13 +450,12 @@ void Graphics::restoreState(const DisplayState &s)
 
 	setFont(s.font.get());
 	setShader(s.shader.get());
-	setCanvas(s.renderTargets);
+	setRenderTargets(s.renderTargets);
 
 	setColorMask(s.colorMask);
 	setWireframe(s.wireframe);
 
-	setDefaultFilter(s.defaultFilter);
-	setDefaultMipmapFilter(s.defaultMipmapFilter, s.defaultMipmapSharpness);
+	setDefaultSamplerState(s.defaultSamplerState);
 }
 
 void Graphics::restoreStateChecked(const DisplayState &s)
@@ -415,8 +467,8 @@ void Graphics::restoreStateChecked(const DisplayState &s)
 
 	setBackgroundColor(s.backgroundColor);
 
-	if (s.blendMode != cur.blendMode || s.blendAlphaMode != cur.blendAlphaMode)
-		setBlendMode(s.blendMode, s.blendAlphaMode);
+	if (!(s.blend == cur.blend))
+		setBlendState(s.blend);
 
 	// These are just simple assignments.
 	setLineWidth(s.lineWidth);
@@ -451,27 +503,27 @@ void Graphics::restoreStateChecked(const DisplayState &s)
 	const auto &sRTs = s.renderTargets;
 	const auto &curRTs = cur.renderTargets;
 
-	bool canvaseschanged = sRTs.colors.size() != curRTs.colors.size();
-	if (!canvaseschanged)
+	bool rtschanged = sRTs.colors.size() != curRTs.colors.size();
+	if (!rtschanged)
 	{
 		for (size_t i = 0; i < sRTs.colors.size() && i < curRTs.colors.size(); i++)
 		{
 			if (sRTs.colors[i] != curRTs.colors[i])
 			{
-				canvaseschanged = true;
+				rtschanged = true;
 				break;
 			}
 		}
 
-		if (!canvaseschanged && sRTs.depthStencil != curRTs.depthStencil)
-			canvaseschanged = true;
+		if (!rtschanged && sRTs.depthStencil != curRTs.depthStencil)
+			rtschanged = true;
 
 		if (sRTs.temporaryRTFlags != curRTs.temporaryRTFlags)
-			canvaseschanged = true;
+			rtschanged = true;
 	}
 
-	if (canvaseschanged)
-		setCanvas(s.renderTargets);
+	if (rtschanged)
+		setRenderTargets(s.renderTargets);
 
 	if (s.colorMask != cur.colorMask)
 		setColorMask(s.colorMask);
@@ -479,8 +531,7 @@ void Graphics::restoreStateChecked(const DisplayState &s)
 	if (s.wireframe != cur.wireframe)
 		setWireframe(s.wireframe);
 
-	setDefaultFilter(s.defaultFilter);
-	setDefaultMipmapFilter(s.defaultMipmapFilter, s.defaultMipmapSharpness);
+	setDefaultSamplerState(s.defaultSamplerState);
 }
 
 Colorf Graphics::getColor() const
@@ -506,7 +557,7 @@ void Graphics::checkSetDefaultFont()
 
 	// Create a new default font if we don't have one yet.
 	if (!defaultFont.get())
-		defaultFont.set(newDefaultFont(12, font::TrueTypeRasterizer::HINTING_NORMAL), Acquire::NORETAIN);
+		defaultFont.set(newDefaultFont(13, font::TrueTypeRasterizer::HINTING_NORMAL), Acquire::NORETAIN);
 
 	states.back().font.set(defaultFont.get());
 }
@@ -545,50 +596,50 @@ love::graphics::Shader *Graphics::getShader() const
 	return states.back().shader.get();
 }
 
-void Graphics::setCanvas(RenderTarget rt, uint32 temporaryRTFlags)
+void Graphics::setRenderTarget(RenderTarget rt, uint32 temporaryRTFlags)
 {
-	if (rt.canvas == nullptr)
-		return setCanvas();
+	if (rt.texture == nullptr)
+		return setRenderTarget();
 
 	RenderTargets rts;
 	rts.colors.push_back(rt);
 	rts.temporaryRTFlags = temporaryRTFlags;
 
-	setCanvas(rts);
+	setRenderTargets(rts);
 }
 
-void Graphics::setCanvas(const RenderTargetsStrongRef &rts)
+void Graphics::setRenderTargets(const RenderTargetsStrongRef &rts)
 {
 	RenderTargets targets;
 	targets.colors.reserve(rts.colors.size());
 
 	for (const auto &rt : rts.colors)
-		targets.colors.emplace_back(rt.canvas.get(), rt.slice, rt.mipmap);
+		targets.colors.emplace_back(rt.texture.get(), rt.slice, rt.mipmap);
 
-	targets.depthStencil = RenderTarget(rts.depthStencil.canvas, rts.depthStencil.slice, rts.depthStencil.mipmap);
+	targets.depthStencil = RenderTarget(rts.depthStencil.texture, rts.depthStencil.slice, rts.depthStencil.mipmap);
 	targets.temporaryRTFlags = rts.temporaryRTFlags;
 
-	return setCanvas(targets);
+	return setRenderTargets(targets);
 }
 
-void Graphics::setCanvas(const RenderTargets &rts)
+void Graphics::setRenderTargets(const RenderTargets &rts)
 {
 	DisplayState &state = states.back();
-	int ncanvases = (int) rts.colors.size();
+	int rtcount = (int) rts.colors.size();
 
 	RenderTarget firsttarget = rts.getFirstTarget();
-	love::graphics::Canvas *firstcanvas = firsttarget.canvas;
+	Texture *firsttex = firsttarget.texture;
 
-	if (firstcanvas == nullptr)
-		return setCanvas();
+	if (firsttex == nullptr)
+		return setRenderTarget();
 
 	const auto &prevRTs = state.renderTargets;
 
-	if (ncanvases == (int) prevRTs.colors.size())
+	if (rtcount == (int) prevRTs.colors.size())
 	{
 		bool modified = false;
 
-		for (int i = 0; i < ncanvases; i++)
+		for (int i = 0; i < rtcount; i++)
 		{
 			if (rts.colors[i] != prevRTs.colors[i])
 			{
@@ -607,36 +658,42 @@ void Graphics::setCanvas(const RenderTargets &rts)
 			return;
 	}
 
-	if (ncanvases > capabilities.limits[LIMIT_MULTI_CANVAS])
-		throw love::Exception("This system can't simultaneously render to %d canvases.", ncanvases);
+	if (rtcount > capabilities.limits[LIMIT_RENDER_TARGETS])
+		throw love::Exception("This system can't simultaneously render to %d textures.", rtcount);
 
-	bool multiformatsupported = capabilities.features[FEATURE_MULTI_CANVAS_FORMATS];
+	bool multiformatsupported = capabilities.features[FEATURE_MULTI_RENDER_TARGET_FORMATS];
 
 	PixelFormat firstcolorformat = PIXELFORMAT_UNKNOWN;
 	if (!rts.colors.empty())
-		firstcolorformat = rts.colors[0].canvas->getPixelFormat();
+		firstcolorformat = rts.colors[0].texture->getPixelFormat();
+
+	if (!firsttex->isRenderTarget())
+		throw love::Exception("Texture must be created as a render target to be used in setRenderTargets.");
 
 	if (isPixelFormatDepthStencil(firstcolorformat))
-		throw love::Exception("Depth/stencil format Canvases must be used with the 'depthstencil' field of the table passed into setCanvas.");
+		throw love::Exception("Depth/stencil format textures must be used with the 'depthstencil' field of the table passed into setRenderTargets.");
 
-	if (firsttarget.mipmap < 0 || firsttarget.mipmap >= firstcanvas->getMipmapCount())
+	if (firsttarget.mipmap < 0 || firsttarget.mipmap >= firsttex->getMipmapCount())
 		throw love::Exception("Invalid mipmap level %d.", firsttarget.mipmap + 1);
 
-	if (!firstcanvas->isValidSlice(firsttarget.slice))
+	if (!firsttex->isValidSlice(firsttarget.slice))
 		throw love::Exception("Invalid slice index: %d.", firsttarget.slice + 1);
 
-	bool hasSRGBcanvas = firstcolorformat == PIXELFORMAT_sRGBA8_UNORM;
-	int pixelw = firstcanvas->getPixelWidth(firsttarget.mipmap);
-	int pixelh = firstcanvas->getPixelHeight(firsttarget.mipmap);
-	int reqmsaa = firstcanvas->getRequestedMSAA();
+	bool hasSRGBtexture = firstcolorformat == PIXELFORMAT_sRGBA8_UNORM;
+	int pixelw = firsttex->getPixelWidth(firsttarget.mipmap);
+	int pixelh = firsttex->getPixelHeight(firsttarget.mipmap);
+	int reqmsaa = firsttex->getRequestedMSAA();
 
-	for (int i = 1; i < ncanvases; i++)
+	for (int i = 1; i < rtcount; i++)
 	{
-		love::graphics::Canvas *c = rts.colors[i].canvas;
+		Texture *c = rts.colors[i].texture;
 		PixelFormat format = c->getPixelFormat();
 		int mip = rts.colors[i].mipmap;
 		int slice = rts.colors[i].slice;
 
+		if (!c->isRenderTarget())
+			throw love::Exception("Texture must be created as a render target to be used in setRenderTargets.");
+
 		if (mip < 0 || mip >= c->getMipmapCount())
 			throw love::Exception("Invalid mipmap level %d.", mip + 1);
 
@@ -644,35 +701,38 @@ void Graphics::setCanvas(const RenderTargets &rts)
 			throw love::Exception("Invalid slice index: %d.", slice + 1);
 
 		if (c->getPixelWidth(mip) != pixelw || c->getPixelHeight(mip) != pixelh)
-			throw love::Exception("All canvases must have the same pixel dimensions.");
+			throw love::Exception("All textures must have the same pixel dimensions.");
 
 		if (!multiformatsupported && format != firstcolorformat)
-			throw love::Exception("This system doesn't support multi-canvas rendering with different canvas formats.");
+			throw love::Exception("This system doesn't support multi-render-target rendering with different texture formats.");
 
 		if (c->getRequestedMSAA() != reqmsaa)
-			throw love::Exception("All Canvases must have the same MSAA value.");
+			throw love::Exception("All textures must have the same MSAA value.");
 
 		if (isPixelFormatDepthStencil(format))
-			throw love::Exception("Depth/stencil format Canvases must be used with the 'depthstencil' field of the table passed into setCanvas.");
+			throw love::Exception("Depth/stencil format textures must be used with the 'depthstencil' field of the table passed into setRenderTargets.");
 
 		if (format == PIXELFORMAT_sRGBA8_UNORM)
-			hasSRGBcanvas = true;
+			hasSRGBtexture = true;
 	}
 
-	if (rts.depthStencil.canvas != nullptr)
+	if (rts.depthStencil.texture != nullptr)
 	{
-		love::graphics::Canvas *c = rts.depthStencil.canvas;
+		Texture *c = rts.depthStencil.texture;
 		int mip = rts.depthStencil.mipmap;
 		int slice = rts.depthStencil.slice;
 
+		if (!c->isRenderTarget())
+			throw love::Exception("Texture must be created as a render target to be used in setRenderTargets.");
+
 		if (!isPixelFormatDepthStencil(c->getPixelFormat()))
-			throw love::Exception("Only depth/stencil format Canvases can be used with the 'depthstencil' field of the table passed into setCanvas.");
+			throw love::Exception("Only depth/stencil format textures can be used with the 'depthstencil' field of the table passed into setRenderTargets.");
 
 		if (c->getPixelWidth(mip) != pixelw || c->getPixelHeight(mip) != pixelh)
-			throw love::Exception("All canvases must have the same pixel dimensions.");
+			throw love::Exception("All Textures must have the same pixel dimensions.");
 
-		if (c->getRequestedMSAA() != firstcanvas->getRequestedMSAA())
-			throw love::Exception("All Canvases must have the same MSAA value.");
+		if (c->getRequestedMSAA() != firsttex->getRequestedMSAA())
+			throw love::Exception("All Textures must have the same MSAA value.");
 
 		if (mip < 0 || mip >= c->getMipmapCount())
 			throw love::Exception("Invalid mipmap level %d.", mip + 1);
@@ -681,12 +741,12 @@ void Graphics::setCanvas(const RenderTargets &rts)
 			throw love::Exception("Invalid slice index: %d.", slice + 1);
 	}
 
-	int w = firstcanvas->getWidth(firsttarget.mipmap);
-	int h = firstcanvas->getHeight(firsttarget.mipmap);
+	int w = firsttex->getWidth(firsttarget.mipmap);
+	int h = firsttex->getHeight(firsttarget.mipmap);
 
-	flushStreamDraws();
+	flushBatchedDraws();
 
-	if (rts.depthStencil.canvas == nullptr && rts.temporaryRTFlags != 0)
+	if (rts.depthStencil.texture == nullptr && rts.temporaryRTFlags != 0)
 	{
 		bool wantsdepth   = (rts.temporaryRTFlags & TEMPORARY_RT_DEPTH) != 0;
 		bool wantsstencil = (rts.temporaryRTFlags & TEMPORARY_RT_STENCIL) != 0;
@@ -694,54 +754,54 @@ void Graphics::setCanvas(const RenderTargets &rts)
 		PixelFormat dsformat = PIXELFORMAT_STENCIL8;
 		if (wantsdepth && wantsstencil)
 			dsformat = PIXELFORMAT_DEPTH24_UNORM_STENCIL8;
-		else if (wantsdepth && isCanvasFormatSupported(PIXELFORMAT_DEPTH24_UNORM, false))
+		else if (wantsdepth && isPixelFormatSupported(PIXELFORMAT_DEPTH24_UNORM, true, false, false))
 			dsformat = PIXELFORMAT_DEPTH24_UNORM;
 		else if (wantsdepth)
 			dsformat = PIXELFORMAT_DEPTH16_UNORM;
 		else if (wantsstencil)
 			dsformat = PIXELFORMAT_STENCIL8;
 
-		// We want setCanvasInternal to have a pointer to the temporary RT, but
-		// we don't want to directly store it in the main graphics state.
+		// We want setRenderTargetsInternal to have a pointer to the temporary RT,
+		// but we don't want to directly store it in the main graphics state.
 		RenderTargets realRTs = rts;
 
-		realRTs.depthStencil.canvas = getTemporaryCanvas(dsformat, pixelw, pixelh, reqmsaa);
+		realRTs.depthStencil.texture = getTemporaryTexture(dsformat, pixelw, pixelh, reqmsaa);
 		realRTs.depthStencil.slice = 0;
 
-		setCanvasInternal(realRTs, w, h, pixelw, pixelh, hasSRGBcanvas);
+		setRenderTargetsInternal(realRTs, w, h, pixelw, pixelh, hasSRGBtexture);
 	}
 	else
-		setCanvasInternal(rts, w, h, pixelw, pixelh, hasSRGBcanvas);
+		setRenderTargetsInternal(rts, w, h, pixelw, pixelh, hasSRGBtexture);
 
 	RenderTargetsStrongRef refs;
 	refs.colors.reserve(rts.colors.size());
 
 	for (auto c : rts.colors)
-		refs.colors.emplace_back(c.canvas, c.slice, c.mipmap);
+		refs.colors.emplace_back(c.texture, c.slice, c.mipmap);
 
-	refs.depthStencil = RenderTargetStrongRef(rts.depthStencil.canvas, rts.depthStencil.slice);
+	refs.depthStencil = RenderTargetStrongRef(rts.depthStencil.texture, rts.depthStencil.slice);
 	refs.temporaryRTFlags = rts.temporaryRTFlags;
 
 	std::swap(state.renderTargets, refs);
 
-	canvasSwitchCount++;
+	renderTargetSwitchCount++;
 }
 
-void Graphics::setCanvas()
+void Graphics::setRenderTarget()
 {
 	DisplayState &state = states.back();
 
-	if (state.renderTargets.colors.empty() && state.renderTargets.depthStencil.canvas == nullptr)
+	if (state.renderTargets.colors.empty() && state.renderTargets.depthStencil.texture == nullptr)
 		return;
 
-	flushStreamDraws();
-	setCanvasInternal(RenderTargets(), width, height, pixelWidth, pixelHeight, isGammaCorrect());
+	flushBatchedDraws();
+	setRenderTargetsInternal(RenderTargets(), width, height, pixelWidth, pixelHeight, isGammaCorrect());
 
 	state.renderTargets = RenderTargetsStrongRef();
-	canvasSwitchCount++;
+	renderTargetSwitchCount++;
 }
 
-Graphics::RenderTargets Graphics::getCanvas() const
+Graphics::RenderTargets Graphics::getRenderTargets() const
 {
 	const auto &curRTs = states.back().renderTargets;
 
@@ -749,82 +809,83 @@ Graphics::RenderTargets Graphics::getCanvas() const
 	rts.colors.reserve(curRTs.colors.size());
 
 	for (const auto &rt : curRTs.colors)
-		rts.colors.emplace_back(rt.canvas.get(), rt.slice, rt.mipmap);
+		rts.colors.emplace_back(rt.texture.get(), rt.slice, rt.mipmap);
 
-	rts.depthStencil = RenderTarget(curRTs.depthStencil.canvas, curRTs.depthStencil.slice, curRTs.depthStencil.mipmap);
+	rts.depthStencil = RenderTarget(curRTs.depthStencil.texture, curRTs.depthStencil.slice, curRTs.depthStencil.mipmap);
 	rts.temporaryRTFlags = curRTs.temporaryRTFlags;
 
 	return rts;
 }
 
-bool Graphics::isCanvasActive() const
+bool Graphics::isRenderTargetActive() const
 {
 	const auto &rts = states.back().renderTargets;
-	return !rts.colors.empty() || rts.depthStencil.canvas != nullptr;
+	return !rts.colors.empty() || rts.depthStencil.texture != nullptr;
 }
 
-bool Graphics::isCanvasActive(love::graphics::Canvas *canvas) const
-{
-	const auto &rts = states.back().renderTargets;
-
-	for (const auto &rt : rts.colors)
-	{
-		if (rt.canvas.get() == canvas)
-			return true;
-	}
-
-	if (rts.depthStencil.canvas.get() == canvas)
-		return true;
-
-	return false;
-}
-
-bool Graphics::isCanvasActive(Canvas *canvas, int slice) const
+bool Graphics::isRenderTargetActive(Texture *texture) const
 {
 	const auto &rts = states.back().renderTargets;
 
 	for (const auto &rt : rts.colors)
 	{
-		if (rt.canvas.get() == canvas && rt.slice == slice)
+		if (rt.texture.get() == texture)
 			return true;
 	}
 
-	if (rts.depthStencil.canvas.get() == canvas && rts.depthStencil.slice == slice)
+	if (rts.depthStencil.texture.get() == texture)
 		return true;
 
 	return false;
 }
 
-Canvas *Graphics::getTemporaryCanvas(PixelFormat format, int w, int h, int samples)
+bool Graphics::isRenderTargetActive(Texture *texture, int slice) const
 {
-	love::graphics::Canvas *canvas = nullptr;
+	const auto &rts = states.back().renderTargets;
 
-	for (TemporaryCanvas &temp : temporaryCanvases)
+	for (const auto &rt : rts.colors)
 	{
-		Canvas *c = temp.canvas;
+		if (rt.texture.get() == texture && rt.slice == slice)
+			return true;
+	}
+
+	if (rts.depthStencil.texture.get() == texture && rts.depthStencil.slice == slice)
+		return true;
+
+	return false;
+}
+
+Texture *Graphics::getTemporaryTexture(PixelFormat format, int w, int h, int samples)
+{
+	Texture *texture = nullptr;
+
+	for (TemporaryTexture &temp : temporaryTextures)
+	{
+		Texture *c = temp.texture;
 		if (c->getPixelFormat() == format && c->getPixelWidth() == w
 			&& c->getPixelHeight() == h && c->getRequestedMSAA() == samples)
 		{
-			canvas = c;
+			texture = c;
 			temp.framesSinceUse = 0;
 			break;
 		}
 	}
 
-	if (canvas == nullptr)
+	if (texture == nullptr)
 	{
-		Canvas::Settings settings;
+		Texture::Settings settings;
+		settings.renderTarget = true;
 		settings.format = format;
 		settings.width = w;
 		settings.height = h;
 		settings.msaa = samples;
 
-		canvas = newCanvas(settings);
+		texture = newTexture(settings);
 
-		temporaryCanvases.emplace_back(canvas);
+		temporaryTextures.emplace_back(texture);
 	}
 
-	return canvas;
+	return texture;
 }
 
 void Graphics::intersectScissor(const Rect &rect)
@@ -891,46 +952,46 @@ CullMode Graphics::getMeshCullMode() const
 	return states.back().meshCullMode;
 }
 
-vertex::Winding Graphics::getFrontFaceWinding() const
+Winding Graphics::getFrontFaceWinding() const
 {
 	return states.back().winding;
 }
 
-Graphics::ColorMask Graphics::getColorMask() const
+ColorChannelMask Graphics::getColorMask() const
 {
 	return states.back().colorMask;
 }
 
-Graphics::BlendMode Graphics::getBlendMode(BlendAlpha &alphamode) const
+void Graphics::setBlendMode(BlendMode mode, BlendAlpha alphamode)
 {
-	alphamode = states.back().blendAlphaMode;
-	return states.back().blendMode;
+	if (alphamode == BLENDALPHA_MULTIPLY && !isAlphaMultiplyBlendSupported(mode))
+	{
+		const char *modestr = "unknown";
+		love::graphics::getConstant(mode, modestr);
+		throw love::Exception("The '%s' blend mode must be used with premultiplied alpha.", modestr);
+	}
+
+	setBlendState(computeBlendState(mode, alphamode));
 }
 
-void Graphics::setDefaultFilter(const Texture::Filter &f)
+BlendMode Graphics::getBlendMode(BlendAlpha &alphamode) const
 {
-	Texture::defaultFilter = f;
-	states.back().defaultFilter = f;
+	return computeBlendMode(states.back().blend, alphamode);
 }
 
-const Texture::Filter &Graphics::getDefaultFilter() const
+const BlendState &Graphics::getBlendState() const
 {
-	return Texture::defaultFilter;
+	return states.back().blend;
 }
 
-void Graphics::setDefaultMipmapFilter(Texture::FilterMode filter, float sharpness)
+void Graphics::setDefaultSamplerState(const SamplerState &s)
 {
-	Texture::defaultMipmapFilter = filter;
-	Texture::defaultMipmapSharpness = sharpness;
-
-	states.back().defaultMipmapFilter = filter;
-	states.back().defaultMipmapSharpness = sharpness;
+	states.back().defaultSamplerState = s;
 }
 
-void Graphics::getDefaultMipmapFilter(Texture::FilterMode *filter, float *sharpness) const
+const SamplerState &Graphics::getDefaultSamplerState() const
 {
-	*filter = Texture::defaultMipmapFilter;
-	*sharpness = Texture::defaultMipmapSharpness;
+	return states.back().defaultSamplerState;
 }
 
 void Graphics::setLineWidth(float width)
@@ -978,18 +1039,42 @@ void Graphics::captureScreenshot(const ScreenshotInfo &info)
 	pendingScreenshotCallbacks.push_back(info);
 }
 
-Graphics::StreamVertexData Graphics::requestStreamDraw(const StreamDrawCommand &cmd)
+void Graphics::copyBuffer(Buffer *source, Buffer *dest, size_t sourceoffset, size_t destoffset, size_t size)
 {
-	using namespace vertex;
+	if (!capabilities.features[FEATURE_COPY_BUFFER])
+		throw love::Exception("Buffer copying is not supported on this system.");
 
-	StreamBufferState &state = streamBufferState;
+	if (!(source->getUsageFlags() & BUFFERUSAGEFLAG_COPY_SOURCE))
+		throw love::Exception("Copy source buffer must be created with the copysource flag.");
+
+	if (!(dest->getUsageFlags() & BUFFERUSAGEFLAG_COPY_DEST))
+		throw love::Exception("Copy destination buffer must be created with the copydest flag.");
+
+	Range sourcerange(sourceoffset, size);
+	Range destrange(destoffset, size);
+
+	if (sourcerange.getMax() >= source->getSize())
+		throw love::Exception("Buffer copy source offset and size doesn't fit within the source Buffer's size.");
+
+	if (destrange.getMax() >= dest->getSize())
+		throw love::Exception("Buffer copy destination offset and size doesn't fit within the destination buffer's size.");
+
+	if (source == dest && sourcerange.intersects(destrange))
+		throw love::Exception("Copying a portion of a buffer to the same buffer requires non-overlapping source and destination offsets.");
+
+	source->copyTo(dest, sourceoffset, destoffset, size);
+}
+
+Graphics::BatchedVertexData Graphics::requestBatchedDraw(const BatchedDrawCommand &cmd)
+{
+	BatchedDrawState &state = batchedDrawState;
 
 	bool shouldflush = false;
 	bool shouldresize = false;
 
 	if (cmd.primitiveMode != state.primitiveMode
 		|| cmd.formats[0] != state.formats[0] || cmd.formats[1] != state.formats[1]
-		|| ((cmd.indexMode != TriangleIndexMode::NONE) != (state.indexCount > 0))
+		|| ((cmd.indexMode != TRIANGLEINDEX_NONE) != (state.indexCount > 0))
 		|| cmd.texture != state.texture
 		|| cmd.standardShaderType != state.standardShaderType)
 	{
@@ -999,7 +1084,7 @@ Graphics::StreamVertexData Graphics::requestStreamDraw(const StreamDrawCommand &
 	int totalvertices = state.vertexCount + cmd.vertexCount;
 
 	// We only support uint16 index buffers for now.
-	if (totalvertices > LOVE_UINT16_MAX && cmd.indexMode != TriangleIndexMode::NONE)
+	if (totalvertices > LOVE_UINT16_MAX && cmd.indexMode != TRIANGLEINDEX_NONE)
 		shouldflush = true;
 
 	int reqIndexCount = getIndexCount(cmd.indexMode, cmd.vertexCount);
@@ -1028,7 +1113,7 @@ Graphics::StreamVertexData Graphics::requestStreamDraw(const StreamDrawCommand &
 		newdatasizes[i] = stride * cmd.vertexCount;
 	}
 
-	if (cmd.indexMode != TriangleIndexMode::NONE)
+	if (cmd.indexMode != TRIANGLEINDEX_NONE)
 	{
 		size_t datasize = (state.indexCount + reqIndexCount) * sizeof(uint16);
 
@@ -1044,7 +1129,7 @@ Graphics::StreamVertexData Graphics::requestStreamDraw(const StreamDrawCommand &
 
 	if (shouldflush || shouldresize)
 	{
-		flushStreamDraws();
+		flushBatchedDraws();
 
 		state.primitiveMode = cmd.primitiveMode;
 		state.formats[0] = cmd.formats[0];
@@ -1053,11 +1138,14 @@ Graphics::StreamVertexData Graphics::requestStreamDraw(const StreamDrawCommand &
 		state.standardShaderType = cmd.standardShaderType;
 	}
 
-	if (state.vertexCount == 0 && Shader::isDefaultActive())
-		Shader::attachDefault(state.standardShaderType);
+	if (state.vertexCount == 0)
+	{
+		if (Shader::isDefaultActive())
+			Shader::attachDefault(state.standardShaderType);
 
-	if (state.vertexCount == 0 && Shader::current != nullptr && cmd.texture != nullptr)
-		Shader::current->checkMainTexture(cmd.texture);
+		if (Shader::current != nullptr)
+			Shader::current->validateDrawState(cmd.primitiveMode, cmd.texture);
+	}
 
 	if (shouldresize)
 	{
@@ -1066,18 +1154,18 @@ Graphics::StreamVertexData Graphics::requestStreamDraw(const StreamDrawCommand &
 			if (state.vb[i]->getSize() < buffersizes[i])
 			{
 				delete state.vb[i];
-				state.vb[i] = newStreamBuffer(BUFFER_VERTEX, buffersizes[i]);
+				state.vb[i] = newStreamBuffer(BUFFERUSAGE_VERTEX, buffersizes[i]);
 			}
 		}
 
 		if (state.indexBuffer->getSize() < buffersizes[2])
 		{
 			delete state.indexBuffer;
-			state.indexBuffer = newStreamBuffer(BUFFER_INDEX, buffersizes[2]);
+			state.indexBuffer = newStreamBuffer(BUFFERUSAGE_INDEX, buffersizes[2]);
 		}
 	}
 
-	if (cmd.indexMode != TriangleIndexMode::NONE)
+	if (cmd.indexMode != TRIANGLEINDEX_NONE)
 	{
 		if (state.indexBufferMap.data == nullptr)
 			state.indexBufferMap = state.indexBuffer->map(reqIndexSize);
@@ -1088,7 +1176,7 @@ Graphics::StreamVertexData Graphics::requestStreamDraw(const StreamDrawCommand &
 		state.indexBufferMap.data += reqIndexSize;
 	}
 
-	StreamVertexData d;
+	BatchedVertexData d;
 
 	for (int i = 0; i < 2; i++)
 	{
@@ -1112,16 +1200,14 @@ Graphics::StreamVertexData Graphics::requestStreamDraw(const StreamDrawCommand &
 	return d;
 }
 
-void Graphics::flushStreamDraws()
+void Graphics::flushBatchedDraws()
 {
-	using namespace vertex;
-
-	auto &sbstate = streamBufferState;
+	auto &sbstate = batchedDrawState;
 
 	if (sbstate.vertexCount == 0 && sbstate.indexCount == 0)
 		return;
 
-	Attributes attributes;
+	VertexAttributes attributes;
 	BufferBindings buffers;
 
 	size_t usedsizes[3] = {0, 0, 0};
@@ -1187,15 +1273,15 @@ void Graphics::flushStreamDraws()
 	if (attributes.isEnabled(ATTRIB_COLOR))
 		setColor(nc);
 
-	streamBufferState.vertexCount = 0;
-	streamBufferState.indexCount = 0;
+	batchedDrawState.vertexCount = 0;
+	batchedDrawState.indexCount = 0;
 }
 
-void Graphics::flushStreamDrawsGlobal()
+void Graphics::flushBatchedDrawsGlobal()
 {
 	Graphics *instance = getInstance<Graphics>(M_GRAPHICS);
 	if (instance != nullptr)
-		instance->flushStreamDraws();
+		instance->flushBatchedDraws();
 }
 
 /**
@@ -1262,13 +1348,14 @@ void Graphics::points(const Vector2 *positions, const Colorf *colors, size_t num
 	const Matrix4 &t = getTransform();
 	bool is2D = t.isAffine2DTransform();
 
-	StreamDrawCommand cmd;
+	BatchedDrawCommand cmd;
 	cmd.primitiveMode = PRIMITIVE_POINTS;
-	cmd.formats[0] = vertex::getSinglePositionFormat(is2D);
-	cmd.formats[1] = vertex::CommonFormat::RGBAub;
+	cmd.formats[0] = getSinglePositionFormat(is2D);
+	cmd.formats[1] = CommonFormat::RGBAub;
 	cmd.vertexCount = (int) numpoints;
+	cmd.standardShaderType = Shader::STANDARD_POINTS;
 
-	StreamVertexData data = requestStreamDraw(cmd);
+	BatchedVertexData data = requestBatchedDraw(cmd);
 
 	if (is2D)
 		t.transformXY((Vector2 *) data.stream[0], positions, cmd.vertexCount);
@@ -1558,13 +1645,13 @@ void Graphics::polygon(DrawMode mode, const Vector2 *coords, size_t count, bool 
 		const Matrix4 &t = getTransform();
 		bool is2D = t.isAffine2DTransform();
 
-		StreamDrawCommand cmd;
-		cmd.formats[0] = vertex::getSinglePositionFormat(is2D);
-		cmd.formats[1] = vertex::CommonFormat::RGBAub;
-		cmd.indexMode = vertex::TriangleIndexMode::FAN;
+		BatchedDrawCommand cmd;
+		cmd.formats[0] = getSinglePositionFormat(is2D);
+		cmd.formats[1] = CommonFormat::RGBAub;
+		cmd.indexMode = TRIANGLEINDEX_FAN;
 		cmd.vertexCount = (int)count - (skipLastFilledVertex ? 1 : 0);
 
-		StreamVertexData data = requestStreamDraw(cmd);
+		BatchedVertexData data = requestBatchedDraw(cmd);
 
 		if (is2D)
 			t.transformXY((Vector2 *) data.stream[0], coords, cmd.vertexCount);
@@ -1590,13 +1677,12 @@ Graphics::Stats Graphics::getStats() const
 	getAPIStats(stats.shaderSwitches);
 
 	stats.drawCalls = drawCalls;
-	if (streamBufferState.vertexCount > 0)
+	if (batchedDrawState.vertexCount > 0)
 		stats.drawCalls++;
 
-	stats.canvasSwitches = canvasSwitchCount;
+	stats.renderTargetSwitches = renderTargetSwitchCount;
 	stats.drawCallsBatched = drawCallsBatched;
-	stats.canvases = Canvas::canvasCount;
-	stats.images = Image::imageCount;
+	stats.textures = Texture::textureCount;
 	stats.fonts = Font::fontCount;
 	stats.textureMemory = Texture::totalGraphicsMemory;
 	
@@ -1736,236 +1822,74 @@ Vector2 Graphics::inverseTransformPoint(Vector2 point)
 	return p;
 }
 
-const Graphics::DefaultShaderCode &Graphics::getCurrentDefaultShaderCode() const
+STRINGMAP_CLASS_BEGIN(Graphics, Graphics::DrawMode, Graphics::DRAW_MAX_ENUM, drawMode)
 {
-	int languageindex = (int) getShaderLanguageTarget();
-	int gammaindex = isGammaCorrect() ? 1 : 0;
-
-	return defaultShaderCode[Shader::STANDARD_DEFAULT][languageindex][gammaindex];
+	{ "line", Graphics::DRAW_LINE },
+	{ "fill", Graphics::DRAW_FILL },
 }
+STRINGMAP_CLASS_END(Graphics, Graphics::DrawMode, Graphics::DRAW_MAX_ENUM, drawMode)
 
-/**
- * Constants.
- **/
-
-bool Graphics::getConstant(const char *in, DrawMode &out)
+STRINGMAP_CLASS_BEGIN(Graphics, Graphics::ArcMode, Graphics::ARC_MAX_ENUM, arcMode)
 {
-	return drawModes.find(in, out);
+	{ "open",   Graphics::ARC_OPEN   },
+	{ "closed", Graphics::ARC_CLOSED },
+	{ "pie",    Graphics::ARC_PIE    },
 }
+STRINGMAP_CLASS_END(Graphics, Graphics::ArcMode, Graphics::ARC_MAX_ENUM, arcMode)
 
-bool Graphics::getConstant(DrawMode in, const char *&out)
+STRINGMAP_CLASS_BEGIN(Graphics, Graphics::LineStyle, Graphics::LINE_MAX_ENUM, lineStyle)
 {
-	return drawModes.find(in, out);
+	{ "smooth", Graphics::LINE_SMOOTH },
+	{ "rough",  Graphics::LINE_ROUGH  }
 }
+STRINGMAP_CLASS_END(Graphics, Graphics::LineStyle, Graphics::LINE_MAX_ENUM, lineStyle)
 
-std::vector<std::string> Graphics::getConstants(DrawMode)
+STRINGMAP_CLASS_BEGIN(Graphics, Graphics::LineJoin, Graphics::LINE_JOIN_MAX_ENUM, lineJoin)
 {
-	return drawModes.getNames();
+	{ "none",  Graphics::LINE_JOIN_NONE  },
+	{ "miter", Graphics::LINE_JOIN_MITER },
+	{ "bevel", Graphics::LINE_JOIN_BEVEL }
 }
+STRINGMAP_CLASS_END(Graphics, Graphics::LineJoin, Graphics::LINE_JOIN_MAX_ENUM, lineJoin)
 
-bool Graphics::getConstant(const char *in, ArcMode &out)
+STRINGMAP_CLASS_BEGIN(Graphics, Graphics::Feature, Graphics::FEATURE_MAX_ENUM, feature)
 {
-	return arcModes.find(in, out);
+	{ "multirendertargetformats", Graphics::FEATURE_MULTI_RENDER_TARGET_FORMATS },
+	{ "clampzero",                Graphics::FEATURE_CLAMP_ZERO           },
+	{ "blendminmax",              Graphics::FEATURE_BLEND_MINMAX         },
+	{ "lighten",                  Graphics::FEATURE_LIGHTEN              },
+	{ "fullnpot",                 Graphics::FEATURE_FULL_NPOT            },
+	{ "pixelshaderhighp",         Graphics::FEATURE_PIXEL_SHADER_HIGHP   },
+	{ "shaderderivatives",        Graphics::FEATURE_SHADER_DERIVATIVES   },
+	{ "glsl3",                    Graphics::FEATURE_GLSL3                },
+	{ "glsl4",                    Graphics::FEATURE_GLSL4                },
+	{ "instancing",               Graphics::FEATURE_INSTANCING           },
+	{ "texelbuffer",              Graphics::FEATURE_TEXEL_BUFFER         },
+	{ "copybuffer",               Graphics::FEATURE_COPY_BUFFER          },
 }
+STRINGMAP_CLASS_END(Graphics, Graphics::Feature, Graphics::FEATURE_MAX_ENUM, feature)
 
-bool Graphics::getConstant(ArcMode in, const char *&out)
+STRINGMAP_CLASS_BEGIN(Graphics, Graphics::SystemLimit, Graphics::LIMIT_MAX_ENUM, systemLimit)
 {
-	return arcModes.find(in, out);
+	{ "pointsize",               Graphics::LIMIT_POINT_SIZE                 },
+	{ "texturesize",             Graphics::LIMIT_TEXTURE_SIZE               },
+	{ "texturelayers",           Graphics::LIMIT_TEXTURE_LAYERS             },
+	{ "volumetexturesize",       Graphics::LIMIT_VOLUME_TEXTURE_SIZE        },
+	{ "cubetexturesize",         Graphics::LIMIT_CUBE_TEXTURE_SIZE          },
+	{ "texelbuffersize",         Graphics::LIMIT_TEXEL_BUFFER_SIZE          },
+	{ "shaderstoragebuffersize", Graphics::LIMIT_SHADER_STORAGE_BUFFER_SIZE },
+	{ "rendertargets",           Graphics::LIMIT_RENDER_TARGETS             },
+	{ "texturemsaa",             Graphics::LIMIT_TEXTURE_MSAA               },
+	{ "anisotropy",              Graphics::LIMIT_ANISOTROPY                 },
 }
+STRINGMAP_CLASS_END(Graphics, Graphics::SystemLimit, Graphics::LIMIT_MAX_ENUM, systemLimit)
 
-std::vector<std::string> Graphics::getConstants(ArcMode)
+STRINGMAP_CLASS_BEGIN(Graphics, Graphics::StackType, Graphics::STACK_MAX_ENUM, stackType)
 {
-	return arcModes.getNames();
+	{ "all",       Graphics::STACK_ALL       },
+	{ "transform", Graphics::STACK_TRANSFORM },
 }
-
-bool Graphics::getConstant(const char *in, BlendMode &out)
-{
-	return blendModes.find(in, out);
-}
-
-bool Graphics::getConstant(BlendMode in, const char *&out)
-{
-	return blendModes.find(in, out);
-}
-
-std::vector<std::string> Graphics::getConstants(BlendMode)
-{
-	return blendModes.getNames();
-}
-
-bool Graphics::getConstant(const char *in, BlendAlpha &out)
-{
-	return blendAlphaModes.find(in, out);
-}
-
-bool Graphics::getConstant(BlendAlpha in, const char *&out)
-{
-	return blendAlphaModes.find(in, out);
-}
-
-std::vector<std::string> Graphics::getConstants(BlendAlpha)
-{
-	return blendAlphaModes.getNames();
-}
-
-bool Graphics::getConstant(const char *in, LineStyle &out)
-{
-	return lineStyles.find(in, out);
-}
-
-bool Graphics::getConstant(LineStyle in, const char *&out)
-{
-	return lineStyles.find(in, out);
-}
-
-std::vector<std::string> Graphics::getConstants(LineStyle)
-{
-	return lineStyles.getNames();
-}
-
-bool Graphics::getConstant(const char *in, LineJoin &out)
-{
-	return lineJoins.find(in, out);
-}
-
-bool Graphics::getConstant(LineJoin in, const char *&out)
-{
-	return lineJoins.find(in, out);
-}
-
-std::vector<std::string> Graphics::getConstants(LineJoin)
-{
-	return lineJoins.getNames();
-}
-
-bool Graphics::getConstant(const char *in, Feature &out)
-{
-	return features.find(in, out);
-}
-
-bool Graphics::getConstant(Feature in, const char *&out)
-{
-	return features.find(in, out);
-}
-
-bool Graphics::getConstant(const char *in, SystemLimit &out)
-{
-	return systemLimits.find(in, out);
-}
-
-bool Graphics::getConstant(SystemLimit in, const char *&out)
-{
-	return systemLimits.find(in, out);
-}
-
-bool Graphics::getConstant(const char *in, StackType &out)
-{
-	return stackTypes.find(in, out);
-}
-
-bool Graphics::getConstant(StackType in, const char *&out)
-{
-	return stackTypes.find(in, out);
-}
-
-std::vector<std::string> Graphics::getConstants(StackType)
-{
-	return stackTypes.getNames();
-}
-
-StringMap<Graphics::DrawMode, Graphics::DRAW_MAX_ENUM>::Entry Graphics::drawModeEntries[] =
-{
-	{ "line", DRAW_LINE },
-	{ "fill", DRAW_FILL },
-};
-
-StringMap<Graphics::DrawMode, Graphics::DRAW_MAX_ENUM> Graphics::drawModes(Graphics::drawModeEntries, sizeof(Graphics::drawModeEntries));
-
-StringMap<Graphics::ArcMode, Graphics::ARC_MAX_ENUM>::Entry Graphics::arcModeEntries[] =
-{
-	{ "open",   ARC_OPEN   },
-	{ "closed", ARC_CLOSED },
-	{ "pie",    ARC_PIE    },
-};
-
-StringMap<Graphics::ArcMode, Graphics::ARC_MAX_ENUM> Graphics::arcModes(Graphics::arcModeEntries, sizeof(Graphics::arcModeEntries));
-
-StringMap<Graphics::BlendMode, Graphics::BLEND_MAX_ENUM>::Entry Graphics::blendModeEntries[] =
-{
-	{ "alpha",    BLEND_ALPHA    },
-	{ "add",      BLEND_ADD      },
-	{ "subtract", BLEND_SUBTRACT },
-	{ "multiply", BLEND_MULTIPLY },
-	{ "lighten",  BLEND_LIGHTEN  },
-	{ "darken",   BLEND_DARKEN   },
-	{ "screen",   BLEND_SCREEN   },
-	{ "replace",  BLEND_REPLACE  },
-	{ "none",     BLEND_NONE     },
-};
-
-StringMap<Graphics::BlendMode, Graphics::BLEND_MAX_ENUM> Graphics::blendModes(Graphics::blendModeEntries, sizeof(Graphics::blendModeEntries));
-
-StringMap<Graphics::BlendAlpha, Graphics::BLENDALPHA_MAX_ENUM>::Entry Graphics::blendAlphaEntries[] =
-{
-	{ "alphamultiply", BLENDALPHA_MULTIPLY      },
-	{ "premultiplied", BLENDALPHA_PREMULTIPLIED },
-};
-
-StringMap<Graphics::BlendAlpha, Graphics::BLENDALPHA_MAX_ENUM> Graphics::blendAlphaModes(Graphics::blendAlphaEntries, sizeof(Graphics::blendAlphaEntries));
-
-StringMap<Graphics::LineStyle, Graphics::LINE_MAX_ENUM>::Entry Graphics::lineStyleEntries[] =
-{
-	{ "smooth", LINE_SMOOTH },
-	{ "rough",  LINE_ROUGH  }
-};
-
-StringMap<Graphics::LineStyle, Graphics::LINE_MAX_ENUM> Graphics::lineStyles(Graphics::lineStyleEntries, sizeof(Graphics::lineStyleEntries));
-
-StringMap<Graphics::LineJoin, Graphics::LINE_JOIN_MAX_ENUM>::Entry Graphics::lineJoinEntries[] =
-{
-	{ "none",  LINE_JOIN_NONE  },
-	{ "miter", LINE_JOIN_MITER },
-	{ "bevel", LINE_JOIN_BEVEL }
-};
-
-StringMap<Graphics::LineJoin, Graphics::LINE_JOIN_MAX_ENUM> Graphics::lineJoins(Graphics::lineJoinEntries, sizeof(Graphics::lineJoinEntries));
-
-StringMap<Graphics::Feature, Graphics::FEATURE_MAX_ENUM>::Entry Graphics::featureEntries[] =
-{
-	{ "multicanvasformats", FEATURE_MULTI_CANVAS_FORMATS },
-	{ "clampzero",          FEATURE_CLAMP_ZERO           },
-	{ "lighten",            FEATURE_LIGHTEN              },
-	{ "fullnpot",           FEATURE_FULL_NPOT            },
-	{ "pixelshaderhighp",   FEATURE_PIXEL_SHADER_HIGHP   },
-	{ "shaderderivatives",  FEATURE_SHADER_DERIVATIVES   },
-	{ "glsl3",              FEATURE_GLSL3                },
-	{ "glsl4",              FEATURE_GLSL4                },
-	{ "instancing",         FEATURE_INSTANCING           },
-};
-
-StringMap<Graphics::Feature, Graphics::FEATURE_MAX_ENUM> Graphics::features(Graphics::featureEntries, sizeof(Graphics::featureEntries));
-
-StringMap<Graphics::SystemLimit, Graphics::LIMIT_MAX_ENUM>::Entry Graphics::systemLimitEntries[] =
-{
-	{ "pointsize",         LIMIT_POINT_SIZE          },
-	{ "texturesize",       LIMIT_TEXTURE_SIZE        },
-	{ "texturelayers",     LIMIT_TEXTURE_LAYERS      },
-	{ "volumetexturesize", LIMIT_VOLUME_TEXTURE_SIZE },
-	{ "cubetexturesize",   LIMIT_CUBE_TEXTURE_SIZE   },
-	{ "multicanvas",       LIMIT_MULTI_CANVAS        },
-	{ "canvasmsaa",        LIMIT_CANVAS_MSAA         },
-	{ "anisotropy",        LIMIT_ANISOTROPY          },
-};
-
-StringMap<Graphics::SystemLimit, Graphics::LIMIT_MAX_ENUM> Graphics::systemLimits(Graphics::systemLimitEntries, sizeof(Graphics::systemLimitEntries));
-
-StringMap<Graphics::StackType, Graphics::STACK_MAX_ENUM>::Entry Graphics::stackTypeEntries[] =
-{
-	{ "all",       STACK_ALL       },
-	{ "transform", STACK_TRANSFORM },
-};
-
-StringMap<Graphics::StackType, Graphics::STACK_MAX_ENUM> Graphics::stackTypes(Graphics::stackTypeEntries, sizeof(Graphics::stackTypeEntries));
+STRINGMAP_CLASS_END(Graphics, Graphics::StackType, Graphics::STACK_MAX_ENUM, stackType)
 
 } // graphics
 } // love

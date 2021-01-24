@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -53,7 +53,7 @@ public:
 	virtual ~StreamBuffer() {}
 
 	size_t getSize() const { return bufferSize; }
-	BufferType getMode() const { return mode; }
+	BufferUsage getMode() const { return mode; }
 	size_t getUsableSize() const { return bufferSize - frameGPUReadOffset; }
 
 	virtual MapInfo map(size_t minsize) = 0;
@@ -64,11 +64,11 @@ public:
 
 protected:
 
-	StreamBuffer(BufferType mode, size_t size);
+	StreamBuffer(BufferUsage mode, size_t size);
 
 	size_t bufferSize;
 	size_t frameGPUReadOffset;
-	BufferType mode;
+	BufferUsage mode;
 
 }; // StreamBuffer
 

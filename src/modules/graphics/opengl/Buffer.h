@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -22,6 +22,7 @@
 
 // LOVE
 #include "common/config.h"
+#include "common/Range.h"
 #include "graphics/Buffer.h"
 #include "graphics/Volatile.h"
 
@@ -32,6 +33,9 @@ namespace love
 {
 namespace graphics
 {
+
+class Graphics;
+
 namespace opengl
 {
 
@@ -39,39 +43,42 @@ class Buffer final : public love::graphics::Buffer, public Volatile
 {
 public:
 
-	Buffer(size_t size, const void *data, BufferType type, vertex::Usage usage, uint32 mapflags);
+	Buffer(love::graphics::Graphics *gfx, const Settings &settings, const std::vector<DataDeclaration> &format, const void *data, size_t size, size_t arraylength);
 	virtual ~Buffer();
-
-	void *map() override;
-	void unmap() override;
-	void setMappedRangeModified(size_t offset, size_t size) override;
-	void fill(size_t offset, size_t size, const void *data) override;
-	ptrdiff_t getHandle() const override;
-
-	void copyTo(size_t offset, size_t size, love::graphics::Buffer *other, size_t otheroffset) override;
 
 	// Implements Volatile.
 	bool loadVolatile() override;
 	void unloadVolatile() override;
 
+	void *map(MapType map, size_t offset, size_t size) override;
+	void unmap(size_t usedoffset, size_t usedsize) override;
+	void fill(size_t offset, size_t size, const void *data) override;
+	void copyTo(love::graphics::Buffer *dest, size_t sourceoffset, size_t destoffset, size_t size) override;
+
+	ptrdiff_t getHandle() const override { return buffer; };
+	ptrdiff_t getTexelBufferHandle() const override { return texture; };
+
 private:
 
-	bool load(bool restore);
-	void unload();
+	bool load(const void *initialdata);
 
 	void unmapStatic(size_t offset, size_t size);
 	void unmapStream();
 
-	GLenum target;
+	BufferUsage mapUsage = BUFFERUSAGE_VERTEX;
+	GLenum target = 0;
 
-	// The VBO identifier. Assigned by OpenGL.
-	GLuint vbo;
+	// The buffer object identifier. Assigned by OpenGL.
+	GLuint buffer = 0;
+
+	// Used for Texel Buffer types.
+	GLuint texture = 0;
 
 	// A pointer to mapped memory.
-	char *memory_map;
+	char *memoryMap = nullptr;
+	bool ownsMemoryMap = false;
 
-	size_t modified_offset;
-	size_t modified_size;
+	Range mappedRange;
 
 }; // Buffer
 

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -22,6 +22,7 @@
 
 #include "common/int.h"
 #include "common/math.h"
+#include "common/StringMap.h"
 #include "vertex.h"
 
 #include <vector>
@@ -34,7 +35,7 @@ namespace graphics
 
 class Shader;
 
-enum BlendMode // High level wrappers
+enum BlendMode // High level wrappers. Order is important (see renderstate.cpp)
 {
 	BLEND_ALPHA,
 	BLEND_ADD,
@@ -45,6 +46,7 @@ enum BlendMode // High level wrappers
 	BLEND_SCREEN,
 	BLEND_REPLACE,
 	BLEND_NONE,
+	BLEND_CUSTOM,
 	BLEND_MAX_ENUM
 };
 
@@ -55,7 +57,7 @@ enum BlendAlpha // High level wrappers
 	BLENDALPHA_MAX_ENUM
 };
 
-enum BlendFactor : uint8
+enum BlendFactor
 {
 	BLENDFACTOR_ZERO,
 	BLENDFACTOR_ONE,
@@ -68,14 +70,10 @@ enum BlendFactor : uint8
 	BLENDFACTOR_DST_ALPHA,
 	BLENDFACTOR_ONE_MINUS_DST_ALPHA,
 	BLENDFACTOR_SRC_ALPHA_SATURATED,
-	BLENDFACTOR_SRC1_COLOR,
-	BLENDFACTOR_ONE_MINUS_SRC1_COLOR,
-	BLENDFACTOR_SRC1_ALPHA,
-	BLENDFACTOR_ONE_MINUS_SRC1_ALPHA,
 	BLENDFACTOR_MAX_ENUM
 };
 
-enum BlendOperation : uint8
+enum BlendOperation
 {
 	BLENDOP_ADD,
 	BLENDOP_SUBTRACT,
@@ -120,6 +118,18 @@ struct BlendState
 	BlendFactor srcFactorA = BLENDFACTOR_ONE;
 	BlendFactor dstFactorRGB = BLENDFACTOR_ZERO;
 	BlendFactor dstFactorA = BLENDFACTOR_ZERO;
+
+	BlendState() {}
+
+	BlendState(BlendOperation opRGB, BlendOperation opA, BlendFactor srcRGB, BlendFactor srcA, BlendFactor dstRGB, BlendFactor dstA)
+		: enable(true)
+		, operationRGB(opRGB)
+		, operationA(opA)
+		, srcFactorRGB(srcRGB)
+		, srcFactorA(srcA)
+		, dstFactorRGB(dstRGB)
+		, dstFactorA(dstA)
+	{}
 
 	bool operator == (const BlendState &b) const
 	{
@@ -167,6 +177,11 @@ struct ColorChannelMask
 	{
 		return r == c.r && g == c.g && b == c.b && a == c.a;
 	}
+
+	bool operator != (ColorChannelMask c) const
+	{
+		return !(operator==(c));
+	}
 };
 
 struct ScissorState
@@ -175,25 +190,9 @@ struct ScissorState
 	bool enable = false;
 };
 
-// State that affects a graphics backend.
-struct RenderState
-{
-	BlendState blend;
-	ScissorState scissor;
-	StencilState stencil;
-	DepthState depth;
-
-	CullMode meshCullMode = CULL_NONE;
-	vertex::Winding winding = vertex::WINDING_CCW;
-
-	Shader *shader = nullptr;
-
-	ColorChannelMask colorChannelMask;
-
-	bool wireframe = false;
-};
-
-BlendState getBlendState(BlendMode mode, BlendAlpha alphamode);
+BlendState computeBlendState(BlendMode mode, BlendAlpha alphamode);
+BlendMode computeBlendMode(BlendState s, BlendAlpha &alphamode);
+bool isAlphaMultiplyBlendSupported(BlendMode mode);
 
 /**
  * GPU APIs do the comparison in the opposite way of what makes sense for some
@@ -205,29 +204,12 @@ BlendState getBlendState(BlendMode mode, BlendAlpha alphamode);
  **/
 CompareMode getReversedCompareMode(CompareMode mode);
 
-bool getConstant(const char *in, BlendMode &out);
-bool getConstant(BlendMode in, const char *&out);
-std::vector<std::string> getConstants(BlendMode);
-
-bool getConstant(const char *in, BlendAlpha &out);
-bool getConstant(BlendAlpha in, const char *&out);
-std::vector<std::string> getConstants(BlendAlpha);
-
-bool getConstant(const char *in, BlendFactor &out);
-bool getConstant(BlendFactor in, const char *&out);
-std::vector<std::string> getConstants(BlendFactor);
-
-bool getConstant(const char *in, BlendOperation &out);
-bool getConstant(BlendOperation in, const char *&out);
-std::vector<std::string> getConstants(BlendOperation);
-
-bool getConstant(const char *in, StencilAction &out);
-bool getConstant(StencilAction in, const char *&out);
-std::vector<std::string> getConstants(StencilAction);
-
-bool getConstant(const char *in, CompareMode &out);
-bool getConstant(CompareMode in, const char *&out);
-std::vector<std::string> getConstants(CompareMode);
+STRINGMAP_DECLARE(BlendMode);
+STRINGMAP_DECLARE(BlendAlpha);
+STRINGMAP_DECLARE(BlendFactor);
+STRINGMAP_DECLARE(BlendOperation);
+STRINGMAP_DECLARE(StencilAction);
+STRINGMAP_DECLARE(CompareMode);
 
 } // graphics
 } // love

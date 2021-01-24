@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -22,6 +22,7 @@
 
 #include "common/Exception.h"
 #include "graphics/vertex.h"
+#include "Graphics.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -35,198 +36,235 @@ namespace graphics
 namespace opengl
 {
 
-Buffer::Buffer(size_t size, const void *data, BufferType type, vertex::Usage usage, uint32 mapflags)
-	: love::graphics::Buffer(size, type, usage, mapflags)
-	, vbo(0)
-	, memory_map(nullptr)
-	, modified_offset(0)
-	, modified_size(0)
+static GLenum getGLFormat(DataFormat format)
 {
-	target = OpenGL::getGLBufferType(type);
-
-	try
+	switch (format)
 	{
-		memory_map = new char[size];
+		case DATAFORMAT_FLOAT: return GL_R32F;
+		case DATAFORMAT_FLOAT_VEC2: return GL_RG32F;
+		case DATAFORMAT_FLOAT_VEC3: return GL_RGB32F;
+		case DATAFORMAT_FLOAT_VEC4: return GL_RGBA32F;
+		case DATAFORMAT_INT32: return GL_R32I;
+		case DATAFORMAT_INT32_VEC2: return GL_RG32I;
+		case DATAFORMAT_INT32_VEC3: return GL_RGB32I;
+		case DATAFORMAT_INT32_VEC4: return GL_RGBA32I;
+		case DATAFORMAT_UINT32: return GL_R32UI;
+		case DATAFORMAT_UINT32_VEC2: return GL_RG32UI;
+		case DATAFORMAT_UINT32_VEC3: return GL_RGB32UI;
+		case DATAFORMAT_UINT32_VEC4: return GL_RGBA32UI;
+		case DATAFORMAT_UNORM8_VEC4: return GL_RGBA8;
+		case DATAFORMAT_INT8_VEC4: return GL_RGBA8I;
+		case DATAFORMAT_UINT8_VEC4: return GL_RGBA8UI;
+		case DATAFORMAT_UNORM16_VEC2: return GL_RG16;
+		case DATAFORMAT_UNORM16_VEC4: return GL_RGBA16;
+		case DATAFORMAT_INT16_VEC2: return GL_RG16I;
+		case DATAFORMAT_INT16_VEC4: return GL_RGBA16I;
+		case DATAFORMAT_UINT16: return GL_R16UI;
+		case DATAFORMAT_UINT16_VEC2: return GL_RG16UI;
+		case DATAFORMAT_UINT16_VEC4: return GL_RGBA16UI;
+		default: return GL_ZERO;
 	}
-	catch (std::bad_alloc &)
+}
+
+Buffer::Buffer(love::graphics::Graphics *gfx, const Settings &settings, const std::vector<DataDeclaration> &format, const void *data, size_t size, size_t arraylength)
+	: love::graphics::Buffer(gfx, settings, format, size, arraylength)
+{
+	size = getSize();
+	arraylength = getArrayLength();
+
+	if (usageFlags & BUFFERUSAGEFLAG_TEXEL)
+		mapUsage = BUFFERUSAGE_TEXEL;
+	else if (usageFlags & BUFFERUSAGEFLAG_VERTEX)
+		mapUsage = BUFFERUSAGE_VERTEX;
+	else if (usageFlags & BUFFERUSAGEFLAG_INDEX)
+		mapUsage = BUFFERUSAGE_INDEX;
+	else  if (usageFlags & BUFFERUSAGEFLAG_SHADER_STORAGE)
+		mapUsage = BUFFERUSAGE_SHADER_STORAGE;
+	else if (usageFlags & BUFFERUSAGEFLAG_COPY_SOURCE)
+		mapUsage = BUFFERUSAGE_COPY_SOURCE;
+	else if (usageFlags & BUFFERUSAGEFLAG_COPY_DEST)
+		mapUsage = BUFFERUSAGE_COPY_DEST;
+
+	target = OpenGL::getGLBufferType(mapUsage);
+
+	if (dataUsage == BUFFERDATAUSAGE_STREAM)
+		ownsMemoryMap = true;
+
+	std::vector<uint8> emptydata;
+	if (settings.zeroInitialize && data == nullptr)
 	{
-		throw love::Exception("Out of memory.");
+		try
+		{
+			emptydata.resize(getSize());
+			data = emptydata.data();
+		}
+		catch (std::exception &)
+		{
+			data = nullptr;
+		}
 	}
 
-	if (data != nullptr)
-		memcpy(memory_map, data, size);
-
-	if (!load(data != nullptr))
+	if (!load(data))
 	{
-		delete[] memory_map;
-		throw love::Exception("Could not load vertex buffer (out of VRAM?)");
+		unloadVolatile();
+		throw love::Exception("Could not create buffer (out of VRAM?)");
 	}
 }
 
 Buffer::~Buffer()
 {
-	if (vbo != 0)
-		unload();
-
-	delete[] memory_map;
-}
-
-void *Buffer::map()
-{
-	if (is_mapped)
-		return memory_map;
-
-	is_mapped = true;
-
-	modified_offset = 0;
-	modified_size = 0;
-
-	return memory_map;
-}
-
-void Buffer::unmapStatic(size_t offset, size_t size)
-{
-	if (size == 0)
-		return;
-
-	// Upload the mapped data to the buffer.
-	gl.bindBuffer(type, vbo);
-	glBufferSubData(target, (GLintptr) offset, (GLsizeiptr) size, memory_map + offset);
-}
-
-void Buffer::unmapStream()
-{
-	GLenum glusage = OpenGL::getGLBufferUsage(getUsage());
-
-	// "orphan" current buffer to avoid implicit synchronisation on the GPU:
-	// http://www.seas.upenn.edu/~pcozzi/OpenGLInsights/OpenGLInsights-AsynchronousBufferTransfers.pdf
-	gl.bindBuffer(type, vbo);
-	glBufferData(target, (GLsizeiptr) getSize(), nullptr, glusage);
-
-#if LOVE_WINDOWS
-	// TODO: Verify that this codepath is a useful optimization.
-	if (gl.getVendor() == OpenGL::VENDOR_INTEL)
-		glBufferData(target, (GLsizeiptr) getSize(), memory_map, glusage);
-	else
-#endif
-		glBufferSubData(target, 0, (GLsizeiptr) getSize(), memory_map);
-}
-
-void Buffer::unmap()
-{
-	if (!is_mapped)
-		return;
-
-	if ((map_flags & MAP_EXPLICIT_RANGE_MODIFY) != 0)
-	{
-		modified_offset = std::min(modified_offset, getSize() - 1);
-		modified_size = std::min(modified_size, getSize() - modified_offset);
-	}
-	else
-	{
-		modified_offset = 0;
-		modified_size = getSize();
-	}
-
-	if (modified_size > 0)
-	{
-		switch (getUsage())
-		{
-		case vertex::USAGE_STATIC:
-			unmapStatic(modified_offset, modified_size);
-			break;
-		case vertex::USAGE_STREAM:
-			unmapStream();
-			break;
-		case vertex::USAGE_DYNAMIC:
-		default:
-			// It's probably more efficient to treat it like a streaming buffer if
-			// at least a third of its contents have been modified during the map().
-			if (modified_size >= getSize() / 3)
-				unmapStream();
-			else
-				unmapStatic(modified_offset, modified_size);
-			break;
-		}
-	}
-
-	modified_offset = 0;
-	modified_size = 0;
-
-	is_mapped = false;
-}
-
-void Buffer::setMappedRangeModified(size_t offset, size_t modifiedsize)
-{
-	if (!is_mapped || !(map_flags & MAP_EXPLICIT_RANGE_MODIFY))
-		return;
-
-	// We're being conservative right now by internally marking the whole range
-	// from the start of section a to the end of section b as modified if both
-	// a and b are marked as modified.
-
-	size_t old_range_end = modified_offset + modified_size;
-	modified_offset = std::min(modified_offset, offset);
-
-	size_t new_range_end = std::max(offset + modifiedsize, old_range_end);
-	modified_size = new_range_end - modified_offset;
-}
-
-void Buffer::fill(size_t offset, size_t size, const void *data)
-{
-	memcpy(memory_map + offset, data, size);
-
-	if (is_mapped)
-		setMappedRangeModified(offset, size);
-	else
-	{
-		gl.bindBuffer(type, vbo);
-		glBufferSubData(target, (GLintptr) offset, (GLsizeiptr) size, data);
-	}
-}
-
-ptrdiff_t Buffer::getHandle() const
-{
-	return vbo;
-}
-
-void Buffer::copyTo(size_t offset, size_t size, love::graphics::Buffer *other, size_t otheroffset)
-{
-	other->fill(otheroffset, size, memory_map + offset);
+	unloadVolatile();
+	if (memoryMap != nullptr && ownsMemoryMap)
+		free(memoryMap);
 }
 
 bool Buffer::loadVolatile()
 {
-	return load(true);
+	if (buffer != 0)
+		return true;
+
+	return load(nullptr);
 }
 
 void Buffer::unloadVolatile()
 {
-	unload();
+	mapped = false;
+	if (buffer != 0)
+		gl.deleteBuffer(buffer);
+	buffer = 0;
+	if (texture != 0)
+		gl.deleteTexture(texture);
+	texture = 0;
 }
 
-bool Buffer::load(bool restore)
+bool Buffer::load(const void *initialdata)
 {
-	glGenBuffers(1, &vbo);
-	gl.bindBuffer(type, vbo);
-
 	while (glGetError() != GL_NO_ERROR)
 		/* Clear the error buffer. */;
 
-	// Copy the old buffer only if 'restore' was requested.
-	const GLvoid *src = restore ? memory_map : nullptr;
+	glGenBuffers(1, &buffer);
+	gl.bindBuffer(mapUsage, buffer);
 
-	// Note that if 'src' is '0', no data will be copied.
-	glBufferData(target, (GLsizeiptr) getSize(), src, OpenGL::getGLBufferUsage(getUsage()));
+	GLenum gldatausage = OpenGL::getGLBufferDataUsage(getDataUsage());
+
+	// initialdata can be null.
+	glBufferData(target, (GLsizeiptr) getSize(), initialdata, gldatausage);
+
+	if (getUsageFlags() & BUFFERUSAGEFLAG_TEXEL)
+	{
+		glGenTextures(1, &texture);
+		gl.bindBufferTextureToUnit(texture, 0, false, true);
+
+		glTexBuffer(target, getGLFormat(getDataMember(0).decl.format), buffer);
+	}
 
 	return (glGetError() == GL_NO_ERROR);
 }
 
-void Buffer::unload()
+void *Buffer::map(MapType /*map*/, size_t offset, size_t size)
 {
-	is_mapped = false;
-	gl.deleteBuffer(vbo);
-	vbo = 0;
+	if (size == 0)
+		return nullptr;
+
+	Range r(offset, size);
+
+	if (!Range(0, getSize()).contains(r))
+		return nullptr;
+
+	char *data = nullptr;
+
+	if (ownsMemoryMap)
+	{
+		if (memoryMap == nullptr)
+			memoryMap = (char *) malloc(getSize());
+		data = memoryMap;
+	}
+	else
+	{
+		auto gfx = Module::getInstance<Graphics>(Module::M_GRAPHICS);
+		data = (char *) gfx->getBufferMapMemory(size);
+	}
+
+	if (data != nullptr)
+	{
+		mapped = true;
+		mappedRange = r;
+		if (!ownsMemoryMap)
+			memoryMap = data;
+	}
+
+	return data;
+}
+
+void Buffer::unmap(size_t usedoffset, size_t usedsize)
+{
+	Range r(usedoffset, usedsize);
+
+	if (!mapped || !mappedRange.contains(r))
+		return;
+
+	mapped = false;
+
+	// Orphan optimization - see fill().
+	if (dataUsage != BUFFERDATAUSAGE_STATIC && mappedRange.first == 0 && mappedRange.getSize() == getSize())
+	{
+		usedoffset = 0;
+		usedsize = getSize();
+	}
+
+	char *data = memoryMap + (usedoffset - mappedRange.getOffset());
+
+	fill(usedoffset, usedsize, data);
+
+	if (!ownsMemoryMap)
+	{
+		auto gfx = Module::getInstance<Graphics>(Module::M_GRAPHICS);
+		gfx->releaseBufferMapMemory(memoryMap);
+		memoryMap = nullptr;
+	}
+}
+
+void Buffer::fill(size_t offset, size_t size, const void *data)
+{
+	if (size == 0)
+		return;
+
+	size_t buffersize = getSize();
+
+	if (!Range(0, buffersize).contains(Range(offset, size)))
+		return;
+
+	GLenum gldatausage = OpenGL::getGLBufferDataUsage(dataUsage);
+
+	gl.bindBuffer(mapUsage, buffer);
+
+	if (dataUsage != BUFFERDATAUSAGE_STATIC && size == buffersize)
+	{
+		// "orphan" current buffer to avoid implicit synchronisation on the GPU:
+		// http://www.seas.upenn.edu/~pcozzi/OpenGLInsights/OpenGLInsights-AsynchronousBufferTransfers.pdf
+		gl.bindBuffer(mapUsage, buffer);
+		glBufferData(target, (GLsizeiptr) buffersize, nullptr, gldatausage);
+
+#if LOVE_WINDOWS
+		// TODO: Verify that this codepath is a useful optimization.
+		if (gl.getVendor() == OpenGL::VENDOR_INTEL)
+			glBufferData(target, (GLsizeiptr) buffersize, data, gldatausage);
+		else
+#endif
+			glBufferSubData(target, 0, (GLsizeiptr) buffersize, data);
+	}
+	else
+	{
+		glBufferSubData(target, (GLintptr) offset, (GLsizeiptr) size, data);
+	}
+}
+
+void Buffer::copyTo(love::graphics::Buffer *dest, size_t sourceoffset, size_t destoffset, size_t size)
+{
+	gl.bindBuffer(BUFFERUSAGE_COPY_SOURCE, buffer);
+	gl.bindBuffer(BUFFERUSAGE_COPY_DEST, ((Buffer *) dest)->buffer);
+
+	glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, sourceoffset, destoffset, size);
 }
 
 } // opengl

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -47,10 +47,10 @@ int PolygonShape::getPoints(lua_State *L)
 {
 	love::luax_assert_argc(L, 0);
 	b2PolygonShape *p = (b2PolygonShape *)shape;
-	int count = p->GetVertexCount();
+	int count = p->m_count;
 	for (int i = 0; i<count; i++)
 	{
-		b2Vec2 v = Physics::scaleUp(p->GetVertex(i));
+		b2Vec2 v = Physics::scaleUp(p->m_vertices[i]);
 		lua_pushnumber(L, v.x);
 		lua_pushnumber(L, v.y);
 	}

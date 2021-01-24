@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -278,12 +278,27 @@ int w_Shader_sendTextures(lua_State *L, int startidx, Shader *shader, const Shad
 	for (int i = 0; i < count; i++)
 	{
 		Texture *tex = luax_checktexture(L, startidx + i);
-		if (tex->getTextureType() != info->textureType)
-			return luaL_argerror(L, startidx + i, "invalid texture type for uniform");
 		textures.push_back(tex);
 	}
 
 	luax_catchexcept(L, [&]() { shader->sendTextures(info, textures.data(), count); });
+	return 0;
+}
+
+int w_Shader_sendBuffers(lua_State *L, int startidx, Shader *shader, const Shader::UniformInfo *info)
+{
+	int count = _getCount(L, startidx, info);
+
+	std::vector<Buffer *> buffers;
+	buffers.reserve(count);
+
+	for (int i = 0; i < count; i++)
+	{
+		Buffer *buffer = luax_checktype<Buffer>(L, startidx + i);
+		buffers.push_back(buffer);
+	}
+
+	luax_catchexcept(L, [&]() { shader->sendBuffers(info, buffers.data(), count); });
 	return 0;
 }
 
@@ -303,6 +318,9 @@ static int w_Shader_sendLuaValues(lua_State *L, int startidx, Shader *shader, co
 		return w_Shader_sendBooleans(L, startidx, shader, info);
 	case Shader::UNIFORM_SAMPLER:
 		return w_Shader_sendTextures(L, startidx, shader, info);
+	case Shader::UNIFORM_TEXELBUFFER:
+	case Shader::UNIFORM_STORAGEBUFFER:
+		return w_Shader_sendBuffers(L, startidx, shader, info);
 	default:
 		return luaL_error(L, "Unknown variable type for shader uniform '%s", name);
 	}
@@ -310,23 +328,39 @@ static int w_Shader_sendLuaValues(lua_State *L, int startidx, Shader *shader, co
 
 static int w_Shader_sendData(lua_State *L, int startidx, Shader *shader, const Shader::UniformInfo *info, bool colors)
 {
-	if (info->baseType == Shader::UNIFORM_SAMPLER)
-		return luaL_error(L, "Uniform sampler values (textures) cannot be sent to Shaders via Data objects.");
+	if (info->baseType == Shader::UNIFORM_SAMPLER || info->baseType == Shader::UNIFORM_TEXELBUFFER || info->baseType == Shader::UNIFORM_STORAGEBUFFER)
+		return luaL_error(L, "Only value types (floats, ints, vectors, matrices, etc) be sent to Shaders via Data objects.");
 
-	bool columnmajor = false;
-	if (info->baseType == Shader::UNIFORM_MATRIX && lua_type(L, startidx + 1) == LUA_TSTRING)
+	math::Transform::MatrixLayout layout = math::Transform::MATRIX_ROW_MAJOR;
+	int dataidx = startidx;
+	if (info->baseType == Shader::UNIFORM_MATRIX)
 	{
-		const char *layoutstr = lua_tostring(L, startidx + 1);
-		math::Transform::MatrixLayout layout;
-		if (!math::Transform::getConstant(layoutstr, layout))
-			return luax_enumerror(L, "matrix layout", math::Transform::getConstants(layout), layoutstr);
+		if (lua_type(L, startidx) == LUA_TSTRING)
+		{
+			// (matrixlayout, data, ...)
+			const char *layoutstr = lua_tostring(L, startidx);
+			if (!math::Transform::getConstant(layoutstr, layout))
+				return luax_enumerror(L, "matrix layout", math::Transform::getConstants(layout), layoutstr);
 
-		columnmajor = (layout == math::Transform::MATRIX_COLUMN_MAJOR);
-		startidx++;
+			startidx++;
+			dataidx = startidx;
+		}
+		else if (lua_type(L, startidx + 1) == LUA_TSTRING)
+		{
+			// (data, matrixlayout, ...)
+			// Should be deprecated in the future (doesn't match the argument
+			// order of Shader:send(name, matrixlayout, table))
+			const char *layoutstr = lua_tostring(L, startidx + 1);
+			if (!math::Transform::getConstant(layoutstr, layout))
+				return luax_enumerror(L, "matrix layout", math::Transform::getConstants(layout), layoutstr);
+
+			startidx++;
+		}
 	}
 
-	Data *data = luax_checktype<Data>(L, startidx);
+	bool columnmajor = (layout == math::Transform::MATRIX_COLUMN_MAJOR);
 
+	Data *data = luax_checktype<Data>(L, dataidx);
 	size_t size = data->getSize();
 
 	ptrdiff_t offset = (ptrdiff_t) luaL_optinteger(L, startidx + 1, 0);
@@ -339,17 +373,17 @@ static int w_Shader_sendData(lua_State *L, int startidx, Shader *shader, const S
 
 	if (!lua_isnoneornil(L, startidx + 2))
 	{
-		lua_Integer datasize = luaL_checkinteger(L, startidx + 2);
-		if (datasize <= 0)
+		lua_Integer sizearg = luaL_checkinteger(L, startidx + 2);
+		if (sizearg <= 0)
 			return luaL_error(L, "Size must be greater than 0.");
-		else if ((size_t) datasize > size - offset)
+		else if ((size_t) sizearg > size - offset)
 			return luaL_error(L, "Size and offset must fit within the Data's bounds.");
-		else if (size % uniformstride != 0)
-			return luaL_error(L, "Size must be a multiple of the uniform's size in bytes.");
-		else if (size > info->dataSize)
+		else if (sizearg % uniformstride != 0)
+			return luaL_error(L, "Size (%d) must be a multiple of the uniform's size in bytes (%d).", sizearg, uniformstride);
+		else if ((size_t) sizearg > info->dataSize)
 			return luaL_error(L, "Size must not be greater than the uniform's total size in bytes.");
 
-		size = (size_t) datasize;
+		size = (size_t) sizearg;
 	}
 	else
 	{
@@ -411,14 +445,18 @@ int w_Shader_send(lua_State *L)
 
 	const Shader::UniformInfo *info = shader->getUniformInfo(name);
 	if (info == nullptr)
-		return luaL_error(L, "Shader uniform '%s' does not exist.\nA common error is to define but not use the variable.", name);
+	{
+		luax_pushboolean(L, false);
+		return 1;
+	}
 
-	int startidx = 3;
-
-	if (luax_istype(L, startidx, Data::type))
-		return w_Shader_sendData(L, startidx, shader, info, false);
+	if (luax_istype(L, 3, Data::type) || (info->baseType == Shader::UNIFORM_MATRIX && luax_istype(L, 4, Data::type)))
+		w_Shader_sendData(L, 3, shader, info, false);
 	else
-		return w_Shader_sendLuaValues(L, startidx, shader, info, name);
+		w_Shader_sendLuaValues(L, 3, shader, info, name);
+
+	luax_pushboolean(L, true);
+	return 1;
 }
 
 int w_Shader_sendColors(lua_State *L)
@@ -428,15 +466,21 @@ int w_Shader_sendColors(lua_State *L)
 
 	const Shader::UniformInfo *info = shader->getUniformInfo(name);
 	if (info == nullptr)
-		return luaL_error(L, "Shader uniform '%s' does not exist.\nA common error is to define but not use the variable.", name);
+	{
+		luax_pushboolean(L, false);
+		return 1;
+	}
 
 	if (info->baseType != Shader::UNIFORM_FLOAT || info->components < 3)
 		return luaL_error(L, "sendColor can only be used on vec3 or vec4 uniforms.");
 
 	if (luax_istype(L, 3, Data::type))
-		return w_Shader_sendData(L, 3, shader, info, true);
+		w_Shader_sendData(L, 3, shader, info, true);
 	else
-		return w_Shader_sendFloats(L, 3, shader, info, true);
+		w_Shader_sendFloats(L, 3, shader, info, true);
+
+	luax_pushboolean(L, true);
+	return 1;
 }
 
 int w_Shader_hasUniform(lua_State *L)

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -60,7 +60,7 @@ public:
 		JOIN_MAX_ENUM
 	};
 
-	Polyline(vertex::TriangleIndexMode mode = vertex::TriangleIndexMode::STRIP)
+	Polyline(TriangleIndexMode mode = TRIANGLEINDEX_STRIP)
 		: vertices(nullptr)
 		, overdraw(nullptr)
 		, vertex_count(0)
@@ -110,7 +110,7 @@ protected:
 	Vector2 *overdraw;
 	size_t vertex_count;
 	size_t overdraw_vertex_count;
-	vertex::TriangleIndexMode triangle_mode;
+	TriangleIndexMode triangle_mode;
 	size_t overdraw_vertex_start;
 
 }; // Polyline
@@ -125,7 +125,7 @@ class NoneJoinPolyline : public Polyline
 public:
 
 	NoneJoinPolyline()
-		: Polyline(vertex::TriangleIndexMode::QUADS)
+		: Polyline(TRIANGLEINDEX_QUADS)
 	{}
 
 	void render(const Vector2 *vertices, size_t count, float halfwidth, float pixel_size, bool draw_overdraw)

@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2006-2019 LOVE Development Team
+* Copyright (c) 2006-2020 LOVE Development Team
 *
 * This software is provided 'as-is', without any express or implied
 * warranty.  In no event will the authors be held liable for any damages
@@ -22,6 +22,7 @@
 
 // LOVE
 #include "common/config.h"
+#include "common/Range.h"
 #include "Drawable.h"
 #include "Font.h"
 #include "Buffer.h"
@@ -73,9 +74,9 @@ private:
 		Font::ColoredCodepoints codepoints;
 		float wrap;
 		Font::AlignMode align;
-		Font::TextInfo text_info;
-		bool use_matrix;
-		bool append_vertices;
+		Font::TextInfo textInfo;
+		bool useMatrix;
+		bool appendVertices;
 		Matrix4 matrix;
 	};
 
@@ -85,19 +86,21 @@ private:
 
 	StrongRef<Font> font;
 
-	vertex::Attributes vertexAttributes;
-	vertex::BufferBindings vertexBuffers;
+	VertexAttributes vertexAttributes;
+	BufferBindings vertexBuffers;
 
-	Buffer *vertex_buffer;
+	StrongRef<Buffer> vertexBuffer;
+	uint8 *vertexData;
+	Range modifiedVertices;
 
-	std::vector<Font::DrawCommand> draw_commands;
+	std::vector<Font::DrawCommand> drawCommands;
 
-	std::vector<TextData> text_data;
+	std::vector<TextData> textData;
 
-	size_t vert_offset;
+	size_t vertOffset;
 	
 	// Used so we know when the font's texture cache is invalidated.
-	uint32 texture_cache_id;
+	uint32 textureCacheID;
 	
 }; // Text
 

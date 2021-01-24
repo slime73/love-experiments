@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2006-2019 LOVE Development Team
+# Copyright (c) 2006-2020 LOVE Development Team
 #
 # This software is provided 'as-is', without any express or implied
 # warranty.  In no event will the authors be held liable for any damages
@@ -49,7 +49,6 @@ else()
 endif()
 
 option(LOVE_JIT "Use LuaJIT" TRUE)
-option(LOVE_MPG123 "Use mpg123" TRUE)
 
 if(LOVE_JIT)
 	if(APPLE)
@@ -60,17 +59,11 @@ else()
 	message(STATUS "LuaJIT: Disabled")
 endif()
 
-if(NOT LOVE_MPG123)
-	add_definitions(-DLOVE_NOMPG123)
-endif()
-
 message(STATUS "Target platform: ${LOVE_TARGET_PLATFORM}")
 
 if(POLICY CMP0072)
 	cmake_policy(SET CMP0072 NEW)
 endif()
-
-find_package(OpenGL)
 
 if(MEGA)
 	# LOVE_MSVC_DLLS contains runtime DLLs that should be bundled with the love
@@ -93,7 +86,6 @@ if(MEGA)
 	set(LOVE_LINK_DIRS ${SDL_LINK_DIR})
 
 	set(LOVE_LINK_LIBRARIES
-		${OPENGL_gl_LIBRARY}
 		${MEGA_FREETYPE}
 		${MEGA_LIBOGG}
 		${MEGA_LIBVORBISFILE}
@@ -117,17 +109,6 @@ if(MEGA)
 		${MEGA_SDL2}
 		${MEGA_OPENAL}
 	)
-
-	if(LOVE_MPG123)
-		set(LOVE_LINK_LIBRARIES
-			${LOVE_LINK_LIBRARIES}
-			${MEGA_MPEG123}
-		)
-		set(LOVE_MOVE_DLLS
-			${LOVE_MOVE_DLLS}
-			${MEGA_MPEG123}
-		)
-	endif()
 
 	if(LOVE_JIT)
 		set(LOVE_LUA_LIBRARY ${MEGA_LUAJIT_LIB})
@@ -209,18 +190,6 @@ Please see http://bitbucket.org/rude/megasource
 		${ZLIB_LIBRARY}
 	)
 
-	if(LOVE_MPG123)
-		find_package(MPG123 REQUIRED)
-		set(LOVE_LINK_LIBRARIES
-			${LOVE_LINK_LIBRARIES}
-			${MPG123_LIBRARY}
-		)
-		set(LOVE_INCLUDE_DIRS
-			${LOVE_INCLUDE_DIRS}
-			${MPG123_INCLUDE_DIR}
-		)
-	endif()
-
 	if(LOVE_JIT)
 		find_package(LuaJIT REQUIRED)
 		set(LOVE_LUA_LIBRARY ${LUAJIT_LIBRARY})
@@ -294,6 +263,7 @@ set(LOVE_SRC_COMMON
 	src/common/Optional.h
 	src/common/pixelformat.cpp
 	src/common/pixelformat.h
+	src/common/Range.h
 	src/common/Reference.cpp
 	src/common/Reference.h
 	src/common/runtime.cpp
@@ -518,10 +488,6 @@ source_group("modules\\font\\freetype" FILES ${LOVE_SRC_MODULE_FONT_FREETYPE})
 set(LOVE_SRC_MODULE_GRAPHICS_ROOT
 	src/modules/graphics/Buffer.cpp
 	src/modules/graphics/Buffer.h
-	src/modules/graphics/Canvas.cpp
-	src/modules/graphics/Canvas.h
-	src/modules/graphics/depthstencil.cpp
-	src/modules/graphics/depthstencil.h
 	src/modules/graphics/Deprecations.cpp
 	src/modules/graphics/Deprecations.h
 	src/modules/graphics/Drawable.cpp
@@ -530,8 +496,6 @@ set(LOVE_SRC_MODULE_GRAPHICS_ROOT
 	src/modules/graphics/Font.h
 	src/modules/graphics/Graphics.cpp
 	src/modules/graphics/Graphics.h
-	src/modules/graphics/Image.cpp
-	src/modules/graphics/Image.h
 	src/modules/graphics/Mesh.cpp
 	src/modules/graphics/Mesh.h
 	src/modules/graphics/ParticleSystem.cpp
@@ -540,6 +504,8 @@ set(LOVE_SRC_MODULE_GRAPHICS_ROOT
 	src/modules/graphics/Polyline.h
 	src/modules/graphics/Quad.cpp
 	src/modules/graphics/Quad.h
+	src/modules/graphics/renderstate.cpp
+	src/modules/graphics/renderstate.h
 	src/modules/graphics/Resource.h
 	src/modules/graphics/Shader.cpp
 	src/modules/graphics/Shader.h
@@ -559,14 +525,12 @@ set(LOVE_SRC_MODULE_GRAPHICS_ROOT
 	src/modules/graphics/Video.h
 	src/modules/graphics/Volatile.cpp
 	src/modules/graphics/Volatile.h
-	src/modules/graphics/wrap_Canvas.cpp
-	src/modules/graphics/wrap_Canvas.h
+	src/modules/graphics/wrap_Buffer.cpp
+	src/modules/graphics/wrap_Buffer.h
 	src/modules/graphics/wrap_Font.cpp
 	src/modules/graphics/wrap_Font.h
 	src/modules/graphics/wrap_Graphics.cpp
 	src/modules/graphics/wrap_Graphics.h
-	src/modules/graphics/wrap_Image.cpp
-	src/modules/graphics/wrap_Image.h
 	src/modules/graphics/wrap_Mesh.cpp
 	src/modules/graphics/wrap_Mesh.h
 	src/modules/graphics/wrap_ParticleSystem.cpp
@@ -588,14 +552,10 @@ set(LOVE_SRC_MODULE_GRAPHICS_ROOT
 set(LOVE_SRC_MODULE_GRAPHICS_OPENGL
 	src/modules/graphics/opengl/Buffer.cpp
 	src/modules/graphics/opengl/Buffer.h
-	src/modules/graphics/opengl/Canvas.cpp
-	src/modules/graphics/opengl/Canvas.h
 	src/modules/graphics/opengl/FenceSync.cpp
 	src/modules/graphics/opengl/FenceSync.h
 	src/modules/graphics/opengl/Graphics.cpp
 	src/modules/graphics/opengl/Graphics.h
-	src/modules/graphics/opengl/Image.cpp
-	src/modules/graphics/opengl/Image.h
 	src/modules/graphics/opengl/OpenGL.cpp
 	src/modules/graphics/opengl/OpenGL.h
 	src/modules/graphics/opengl/Shader.cpp
@@ -604,6 +564,8 @@ set(LOVE_SRC_MODULE_GRAPHICS_OPENGL
 	src/modules/graphics/opengl/ShaderStage.h
 	src/modules/graphics/opengl/StreamBuffer.cpp
 	src/modules/graphics/opengl/StreamBuffer.h
+	src/modules/graphics/opengl/Texture.cpp
+	src/modules/graphics/opengl/Texture.h
 )
 
 set(LOVE_SRC_MODULE_GRAPHICS
@@ -921,6 +883,8 @@ set(LOVE_SRC_MODULE_SOUND_LULLABY
 	src/modules/sound/lullaby/GmeDecoder.h
 	src/modules/sound/lullaby/ModPlugDecoder.cpp
 	src/modules/sound/lullaby/ModPlugDecoder.h
+	src/modules/sound/lullaby/MP3Decoder.h
+	src/modules/sound/lullaby/MP3Decoder.cpp
 	src/modules/sound/lullaby/Sound.cpp
 	src/modules/sound/lullaby/Sound.h
 	src/modules/sound/lullaby/VorbisDecoder.cpp
@@ -928,14 +892,6 @@ set(LOVE_SRC_MODULE_SOUND_LULLABY
 	src/modules/sound/lullaby/WaveDecoder.cpp
 	src/modules/sound/lullaby/WaveDecoder.h
 )
-
-if(LOVE_MPG123)
-	set(LOVE_SRC_MODULE_SOUND_LULLABY
-		${LOVE_SRC_MODULE_SOUND_LULLABY}
-		src/modules/sound/lullaby/Mpg123Decoder.cpp
-		src/modules/sound/lullaby/Mpg123Decoder.h
-	)
-endif()
 
 set(LOVE_SRC_MODULE_SOUND
 	${LOVE_SRC_MODULE_SOUND_ROOT}
@@ -1106,130 +1062,80 @@ source_group("modules\\window\\sdl" FILES ${LOVE_SRC_MODULE_WINDOW_SDL})
 #
 
 set(LOVE_SRC_3P_BOX2D_ROOT
-	src/libraries/Box2D/Box2D.h
+	src/libraries/box2d/Box2D.h
 )
 
 set(LOVE_SRC_3P_BOX2D_COLLISION
-	src/libraries/Box2D/Collision/b2BroadPhase.cpp
-	src/libraries/Box2D/Collision/b2BroadPhase.h
-	src/libraries/Box2D/Collision/b2CollideCircle.cpp
-	src/libraries/Box2D/Collision/b2CollideEdge.cpp
-	src/libraries/Box2D/Collision/b2CollidePolygon.cpp
-	src/libraries/Box2D/Collision/b2Collision.cpp
-	src/libraries/Box2D/Collision/b2Collision.h
-	src/libraries/Box2D/Collision/b2Distance.cpp
-	src/libraries/Box2D/Collision/b2Distance.h
-	src/libraries/Box2D/Collision/b2DynamicTree.cpp
-	src/libraries/Box2D/Collision/b2DynamicTree.h
-	src/libraries/Box2D/Collision/b2TimeOfImpact.cpp
-	src/libraries/Box2D/Collision/b2TimeOfImpact.h
-)
-
-set(LOVE_SRC_3P_BOX2D_COLLISION_SHAPES
-	src/libraries/Box2D/Collision/Shapes/b2ChainShape.cpp
-	src/libraries/Box2D/Collision/Shapes/b2ChainShape.h
-	src/libraries/Box2D/Collision/Shapes/b2CircleShape.cpp
-	src/libraries/Box2D/Collision/Shapes/b2CircleShape.h
-	src/libraries/Box2D/Collision/Shapes/b2EdgeShape.cpp
-	src/libraries/Box2D/Collision/Shapes/b2EdgeShape.h
-	src/libraries/Box2D/Collision/Shapes/b2PolygonShape.cpp
-	src/libraries/Box2D/Collision/Shapes/b2PolygonShape.h
-	src/libraries/Box2D/Collision/Shapes/b2Shape.h
+    src/libraries/box2d/collision/b2_broad_phase.cpp
+    src/libraries/box2d/collision/b2_chain_shape.cpp
+    src/libraries/box2d/collision/b2_circle_shape.cpp
+    src/libraries/box2d/collision/b2_collide_circle.cpp
+    src/libraries/box2d/collision/b2_collide_edge.cpp
+    src/libraries/box2d/collision/b2_collide_polygon.cpp
+    src/libraries/box2d/collision/b2_collision.cpp
+    src/libraries/box2d/collision/b2_distance.cpp
+    src/libraries/box2d/collision/b2_dynamic_tree.cpp
+    src/libraries/box2d/collision/b2_edge_shape.cpp
+    src/libraries/box2d/collision/b2_polygon_shape.cpp
+    src/libraries/box2d/collision/b2_time_of_impact.cpp
 )
 
 set(LOVE_SRC_3P_BOX2D_COMMON
-	src/libraries/Box2D/Common/b2BlockAllocator.cpp
-	src/libraries/Box2D/Common/b2BlockAllocator.h
-	src/libraries/Box2D/Common/b2Draw.cpp
-	src/libraries/Box2D/Common/b2Draw.h
-	src/libraries/Box2D/Common/b2GrowableStack.h
-	src/libraries/Box2D/Common/b2Math.cpp
-	src/libraries/Box2D/Common/b2Math.h
-	src/libraries/Box2D/Common/b2Settings.cpp
-	src/libraries/Box2D/Common/b2Settings.h
-	src/libraries/Box2D/Common/b2StackAllocator.cpp
-	src/libraries/Box2D/Common/b2StackAllocator.h
-	src/libraries/Box2D/Common/b2Timer.cpp
-	src/libraries/Box2D/Common/b2Timer.h
+    src/libraries/box2d/common/b2_block_allocator.cpp
+    src/libraries/box2d/common/b2_draw.cpp
+    src/libraries/box2d/common/b2_math.cpp
+    src/libraries/box2d/common/b2_settings.cpp
+    src/libraries/box2d/common/b2_stack_allocator.cpp
+    src/libraries/box2d/common/b2_timer.cpp
 )
 
 set(LOVE_SRC_3P_BOX2D_DYNAMICS
-	src/libraries/Box2D/Dynamics/b2Body.cpp
-	src/libraries/Box2D/Dynamics/b2Body.h
-	src/libraries/Box2D/Dynamics/b2ContactManager.cpp
-	src/libraries/Box2D/Dynamics/b2ContactManager.h
-	src/libraries/Box2D/Dynamics/b2Fixture.cpp
-	src/libraries/Box2D/Dynamics/b2Fixture.h
-	src/libraries/Box2D/Dynamics/b2Island.cpp
-	src/libraries/Box2D/Dynamics/b2Island.h
-	src/libraries/Box2D/Dynamics/b2TimeStep.h
-	src/libraries/Box2D/Dynamics/b2World.cpp
-	src/libraries/Box2D/Dynamics/b2World.h
-	src/libraries/Box2D/Dynamics/b2WorldCallbacks.cpp
-	src/libraries/Box2D/Dynamics/b2WorldCallbacks.h
-)
-
-set(LOVE_SRC_3P_BOX2D_DYNAMICS_CONTACTS
-	src/libraries/Box2D/Dynamics/Contacts/b2ChainAndCircleContact.cpp
-	src/libraries/Box2D/Dynamics/Contacts/b2ChainAndCircleContact.h
-	src/libraries/Box2D/Dynamics/Contacts/b2ChainAndPolygonContact.cpp
-	src/libraries/Box2D/Dynamics/Contacts/b2ChainAndPolygonContact.h
-	src/libraries/Box2D/Dynamics/Contacts/b2CircleContact.cpp
-	src/libraries/Box2D/Dynamics/Contacts/b2CircleContact.h
-	src/libraries/Box2D/Dynamics/Contacts/b2Contact.cpp
-	src/libraries/Box2D/Dynamics/Contacts/b2Contact.h
-	src/libraries/Box2D/Dynamics/Contacts/b2ContactSolver.cpp
-	src/libraries/Box2D/Dynamics/Contacts/b2ContactSolver.h
-	src/libraries/Box2D/Dynamics/Contacts/b2EdgeAndCircleContact.cpp
-	src/libraries/Box2D/Dynamics/Contacts/b2EdgeAndCircleContact.h
-	src/libraries/Box2D/Dynamics/Contacts/b2EdgeAndPolygonContact.cpp
-	src/libraries/Box2D/Dynamics/Contacts/b2EdgeAndPolygonContact.h
-	src/libraries/Box2D/Dynamics/Contacts/b2PolygonAndCircleContact.cpp
-	src/libraries/Box2D/Dynamics/Contacts/b2PolygonAndCircleContact.h
-	src/libraries/Box2D/Dynamics/Contacts/b2PolygonContact.cpp
-	src/libraries/Box2D/Dynamics/Contacts/b2PolygonContact.h
-)
-
-set(LOVE_SRC_3P_BOX2D_DYNAMICS_JOINTS
-	src/libraries/Box2D/Dynamics/Joints/b2DistanceJoint.cpp
-	src/libraries/Box2D/Dynamics/Joints/b2DistanceJoint.h
-	src/libraries/Box2D/Dynamics/Joints/b2FrictionJoint.cpp
-	src/libraries/Box2D/Dynamics/Joints/b2FrictionJoint.h
-	src/libraries/Box2D/Dynamics/Joints/b2GearJoint.cpp
-	src/libraries/Box2D/Dynamics/Joints/b2GearJoint.h
-	src/libraries/Box2D/Dynamics/Joints/b2Joint.cpp
-	src/libraries/Box2D/Dynamics/Joints/b2Joint.h
-	src/libraries/Box2D/Dynamics/Joints/b2MotorJoint.cpp
-	src/libraries/Box2D/Dynamics/Joints/b2MotorJoint.h
-	src/libraries/Box2D/Dynamics/Joints/b2MouseJoint.cpp
-	src/libraries/Box2D/Dynamics/Joints/b2MouseJoint.h
-	src/libraries/Box2D/Dynamics/Joints/b2PrismaticJoint.cpp
-	src/libraries/Box2D/Dynamics/Joints/b2PrismaticJoint.h
-	src/libraries/Box2D/Dynamics/Joints/b2PulleyJoint.cpp
-	src/libraries/Box2D/Dynamics/Joints/b2PulleyJoint.h
-	src/libraries/Box2D/Dynamics/Joints/b2RevoluteJoint.cpp
-	src/libraries/Box2D/Dynamics/Joints/b2RevoluteJoint.h
-	src/libraries/Box2D/Dynamics/Joints/b2RopeJoint.cpp
-	src/libraries/Box2D/Dynamics/Joints/b2RopeJoint.h
-	src/libraries/Box2D/Dynamics/Joints/b2WeldJoint.cpp
-	src/libraries/Box2D/Dynamics/Joints/b2WeldJoint.h
-	src/libraries/Box2D/Dynamics/Joints/b2WheelJoint.cpp
-	src/libraries/Box2D/Dynamics/Joints/b2WheelJoint.h
+    src/libraries/box2d/dynamics/b2_body.cpp
+    src/libraries/box2d/dynamics/b2_chain_circle_contact.cpp
+    src/libraries/box2d/dynamics/b2_chain_circle_contact.h
+    src/libraries/box2d/dynamics/b2_chain_polygon_contact.cpp
+    src/libraries/box2d/dynamics/b2_chain_polygon_contact.h
+    src/libraries/box2d/dynamics/b2_circle_contact.cpp
+    src/libraries/box2d/dynamics/b2_circle_contact.h
+    src/libraries/box2d/dynamics/b2_contact.cpp
+    src/libraries/box2d/dynamics/b2_contact_manager.cpp
+    src/libraries/box2d/dynamics/b2_contact_solver.cpp
+    src/libraries/box2d/dynamics/b2_contact_solver.h
+    src/libraries/box2d/dynamics/b2_distance_joint.cpp
+    src/libraries/box2d/dynamics/b2_edge_circle_contact.cpp
+    src/libraries/box2d/dynamics/b2_edge_circle_contact.h
+    src/libraries/box2d/dynamics/b2_edge_polygon_contact.cpp
+    src/libraries/box2d/dynamics/b2_edge_polygon_contact.h
+    src/libraries/box2d/dynamics/b2_fixture.cpp
+    src/libraries/box2d/dynamics/b2_friction_joint.cpp
+    src/libraries/box2d/dynamics/b2_gear_joint.cpp
+    src/libraries/box2d/dynamics/b2_island.cpp
+    src/libraries/box2d/dynamics/b2_island.h
+    src/libraries/box2d/dynamics/b2_joint.cpp
+    src/libraries/box2d/dynamics/b2_motor_joint.cpp
+    src/libraries/box2d/dynamics/b2_mouse_joint.cpp
+    src/libraries/box2d/dynamics/b2_polygon_circle_contact.cpp
+    src/libraries/box2d/dynamics/b2_polygon_circle_contact.h
+    src/libraries/box2d/dynamics/b2_polygon_contact.cpp
+    src/libraries/box2d/dynamics/b2_polygon_contact.h
+    src/libraries/box2d/dynamics/b2_prismatic_joint.cpp
+    src/libraries/box2d/dynamics/b2_pulley_joint.cpp
+    src/libraries/box2d/dynamics/b2_revolute_joint.cpp
+    src/libraries/box2d/dynamics/b2_weld_joint.cpp
+    src/libraries/box2d/dynamics/b2_wheel_joint.cpp
+    src/libraries/box2d/dynamics/b2_world.cpp
+    src/libraries/box2d/dynamics/b2_world_callbacks.cpp
 )
 
 set(LOVE_SRC_3P_BOX2D_ROPE
-	src/libraries/Box2D/Rope/b2Rope.cpp
-	src/libraries/Box2D/Rope/b2Rope.h
+	src/libraries/box2d/rope/b2_rope.cpp
 )
 
 set(LOVE_SRC_3P_BOX2D
 	${LOVE_SRC_3P_BOX2D_ROOT}
 	${LOVE_SRC_3P_BOX2D_COLLISION}
-	${LOVE_SRC_3P_BOX2D_COLLISION_SHAPES}
 	${LOVE_SRC_3P_BOX2D_COMMON}
 	${LOVE_SRC_3P_BOX2D_DYNAMICS}
-	${LOVE_SRC_3P_BOX2D_DYNAMICS_CONTACTS}
-	${LOVE_SRC_3P_BOX2D_DYNAMICS_JOINTS}
 	${LOVE_SRC_3P_BOX2D_ROPE}
 )
 
@@ -1252,10 +1158,20 @@ add_library(love_3p_ddsparse ${LOVE_SRC_3P_DDSPARSE})
 #
 
 set(LOVE_SRC_3P_DRFLAC
-	src/libraries/dr_flac/dr_flac.h
+	src/libraries/dr/dr_flac.h
 )
 
 # dr_flac has no implementation files of its own.
+
+#
+# dr_mp3
+#
+
+set(LOVE_SRC_3P_DRMP3
+	src/libraries/dr/dr_mp3.h
+)
+
+# dr_mp3 has no implementation files of its own.
 
 #
 # enet
@@ -1370,7 +1286,6 @@ set(LOVE_SRC_3P_GLSLANG_GLSLANG_MACHINEINDEPENDENT
 	src/libraries/glslang/glslang/MachineIndependent/ParseHelper.cpp
 	src/libraries/glslang/glslang/MachineIndependent/ParseHelper.h
 	src/libraries/glslang/glslang/MachineIndependent/parseVersions.h
-	src/libraries/glslang/glslang/MachineIndependent/pch.cpp
 	src/libraries/glslang/glslang/MachineIndependent/pch.h
 	src/libraries/glslang/glslang/MachineIndependent/PoolAlloc.cpp
 	src/libraries/glslang/glslang/MachineIndependent/propagateNoContraction.cpp
@@ -1411,6 +1326,7 @@ set(LOVE_SRC_3P_GLSLANG_GLSLANG_PUBLIC
 )
 
 set(LOVE_SRC_3P_GLSLANG_GLSLANG
+	src/libraries/glslang/glslang/build_info.h
 	${LOVE_SRC_3P_GLSLANG_GLSLANG_GENERICCODEGEN}
 	${LOVE_SRC_3P_GLSLANG_GLSLANG_INCLUDE}
 	${LOVE_SRC_3P_GLSLANG_GLSLANG_MACHINEINDEPENDENT}
@@ -1423,9 +1339,39 @@ set(LOVE_SRC_3P_GLSLANG_OGLCOMPILERSDLL
 	src/libraries/glslang/OGLCompilersDLL/InitializeDll.h
 )
 
+set(LOVE_SRC_3P_GLSLANG_SPIRV
+	src/libraries/glslang/SPIRV/bitutils.h
+	src/libraries/glslang/SPIRV/disassemble.cpp
+	src/libraries/glslang/SPIRV/disassemble.h
+	src/libraries/glslang/SPIRV/doc.cpp
+	src/libraries/glslang/SPIRV/doc.h
+	src/libraries/glslang/SPIRV/GLSL.ext.AMD.h
+	src/libraries/glslang/SPIRV/GLSL.ext.EXT.h
+	src/libraries/glslang/SPIRV/GLSL.ext.KHR.h
+	src/libraries/glslang/SPIRV/GLSL.ext.NV.h
+	src/libraries/glslang/SPIRV/GLSL.std.450.h
+	src/libraries/glslang/SPIRV/GlslangToSpv.cpp
+	src/libraries/glslang/SPIRV/GlslangToSpv.h
+	src/libraries/glslang/SPIRV/hex_float.h
+	src/libraries/glslang/SPIRV/InReadableOrder.cpp
+	src/libraries/glslang/SPIRV/Logger.cpp
+	src/libraries/glslang/SPIRV/Logger.h
+	src/libraries/glslang/SPIRV/NonSemanticDebugPrintf.h
+	src/libraries/glslang/SPIRV/spirv.hpp
+	src/libraries/glslang/SPIRV/SpvBuilder.cpp
+	src/libraries/glslang/SPIRV/SpvBuilder.h
+	src/libraries/glslang/SPIRV/spvIR.h
+	src/libraries/glslang/SPIRV/SpvPostProcess.cpp
+	src/libraries/glslang/SPIRV/SPVRemapper.cpp
+	src/libraries/glslang/SPIRV/SPVRemapper.h
+	src/libraries/glslang/SPIRV/SpvTools.cpp
+	src/libraries/glslang/SPIRV/SpvTools.h
+)
+
 set(LOVE_SRC_3P_GLSLANG
 	${LOVE_SRC_3P_GLSLANG_GLSLANG}
 	${LOVE_SRC_3P_GLSLANG_OGLCOMPILERSDLL}
+	${LOVE_SRC_3P_GLSLANG_SPIRV}
 )
 
 add_library(love_3p_glslang ${LOVE_SRC_3P_GLSLANG})
@@ -1729,6 +1675,7 @@ set(LOVE_LIB_SRC
 include_directories(
 	src
 	src/libraries
+	src/libraries/box2D
 	src/modules
 	${LOVE_INCLUDE_DIRS}
 )

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -45,7 +45,7 @@ Body::Body(World *world, b2Vec2 p, Body::Type type)
 	udata->ref = nullptr;
 	b2BodyDef def;
 	def.position = Physics::scaleDown(p);
-	def.userData = (void *) udata;
+	def.userData.pointer = (uintptr_t)udata;
 	body = world->world->CreateBody(&def);
 	// Box2D body holds a reference to the love Body.
 	this->retain();
@@ -110,6 +110,14 @@ void Body::getLocalCenter(float &x_o, float &y_o)
 float Body::getAngularVelocity() const
 {
 	return body->GetAngularVelocity();
+}
+
+void Body::getKinematicState(b2Vec2 &pos_o, float &a_o, b2Vec2 &vel_o, float &da_o) const
+{
+	pos_o = Physics::scaleUp(body->GetPosition());
+	a_o = body->GetAngle();
+	vel_o = Physics::scaleUp(body->GetLinearVelocity());
+	da_o = body->GetAngularVelocity();
 }
 
 float Body::getMass() const
@@ -223,6 +231,13 @@ void Body::setAngle(float d)
 void Body::setAngularVelocity(float r)
 {
 	body->SetAngularVelocity(r);
+}
+
+void Body::setKinematicState(b2Vec2 pos, float a, b2Vec2 vel, float da)
+{
+	body->SetTransform(Physics::scaleDown(pos), a);
+	body->SetLinearVelocity(Physics::scaleDown(vel));
+	body->SetAngularVelocity(da);
 }
 
 void Body::setPosition(float x, float y)
@@ -346,6 +361,30 @@ void Body::getLocalVector(float x, float y, float &x_o, float &y_o)
 	y_o = v.y;
 }
 
+int Body::getLocalPoints(lua_State *L)
+{
+	int argc = lua_gettop(L);
+	int vcount = (int)argc/2;
+	// at least one point
+	love::luax_assert_argc(L, 2);
+
+	for (int i = 0; i<vcount; i++)
+	{
+		float x = (float)lua_tonumber(L, 1);
+		float y = (float)lua_tonumber(L, 2);
+		// Remove them, so we don't run out of stack space
+		lua_remove(L, 1);
+		lua_remove(L, 1);
+		// Time for scaling
+		b2Vec2 point = Physics::scaleUp(body->GetLocalPoint(Physics::scaleDown(b2Vec2(x, y))));
+		// And then we push the result
+		lua_pushnumber(L, point.x);
+		lua_pushnumber(L, point.y);
+	}
+
+	return argc;
+}
+
 void Body::getLinearVelocityFromWorldPoint(float x, float y, float &x_o, float &y_o)
 {
 	b2Vec2 v = Physics::scaleUp(body->GetLinearVelocityFromWorldPoint(Physics::scaleDown(b2Vec2(x, y))));
@@ -370,9 +409,9 @@ void Body::setBullet(bool bullet)
 	return body->SetBullet(bullet);
 }
 
-bool Body::isActive() const
+bool Body::isEnabled() const
 {
-	return body->IsActive();
+	return body->IsEnabled();
 }
 
 bool Body::isAwake() const
@@ -390,9 +429,9 @@ bool Body::isSleepingAllowed() const
 	return body->IsSleepingAllowed();
 }
 
-void Body::setActive(bool active)
+void Body::setEnabled(bool enabled)
 {
-	body->SetActive(active);
+	body->SetEnabled(enabled);
 }
 
 void Body::setAwake(bool awake)
@@ -529,7 +568,7 @@ int Body::setUserData(lua_State *L)
 	if (udata == nullptr)
 	{
 		udata = new bodyudata();
-		body->SetUserData((void *) udata);
+		body->GetUserData().pointer = (uintptr_t)udata;
 	}
 
 	if(!udata->ref)

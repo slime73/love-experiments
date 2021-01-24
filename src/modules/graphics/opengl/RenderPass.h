@@ -57,8 +57,8 @@ private:
 	void beginPass(DrawContext *context) override;
 	void endPass(DrawContext *context) override;
 
-	vertex::Attributes currentAttributes;
-	vertex::BufferBindings currentBuffers;
+	VertexAttributes currentAttributes;
+	BufferBindings currentBuffers;
 
 }; // RenderPass
 

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -43,6 +43,10 @@ class Graphics;
 namespace window
 {
 
+// Applied when the window is first created.
+void setHighDPIAllowed(bool enable);
+bool isHighDPIAllowed();
+
 // Forward-declared so it can be used in the class methods. We can't define the
 // whole thing here because it uses the Window::Type enum.
 struct WindowSettings;
@@ -66,7 +70,7 @@ public:
 		SETTING_BORDERLESS,
 		SETTING_CENTERED,
 		SETTING_DISPLAY,
-		SETTING_HIGHDPI,
+		SETTING_HIGHDPI, // Deprecated
 		SETTING_USE_DPISCALE,
 		SETTING_REFRESHRATE,
 		SETTING_X,
@@ -261,7 +265,6 @@ struct WindowSettings
 	bool borderless = false;
 	bool centered = true;
 	int display = 0;
-	bool highdpi = false;
 	bool usedpiscale = true;
 	double refreshrate = 0.0;
 	bool useposition = false;

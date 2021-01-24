@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -78,6 +78,20 @@ private:
 
 }; // Object
 
+/**
+ * Structure wrapping an object and its associated Type instance. This is used
+ * for storing everything necessary to identify an object's properties in
+ * environments where the Type is not easily obtained otherwise, for example in
+ * a Lua state.
+ **/
+struct Proxy
+{
+	// Holds type information (see types.h).
+	love::Type *type;
+
+	// Pointer to the actual object.
+	Object *object;
+};
 
 enum class Acquire
 {

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -19,6 +19,7 @@
  **/
 
 #include "ios.h"
+#include "apple.h"
 
 #ifdef LOVE_IOS
 
@@ -27,6 +28,8 @@
 
 #import <AudioToolbox/AudioServices.h>
 #import <AVFoundation/AVFoundation.h>
+
+#include "modules/audio/Audio.h"
 
 #include <vector>
 
@@ -125,12 +128,6 @@ static bool deleteFileInDocuments(NSString *filename);
 
 @end
 
-static NSString *getDocumentsDirectory()
-{
-	NSArray *docdirs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-	return docdirs[0];
-}
-
 static NSArray *getLovesInDocuments()
 {
 	NSMutableArray *paths = [NSMutableArray new];
@@ -199,6 +196,56 @@ static int dropFileEventFilter(void *userdata, SDL_Event *event)
 		return 1;
 	}
 }
+
+@interface LoveAudioInterruptionListener : NSObject
+@end
+
+@implementation LoveAudioInterruptionListener
+
++ (id) shared
+{
+	// thread-safe singleton
+	static dispatch_once_t pred = 0;
+	__strong static id _shared = nil;
+	dispatch_once(&pred, ^{
+			_shared = [[self alloc] init];
+		});
+	return _shared;
+}
+
+- (void)audioSessionInterruption:(NSNotification *)note
+{
+	@synchronized (self)
+	{
+		auto audio = love::Module::getInstance<love::audio::Audio>(love::Module::M_AUDIO);
+		if (!audio)
+		{
+			NSLog(@"LoveAudioInterruptionListener could not get love audio module");
+			return;
+		}
+		NSNumber *type = note.userInfo[AVAudioSessionInterruptionTypeKey];
+		if (type.unsignedIntegerValue == AVAudioSessionInterruptionTypeBegan)
+			audio->pauseContext();
+		else
+			audio->resumeContext();
+	}
+}
+
+- (void)applicationBecameActive:(NSNotification *)note
+{
+	@synchronized (self)
+	{
+		auto audio = love::Module::getInstance<love::audio::Audio>(love::Module::M_AUDIO);
+		if (!audio)
+		{
+			NSLog(@"ERROR:could not get love audio module");
+			return;
+		}
+		audio->resumeContext();
+	}
+}
+
+@end // LoveAudioInterruptionListener
 
 namespace love
 {
@@ -287,38 +334,6 @@ std::string getLoveInResources(bool &fused)
 	return path;
 }
 
-static std::string getUserDirectory(NSSearchPathDirectory dir)
-{
-	std::string path;
-
-	@autoreleasepool
-	{
-		NSArray<NSURL *> *dirs = [[NSFileManager defaultManager] URLsForDirectory:dir inDomains:NSUserDomainMask];
-
-		if (dirs.count > 0)
-			path = [dirs[0].path UTF8String];
-	}
-
-	return path;
-}
-
-std::string getAppdataDirectory()
-{
-	return getUserDirectory(NSApplicationSupportDirectory);
-}
-
-std::string getHomeDirectory()
-{
-	std::string path;
-
-	@autoreleasepool
-	{
-		path = [NSHomeDirectory() UTF8String];
-	}
-
-	return path;
-}
-
 bool openURL(const std::string &url)
 {
 	bool success = false;
@@ -333,14 +348,6 @@ bool openURL(const std::string &url)
 	}
 
 	return success;
-}
-
-std::string getExecutablePath()
-{
-	@autoreleasepool
-	{
-		return std::string([NSBundle mainBundle].executablePath.UTF8String);
-	}
 }
 
 void vibrate()
@@ -378,6 +385,38 @@ bool hasBackgroundMusic()
 			return session.secondaryAudioShouldBeSilencedHint;
 		return false;
 	}
+}
+
+void initAudioSessionInterruptionHandler()
+{
+	@autoreleasepool
+	{
+		AVAudioSession *session = [AVAudioSession sharedInstance];
+		NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+
+		[center addObserver:[LoveAudioInterruptionListener shared]
+			   selector:@selector(audioSessionInterruption:)
+			       name:AVAudioSessionInterruptionNotification
+			     object:session];
+
+		// An interruption end notification is not guaranteed to be sent if
+		// we were previously interrupted... resuming if needed when the app
+		// becomes active seems to be the way to go.
+		[center addObserver:[LoveAudioInterruptionListener shared]
+			   selector:@selector(applicationBecameActive:)
+			       name:UIApplicationDidBecomeActiveNotification
+			     object:nil];
+
+		[center addObserver:[LoveAudioInterruptionListener shared]
+			   selector:@selector(applicationBecameActive:)
+			       name:UIApplicationWillEnterForegroundNotification
+			     object:nil];
+	}
+}
+
+void destroyAudioSessionInterruptionHandler()
+{
+	[[NSNotificationCenter defaultCenter] removeObserver:[LoveAudioInterruptionListener shared]];
 }
 
 Rect getSafeArea(SDL_Window *window)

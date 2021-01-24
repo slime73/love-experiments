@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -31,8 +31,6 @@ namespace love
 namespace macos
 {
 
-std::string getAppdataDirectory();
-
 /**
  * Returns the filepath of the first detected love file in the Resources folder
  * in the main bundle (love.app.)
@@ -45,11 +43,6 @@ std::string getLoveInResources();
  * an empty string otherwise.
  **/
 std::string checkDropEvents();
-
-/**
- * Returns the full path to the executable.
- **/
-std::string getExecutablePath();
 
 /**
  * Bounce the dock icon, if the app isn't in the foreground.

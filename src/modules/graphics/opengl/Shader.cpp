@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -23,6 +23,7 @@
 
 #include "Shader.h"
 #include "Graphics.h"
+#include "graphics/vertex.h"
 
 // C++
 #include <algorithm>
@@ -36,13 +37,17 @@ namespace graphics
 namespace opengl
 {
 
+static bool isBuffer(Shader::UniformType utype)
+{
+	return utype == Shader::UNIFORM_TEXELBUFFER || utype == Shader::UNIFORM_STORAGEBUFFER;
+}
+
 Shader::Shader(love::graphics::ShaderStage *vertex, love::graphics::ShaderStage *pixel)
 	: love::graphics::Shader(vertex, pixel)
 	, program(0)
 	, builtinUniforms()
 	, builtinUniformInfo()
 	, builtinAttributes()
-	, lastPointSize(0.0f)
 {
 	// load shader source and create program object
 	loadVolatile();
@@ -67,6 +72,16 @@ Shader::~Shader()
 			}
 
 			delete[] p.second.textures;
+		}
+		else if (isBuffer(p.second.baseType))
+		{
+			for (int i = 0; i < p.second.count; i++)
+			{
+				if (p.second.buffers[i] != nullptr)
+					p.second.buffers[i]->release();
+			}
+
+			delete[] p.second.buffers;
 		}
 	}
 }
@@ -106,6 +121,7 @@ void Shader::mapActiveUniforms()
 		u.location = glGetUniformLocation(program, u.name.c_str());
 		u.baseType = getUniformBaseType(gltype);
 		u.textureType = getUniformTextureType(gltype);
+		u.texelBufferType = getUniformTexelBufferType(gltype);
 		u.isDepthSampler = isDepthTextureType(gltype);
 
 		if (u.baseType == UNIFORM_MATRIX)
@@ -129,12 +145,22 @@ void Shader::mapActiveUniforms()
 		if (u.location == -1)
 			continue;
 
-		if (u.baseType == UNIFORM_SAMPLER && builtin != BUILTIN_TEXTURE_MAIN)
+		if ((u.baseType == UNIFORM_SAMPLER && builtin != BUILTIN_TEXTURE_MAIN) || u.baseType == UNIFORM_TEXELBUFFER)
 		{
 			TextureUnit unit;
 			unit.type = u.textureType;
 			unit.active = true;
-			unit.texture = gl.getDefaultTexture(u.textureType);
+
+			if (u.baseType == UNIFORM_TEXELBUFFER)
+			{
+				unit.isTexelBuffer = true;
+				unit.texture = gl.getDefaultTexelBuffer();
+			}
+			else
+			{
+				unit.isTexelBuffer = false;
+				unit.texture = gl.getDefaultTexture(u.textureType);
+			}
 
 			for (int i = 0; i < u.count; i++)
 				textureUnits.push_back(unit);
@@ -164,6 +190,7 @@ void Shader::mapActiveUniforms()
 			case UNIFORM_INT:
 			case UNIFORM_BOOL:
 			case UNIFORM_SAMPLER:
+			case UNIFORM_TEXELBUFFER:
 				u.dataSize = sizeof(int) * u.components * u.count;
 				u.data = malloc(u.dataSize);
 				break;
@@ -172,7 +199,7 @@ void Shader::mapActiveUniforms()
 				u.data = malloc(u.dataSize);
 				break;
 			case UNIFORM_MATRIX:
-				u.dataSize = sizeof(float) * (u.matrix.rows * u.matrix.columns) * u.count;
+				u.dataSize = sizeof(float) * ((size_t)u.matrix.rows * u.matrix.columns) * u.count;
 				u.data = malloc(u.dataSize);
 				break;
 			default:
@@ -183,7 +210,7 @@ void Shader::mapActiveUniforms()
 			{
 				memset(u.data, 0, u.dataSize);
 
-				if (u.baseType == UNIFORM_SAMPLER)
+				if (u.baseType == UNIFORM_SAMPLER || u.baseType == UNIFORM_TEXELBUFFER)
 				{
 					int startunit = (int) textureUnits.size() - u.count;
 
@@ -195,8 +222,16 @@ void Shader::mapActiveUniforms()
 
 					glUniform1iv(u.location, u.count, u.ints);
 
-					u.textures = new Texture*[u.count];
-					memset(u.textures, 0, sizeof(Texture *) * u.count);
+					if (u.baseType == UNIFORM_TEXELBUFFER)
+					{
+						u.buffers = new love::graphics::Buffer*[u.count];
+						memset(u.buffers, 0, sizeof(Buffer *) * u.count);
+					}
+					else
+					{
+						u.textures = new love::graphics::Texture*[u.count];
+						memset(u.textures, 0, sizeof(Texture *) * u.count);
+					}
 				}
 			}
 
@@ -236,7 +271,7 @@ void Shader::mapActiveUniforms()
 					break;
 				case UNIFORM_MATRIX:
 					glGetUniformfv(program, location, &u.floats[offset]);
-					offset += u.matrix.rows * u.matrix.columns;
+					offset += (size_t)u.matrix.rows * u.matrix.columns;
 					break;
 				default:
 					break;
@@ -257,13 +292,101 @@ void Shader::mapActiveUniforms()
 			{
 				if (u.textures[i] == nullptr)
 					continue;
-
 				Volatile *v = dynamic_cast<Volatile *>(u.textures[i]);
 				if (v != nullptr)
 					v->loadVolatile();
 			}
 
 			sendTextures(&u, u.textures, u.count, true);
+		}
+		else if (u.baseType == UNIFORM_TEXELBUFFER)
+		{
+			for (int i = 0; i < u.count; i++)
+			{
+				if (u.buffers[i] == nullptr)
+					continue;
+				Volatile *v = dynamic_cast<Volatile *>(u.buffers[i]);
+				if (v != nullptr)
+					v->loadVolatile();
+			}
+
+			sendBuffers(&u, u.buffers, u.count, true);
+		}
+	}
+
+	if (gl.isBufferUsageSupported(BUFFERUSAGE_SHADER_STORAGE))
+	{
+		GLint numstoragebuffers = 0;
+		glGetProgramInterfaceiv(program, GL_SHADER_STORAGE_BLOCK, GL_ACTIVE_RESOURCES, &numstoragebuffers);
+
+		char namebuffer[2048] = { '\0' };
+
+		for (int sindex = 0; sindex < numstoragebuffers; sindex++)
+		{
+			UniformInfo u = {};
+			u.baseType = UNIFORM_STORAGEBUFFER;
+
+			GLsizei namelength = 0;
+			glGetProgramResourceName(program, GL_SHADER_STORAGE_BLOCK, sindex, 2048, &namelength, namebuffer);
+
+			u.name = std::string(namebuffer, namelength);
+			u.count = 1;
+
+			const auto reflectionit = validationReflection.storageBuffers.find(u.name);
+			if (reflectionit != validationReflection.storageBuffers.end())
+			{
+				u.bufferStride = reflectionit->second.stride;
+				u.bufferMemberCount = reflectionit->second.memberCount;
+			}
+
+			// Make sure previously set uniform data is preserved, and shader-
+			// initialized values are retrieved.
+			auto oldu = olduniforms.find(u.name);
+			if (oldu != olduniforms.end())
+			{
+				u.data = oldu->second.data;
+				u.dataSize = oldu->second.dataSize;
+				u.buffers = oldu->second.buffers;
+			}
+			else
+			{
+				u.dataSize = sizeof(int) * 1;
+				u.data = malloc(u.dataSize);
+
+				u.ints[0] = -1;
+
+				u.buffers = new love::graphics::Buffer * [u.count];
+				memset(u.buffers, 0, sizeof(Buffer*)* u.count);
+			}
+
+			GLenum props[] = { GL_BUFFER_BINDING };
+			glGetProgramResourceiv(program, GL_SHADER_STORAGE_BLOCK, sindex, 1, props, 1, nullptr, u.ints);
+
+			BufferBinding binding;
+			binding.bindingindex = u.ints[0];
+			binding.buffer = gl.getDefaultStorageBuffer();
+
+			if (binding.bindingindex >= 0)
+			{
+				int activeindex = (int)activeStorageBufferBindings.size();
+
+				storageBufferBindingIndexToActiveBinding[binding.bindingindex] = activeindex;
+
+				activeStorageBufferBindings.push_back(binding);
+			}
+
+			uniforms[u.name] = u;
+
+			for (int i = 0; i < u.count; i++)
+			{
+				if (u.buffers[i] == nullptr)
+					continue;
+				Volatile* v = dynamic_cast<Volatile*>(u.buffers[i]);
+				if (v != nullptr)
+					v->loadVolatile();
+			}
+
+			sendBuffers(&u, u.buffers, u.count, true);
 		}
 	}
 
@@ -273,18 +396,29 @@ void Shader::mapActiveUniforms()
 	{
 		if (uniforms.find(p.first) == uniforms.end())
 		{
-			free(p.second.data);
+			if (p.second.data != nullptr)
+				free(p.second.data);
 
-			if (p.second.baseType != UNIFORM_SAMPLER)
-				continue;
-
-			for (int i = 0; i < p.second.count; i++)
+			if (p.second.baseType == UNIFORM_SAMPLER)
 			{
-				if (p.second.textures[i] != nullptr)
-					p.second.textures[i]->release();
-			}
+				for (int i = 0; i < p.second.count; i++)
+				{
+					if (p.second.textures[i] != nullptr)
+						p.second.textures[i]->release();
+				}
 
-			delete[] p.second.textures;
+				delete[] p.second.textures;
+			}
+			else if (isBuffer(p.second.baseType))
+			{
+				for (int i = 0; i < p.second.count; i++)
+				{
+					if (p.second.buffers[i] != nullptr)
+						p.second.buffers[i]->release();
+				}
+
+				delete[] p.second.buffers;
+			}
 		}
 	}
 
@@ -295,12 +429,12 @@ bool Shader::loadVolatile()
 {
 	OpenGL::TempDebugGroup debuggroup("Shader load");
 
-    // Recreating the shader program will invalidate uniforms that rely on these.
-	lastPointSize = -1.0f;
-
 	// zero out active texture list
 	textureUnits.clear();
 	textureUnits.push_back(TextureUnit());
+
+	storageBufferBindingIndexToActiveBinding.resize(gl.getMaxShaderStorageBufferBindings(), -1);
+	activeStorageBufferBindings.clear();
 
 	for (const auto &stage : stages)
 	{
@@ -323,7 +457,7 @@ bool Shader::loadVolatile()
 	for (int i = 0; i < int(ATTRIB_MAX_ENUM); i++)
 	{
 		const char *name = nullptr;
-		if (vertex::getConstant((BuiltinVertexAttribute) i, name))
+		if (graphics::getConstant((BuiltinVertexAttribute) i, name))
 			glBindAttribLocation(program, i, (const GLchar *) name);
 	}
 
@@ -346,7 +480,7 @@ bool Shader::loadVolatile()
 	for (int i = 0; i < int(ATTRIB_MAX_ENUM); i++)
 	{
 		const char *name = nullptr;
-		if (vertex::getConstant(BuiltinVertexAttribute(i), name))
+		if (graphics::getConstant(BuiltinVertexAttribute(i), name))
 			builtinAttributes[i] = glGetAttribLocation(program, name);
 		else
 			builtinAttributes[i] = -1;
@@ -429,7 +563,7 @@ void Shader::attach()
 {
 	if (current != this)
 	{
-		Graphics::flushStreamDrawsGlobal();
+		Graphics::flushBatchedDrawsGlobal();
 
 		gl.useProgram(program);
 		current = this;
@@ -440,8 +574,16 @@ void Shader::attach()
 		{
 			const TextureUnit &unit = textureUnits[i];
 			if (unit.active)
-				gl.bindTextureToUnit(unit.type, unit.texture, i, false);
+			{
+				if (unit.isTexelBuffer)
+					gl.bindBufferTextureToUnit(unit.texture, i, false, false);
+				else
+					gl.bindTextureToUnit(unit.type, unit.texture, i, false, false);
+			}
 		}
+
+		for (auto bufferbinding : activeStorageBufferBindings)
+			gl.bindIndexedBuffer(bufferbinding.buffer, BUFFERUSAGE_SHADER_STORAGE, bufferbinding.bindingindex);
 
 		// send any pending uniforms to the shader program.
 		for (const auto &p : pendingUniformUpdates)
@@ -480,7 +622,7 @@ void Shader::updateUniform(const UniformInfo *info, int count, bool internalupda
 	}
 
 	if (!internalupdate)
-		flushStreamDraws();
+		flushBatchedDraws();
 
 	int location = info->location;
 	UniformType type = info->baseType;
@@ -503,7 +645,7 @@ void Shader::updateUniform(const UniformInfo *info, int count, bool internalupda
 			break;
 		}
 	}
-	else if (type == UNIFORM_INT || type == UNIFORM_BOOL || type == UNIFORM_SAMPLER)
+	else if (type == UNIFORM_INT || type == UNIFORM_BOOL || type == UNIFORM_SAMPLER || type == UNIFORM_TEXELBUFFER)
 	{
 		switch (info->components)
 		{
@@ -565,12 +707,12 @@ void Shader::updateUniform(const UniformInfo *info, int count, bool internalupda
 	}
 }
 
-void Shader::sendTextures(const UniformInfo *info, Texture **textures, int count)
+void Shader::sendTextures(const UniformInfo *info, love::graphics::Texture **textures, int count)
 {
 	Shader::sendTextures(info, textures, count, false);
 }
 
-void Shader::sendTextures(const UniformInfo *info, Texture **textures, int count, bool internalUpdate)
+void Shader::sendTextures(const UniformInfo *info, love::graphics::Texture **textures, int count, bool internalUpdate)
 {
 	if (info->baseType != UNIFORM_SAMPLER)
 		return;
@@ -578,17 +720,18 @@ void Shader::sendTextures(const UniformInfo *info, Texture **textures, int count
 	bool shaderactive = current == this;
 
 	if (!internalUpdate && shaderactive)
-		flushStreamDraws();
+		flushBatchedDraws();
 
 	count = std::min(count, info->count);
 
 	// Bind the textures to the texture units.
 	for (int i = 0; i < count; i++)
 	{
-		Texture *tex = textures[i];
+		love::graphics::Texture *tex = textures[i];
 
 		if (tex != nullptr)
 		{
+			const SamplerState &sampler = tex->getSamplerState();
 			if (!tex->isReadable())
 			{
 				if (internalUpdate)
@@ -596,7 +739,7 @@ void Shader::sendTextures(const UniformInfo *info, Texture **textures, int count
 				else
 					throw love::Exception("Textures with non-readable formats cannot be sampled from in a shader.");
 			}
-			else if (info->isDepthSampler != tex->getDepthSampleMode().hasValue)
+			else if (info->isDepthSampler != sampler.depthSampleMode.hasValue)
 			{
 				if (internalUpdate)
 					continue;
@@ -636,17 +779,152 @@ void Shader::sendTextures(const UniformInfo *info, Texture **textures, int count
 		int texunit = info->ints[i];
 
 		if (shaderactive)
-			gl.bindTextureToUnit(info->textureType, gltex, texunit, false);
+			gl.bindTextureToUnit(info->textureType, gltex, texunit, false, false);
 
 		// Store texture id so it can be re-bound to the texture unit later.
 		textureUnits[texunit].texture = gltex;
 	}
 }
 
-void Shader::flushStreamDraws() const
+void Shader::sendBuffers(const UniformInfo *info, love::graphics::Buffer **buffers, int count)
+{
+	Shader::sendBuffers(info, buffers, count, false);
+}
+
+static bool isTexelBufferTypeCompatible(DataBaseType a, DataBaseType b)
+{
+	if (a == DATA_BASETYPE_FLOAT || a == DATA_BASETYPE_UNORM || a == DATA_BASETYPE_SNORM)
+		return b == DATA_BASETYPE_FLOAT || b == DATA_BASETYPE_UNORM || b == DATA_BASETYPE_SNORM;
+
+	if (a == DATA_BASETYPE_INT && b == DATA_BASETYPE_INT)
+		return true;
+
+	if (a == DATA_BASETYPE_UINT && b == DATA_BASETYPE_UINT)
+		return true;
+
+	return false;
+}
+
+void Shader::sendBuffers(const UniformInfo *info, love::graphics::Buffer **buffers, int count, bool internalUpdate)
+{
+	uint32 requiredtypeflags = 0;
+
+	bool texelbinding = info->baseType == UNIFORM_TEXELBUFFER;
+	bool storagebinding = info->baseType == UNIFORM_STORAGEBUFFER;
+
+	if (texelbinding)
+		requiredtypeflags = BUFFERUSAGEFLAG_TEXEL;
+	else if (storagebinding)
+		requiredtypeflags = BUFFERUSAGEFLAG_SHADER_STORAGE;
+
+	if (requiredtypeflags == 0)
+		return;
+
+	bool shaderactive = current == this;
+
+	if (!internalUpdate && shaderactive)
+		flushBatchedDraws();
+
+	count = std::min(count, info->count);
+
+	// Bind the textures to the texture units.
+	for (int i = 0; i < count; i++)
+	{
+		love::graphics::Buffer *buffer = buffers[i];
+
+		if (buffer != nullptr)
+		{
+			if ((buffer->getUsageFlags() & requiredtypeflags) == 0)
+			{
+				if (internalUpdate)
+					continue;
+				else if (texelbinding)
+					throw love::Exception("Shader uniform '%s' is a texel buffer, but the given Buffer was not created with texel buffer capabilities.", info->name.c_str());
+				else if (storagebinding)
+					throw love::Exception("Shader uniform '%s' is a shader storage buffer block, but the given Buffer was not created with shader storage buffer capabilities.", info->name.c_str());
+				else
+					throw love::Exception("Shader uniform '%s' does not match the types supported by the given Buffer.", info->name.c_str());
+			}
+
+			if (texelbinding)
+			{
+				DataBaseType basetype = buffer->getDataMember(0).info.baseType;
+				if (!isTexelBufferTypeCompatible(basetype, info->texelBufferType))
+				{
+					if (internalUpdate)
+						continue;
+					else
+						throw love::Exception("Texel buffer's data format base type must match the variable declared in the shader.");
+				}
+			}
+			else if (storagebinding)
+			{
+				if (info->bufferStride != buffer->getArrayStride())
+				{
+					if (internalUpdate)
+						continue;
+					else
+						throw love::Exception("Shader storage block '%s' has an array stride of %d bytes, but the given Buffer has an array stride of %d bytes.",
+							info->name.c_str(), info->bufferStride, buffer->getArrayStride());
+				}
+				else if (info->bufferMemberCount != buffer->getDataMembers().size())
+				{
+					if (internalUpdate)
+						continue;
+					else
+						throw love::Exception("Shader storage block '%s' has a struct with %d fields, but the given Buffer has a format with %d members.",
+							info->name.c_str(), info->bufferMemberCount, buffer->getDataMembers().size());
+				}
+			}
+
+			buffer->retain();
+		}
+
+		if (info->buffers[i] != nullptr)
+			info->buffers[i]->release();
+
+		info->buffers[i] = buffer;
+
+		if (texelbinding)
+		{
+			GLuint gltex = 0;
+			if (buffers[i] != nullptr)
+				gltex = (GLuint) buffer->getTexelBufferHandle();
+			else
+				gltex = gl.getDefaultTexelBuffer();
+
+			int texunit = info->ints[i];
+
+			if (shaderactive)
+				gl.bindBufferTextureToUnit(gltex, texunit, false, false);
+
+			// Store texture id so it can be re-bound to the texture unit later.
+			textureUnits[texunit].texture = gltex;
+		}
+		else if (storagebinding)
+		{
+			int bindingindex = info->ints[i];
+
+			GLuint glbuffer = 0;
+			if (buffers[i] != nullptr)
+				glbuffer = (GLuint) buffer->getHandle();
+			else
+				glbuffer = gl.getDefaultStorageBuffer();
+
+			if (shaderactive)
+				gl.bindIndexedBuffer(glbuffer, BUFFERUSAGE_SHADER_STORAGE, bindingindex);
+
+			int activeindex = storageBufferBindingIndexToActiveBinding[bindingindex];
+			if (activeindex >= 0)
+				activeStorageBufferBindings[activeindex].buffer = glbuffer;
+		}
+	}
+}
+
+void Shader::flushBatchedDraws() const
 {
 	if (current == this)
-		Graphics::flushStreamDrawsGlobal();
+		Graphics::flushBatchedDrawsGlobal();
 }
 
 bool Shader::hasUniform(const std::string &name) const
@@ -671,7 +949,7 @@ int Shader::getVertexAttributeIndex(const std::string &name)
 	return location;
 }
 
-void Shader::setVideoTextures(Texture *ytexture, Texture *cbtexture, Texture *crtexture)
+void Shader::setVideoTextures(love::graphics::Texture *ytexture, love::graphics::Texture *cbtexture, love::graphics::Texture *crtexture)
 {
 	const BuiltinUniform builtins[3] = {
 		BUILTIN_TEXTURE_VIDEO_Y,
@@ -679,7 +957,7 @@ void Shader::setVideoTextures(Texture *ytexture, Texture *cbtexture, Texture *cr
 		BUILTIN_TEXTURE_VIDEO_CR,
 	};
 
-	Texture *textures[3] = {ytexture, cbtexture, crtexture};
+	love::graphics::Texture *textures[3] = {ytexture, cbtexture, crtexture};
 
 	for (int i = 0; i < 3; i++)
 	{
@@ -690,34 +968,74 @@ void Shader::setVideoTextures(Texture *ytexture, Texture *cbtexture, Texture *cr
 	}
 }
 
-void Shader::updatePointSize(float size)
-{
-	if (size == lastPointSize || current != this)
-		return;
-
-	GLint location = builtinUniforms[BUILTIN_POINT_SIZE];
-	if (location >= 0)
-		glUniform1f(location, size);
-
-	lastPointSize = size;
-}
-
 void Shader::updateBuiltinUniforms(const BuiltinUniformData &data)
 {
-	if (current != this)
-		return;
-
-	if (GLAD_ES_VERSION_2_0)
-		updatePointSize(gl.getPointSize());
-
 	GLint location = builtinUniforms[BUILTIN_UNIFORMS_PER_DRAW];
 	if (location >= 0)
 		glUniform4fv(location, sizeof(BuiltinUniformData) / (sizeof(float) * 4), (const GLfloat *) &data);
 }
 
+void Shader::updateBuiltinUniforms(love::graphics::Graphics *gfx, int viewportW, int viewportH)
+{
+	if (current != this)
+		return;
+
+	BuiltinUniformData data;
+
+	data.transformMatrix = gfx->getTransform();
+	data.projectionMatrix = gfx->getProjection();
+
+	// The normal matrix is the transpose of the inverse of the rotation portion
+	// (top-left 3x3) of the transform matrix.
+	{
+		Matrix3 normalmatrix = Matrix3(data.transformMatrix).transposedInverse();
+		const float *e = normalmatrix.getElements();
+		for (int i = 0; i < 3; i++)
+		{
+			data.normalMatrix[i].x = e[i * 3 + 0];
+			data.normalMatrix[i].y = e[i * 3 + 1];
+			data.normalMatrix[i].z = e[i * 3 + 2];
+			data.normalMatrix[i].w = 0.0f;
+		}
+	}
+
+	// Store DPI scale in an unused component of another vector.
+	data.normalMatrix[0].w = (float) gfx->getCurrentDPIScale();
+
+	// Same with point size.
+	data.normalMatrix[1].w = gfx->getPointSize();
+
+	data.screenSizeParams.x = viewportW;
+	data.screenSizeParams.y = viewportH;
+
+	// The shader does pixcoord.y = gl_FragCoord.y * params.z + params.w.
+	// This lets us flip pixcoord.y when needed, to be consistent (drawing
+	// with no RT active makes the pixel coordinates y-flipped.)
+	if (gfx->isRenderTargetActive())
+	{
+		// No flipping: pixcoord.y = gl_FragCoord.y * 1.0 + 0.0.
+		data.screenSizeParams.z = 1.0f;
+		data.screenSizeParams.w = 0.0f;
+	}
+	else
+	{
+		// gl_FragCoord.y is flipped when drawing to the screen, so we
+		// un-flip: pixcoord.y = gl_FragCoord.y * -1.0 + height.
+		data.screenSizeParams.z = -1.0f;
+		data.screenSizeParams.w = viewportH;
+	}
+
+	data.constantColor = gfx->getColor();
+	gammaCorrectColor(data.constantColor);
+
+	updateBuiltinUniforms(data);
+}
+
 int Shader::getUniformTypeComponents(GLenum type) const
 {
-	if (getUniformBaseType(type) == UNIFORM_SAMPLER)
+	UniformType basetype = getUniformBaseType(type);
+
+	if (basetype == UNIFORM_SAMPLER || basetype == UNIFORM_TEXELBUFFER)
 		return 1;
 
 	switch (type)
@@ -846,6 +1164,10 @@ Shader::UniformType Shader::getUniformBaseType(GLenum type) const
 	case GL_SAMPLER_CUBE_MAP_ARRAY:
 	case GL_SAMPLER_CUBE_MAP_ARRAY_SHADOW:
 		return UNIFORM_SAMPLER;
+	case GL_SAMPLER_BUFFER:
+	case GL_INT_SAMPLER_BUFFER:
+	case GL_UNSIGNED_INT_SAMPLER_BUFFER:
+		return UNIFORM_TEXELBUFFER;
 	default:
 		return UNIFORM_UNKNOWN;
 	}
@@ -886,6 +1208,21 @@ TextureType Shader::getUniformTextureType(GLenum type) const
 		return TEXTURE_MAX_ENUM;
 	default:
 		return TEXTURE_MAX_ENUM;
+	}
+}
+
+DataBaseType Shader::getUniformTexelBufferType(GLenum type) const
+{
+	switch (type)
+	{
+	case GL_SAMPLER_BUFFER:
+		return DATA_BASETYPE_FLOAT;
+	case GL_INT_SAMPLER_BUFFER:
+		return DATA_BASETYPE_INT;
+	case GL_UNSIGNED_INT_SAMPLER_BUFFER:
+		return DATA_BASETYPE_UINT;
+	default:
+		return DATA_BASETYPE_MAX_ENUM;
 	}
 }
 

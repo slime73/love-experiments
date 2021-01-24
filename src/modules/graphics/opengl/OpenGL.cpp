@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -23,7 +23,6 @@
 #include "OpenGL.h"
 
 #include "Shader.h"
-#include "Canvas.h"
 #include "common/Exception.h"
 
 #include "graphics/Graphics.h"
@@ -102,9 +101,12 @@ OpenGL::OpenGL()
 	, max3DTextureSize(0)
 	, maxCubeTextureSize(0)
 	, maxTextureArrayLayers(0)
+	, maxTexelBufferSize(0)
+	, maxShaderStorageBufferSize(0)
 	, maxRenderTargets(1)
-	, maxRenderbufferSamples(0)
+	, maxSamples(1)
 	, maxTextureUnits(1)
+	, maxShaderStorageBufferBindings(0)
 	, maxPointSize(1)
 	, coreProfile(false)
 	, vendor(VENDOR_UNKNOWN)
@@ -151,16 +153,26 @@ bool OpenGL::initContext()
 		if (strstr(device, "HD Graphics 4000") || strstr(device, "HD Graphics 2500"))
 			bugs.clientWaitSyncStalls = true;
 	}
+
+	if (getVendor() == VENDOR_INTEL)
+	{
+		const char *device = (const char *) glGetString(GL_RENDERER);
+		if (strstr(device, "HD Graphics 3000") || strstr(device, "HD Graphics 2000")
+			|| !strcmp(device, "Intel(R) HD Graphics") || !strcmp(device, "Intel(R) HD Graphics Family"))
+		{
+			bugs.brokenSRGB = true;
+		}
+	}
 #endif
 
 #ifdef LOVE_WINDOWS
 	if (getVendor() == VENDOR_AMD)
 	{
-		// Radeon HD drivers switched from "ATI Radeon" to "AMD Radeon" around
+		// Radeon drivers switched from "ATI Radeon" to "AMD Radeon" around
 		// the 7000 series. We'll assume this bug doesn't affect those newer
 		// GPUs / drivers.
 		const char *device = (const char *) glGetString(GL_RENDERER);
-		if (strstr(device, "ATI Radeon HD ") || strstr(device, "ATI Mobility Radeon HD"))
+		if (strstr(device, "ATI Radeon") || strstr(device, "ATI Mobility Radeon"))
 			bugs.texStorageBreaksSubImage = true;
 	}
 #endif
@@ -186,7 +198,7 @@ void OpenGL::setupContext()
 	state.enabledAttribArrays = (uint32) ((1ull << uint32(maxvertexattribs)) - 1);
 	state.instancedAttribArrays = 0;
 
-	setVertexAttributes(vertex::Attributes(), vertex::BufferBindings());
+	setVertexAttributes(VertexAttributes(), BufferBindings());
 
 	// Get the current viewport.
 	glGetIntegerv(GL_VIEWPORT, (GLint *) &state.viewport.x);
@@ -205,13 +217,14 @@ void OpenGL::setupContext()
 		state.boundFramebuffers[i] = std::numeric_limits<GLuint>::max();
 	bindFramebuffer(FRAMEBUFFER_ALL, getDefaultFBO());
 
+	setEnableState(ENABLE_BLEND, state.enableState[ENABLE_BLEND]);
 	setEnableState(ENABLE_DEPTH_TEST, state.enableState[ENABLE_DEPTH_TEST]);
 	setEnableState(ENABLE_STENCIL_TEST, state.enableState[ENABLE_STENCIL_TEST]);
 	setEnableState(ENABLE_SCISSOR_TEST, state.enableState[ENABLE_SCISSOR_TEST]);
 	setEnableState(ENABLE_FACE_CULL, state.enableState[ENABLE_FACE_CULL]);
 
-	if (GLAD_VERSION_3_0 || GLAD_ARB_framebuffer_sRGB || GLAD_EXT_framebuffer_sRGB
-		|| GLAD_EXT_sRGB_write_control)
+	if (!bugs.brokenSRGB && (GLAD_VERSION_3_0 || GLAD_ARB_framebuffer_sRGB
+		|| GLAD_EXT_framebuffer_sRGB || GLAD_EXT_sRGB_write_control))
 	{
 		setEnableState(ENABLE_FRAMEBUFFER_SRGB, state.enableState[ENABLE_FRAMEBUFFER_SRGB]);
 	}
@@ -222,14 +235,18 @@ void OpenGL::setupContext()
 	glGetIntegerv(GL_CULL_FACE_MODE, &faceCull);
 	state.faceCullMode = faceCull;
 
-	for (int i = 0; i < (int) BUFFER_MAX_ENUM; i++)
+	for (int i = 0; i < (int) BUFFERUSAGE_MAX_ENUM; i++)
 	{
 		state.boundBuffers[i] = 0;
-		glBindBuffer(getGLBufferType((BufferType) i), 0);
+		if (isBufferUsageSupported((BufferUsage) i))
+			glBindBuffer(getGLBufferType((BufferUsage) i), 0);
 	}
 
+	if (isBufferUsageSupported(BUFFERUSAGE_SHADER_STORAGE))
+		state.boundIndexedBuffers[BUFFERUSAGE_SHADER_STORAGE].resize(maxShaderStorageBufferBindings, 0);
+
 	// Initialize multiple texture unit support for shaders.
-	for (int i = 0; i < TEXTURE_MAX_ENUM; i++)
+	for (int i = 0; i < TEXTURE_MAX_ENUM + 1; i++)
 	{
 		state.boundTextures[i].clear();
 		state.boundTextures[i].resize(maxTextureUnits, 0);
@@ -259,8 +276,9 @@ void OpenGL::setupContext()
 
 #ifdef LOVE_ANDROID
 	// This can't be done in initContext with the rest of the bug checks because
-	// Canvas::isFormatSupported relies on state initialized here / after init.
-	if (GLAD_ES_VERSION_3_0 && !Canvas::isFormatSupported(PIXELFORMAT_R8))
+	// isPixelFormatSupported relies on state initialized here / after init.
+	auto gfx = Module::getInstance<Graphics>(Module::M_GRAPHICS);
+	if (GLAD_ES_VERSION_3_0 && gfx != nullptr && !gfx->isPixelFormatSupported(PIXELFORMAT_R8_UNORM, true, true))
 		bugs.brokenR8PixelFormat = true;
 #endif
 }
@@ -386,15 +404,23 @@ void OpenGL::initOpenGLFunctions()
 		}
 	}
 
-	if (GLAD_ES_VERSION_2_0 && GLAD_OES_texture_3D && !GLAD_ES_VERSION_3_0)
+	if (GLAD_ES_VERSION_2_0 && !GLAD_ES_VERSION_3_0)
 	{
-		// Function signatures don't match, we'll have to conditionally call it
-		//fp_glTexImage3D = fp_glTexImage3DOES;
-		fp_glTexSubImage3D = fp_glTexSubImage3DOES;
-		fp_glCopyTexSubImage3D = fp_glCopyTexSubImage3DOES;
-		fp_glCompressedTexImage3D = fp_glCompressedTexImage3DOES;
-		fp_glCompressedTexSubImage3D = fp_glCompressedTexSubImage3DOES;
-		fp_glFramebufferTexture3D = fp_glFramebufferTexture3DOES;
+		// The Nvidia Tegra 3 driver (used by Ouya) claims to support GL_EXT_texture_array but
+		// segfaults if you actually try to use it. OpenGL ES 2.0 devices should use OES_texture_3D.
+		// GL_EXT_texture_array is for desktops.
+		GLAD_EXT_texture_array = false;
+
+		if (GLAD_OES_texture_3D)
+		{
+			// Function signatures don't match, we'll have to conditionally call it
+			//fp_glTexImage3D = fp_glTexImage3DOES;
+			fp_glTexSubImage3D = fp_glTexSubImage3DOES;
+			fp_glCopyTexSubImage3D = fp_glCopyTexSubImage3DOES;
+			fp_glCompressedTexImage3D = fp_glCompressedTexImage3DOES;
+			fp_glCompressedTexSubImage3D = fp_glCompressedTexSubImage3DOES;
+			fp_glFramebufferTexture3D = fp_glFramebufferTexture3DOES;
+		}
 	}
 
 	if (!GLAD_VERSION_3_2 && !GLAD_ES_VERSION_3_2 && !GLAD_ARB_draw_elements_base_vertex)
@@ -458,6 +484,22 @@ void OpenGL::initMaxValues()
 	else
 		maxTextureArrayLayers = 0;
 
+	if (isBufferUsageSupported(BUFFERUSAGE_TEXEL))
+		glGetIntegerv(GL_MAX_TEXTURE_BUFFER_SIZE, &maxTexelBufferSize);
+	else
+		maxTexelBufferSize = 0;
+
+	if (isBufferUsageSupported(BUFFERUSAGE_SHADER_STORAGE))
+	{
+		glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &maxShaderStorageBufferSize);
+		glGetIntegerv(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS, &maxShaderStorageBufferBindings);
+	}
+	else
+	{
+		maxShaderStorageBufferSize = 0;
+		maxShaderStorageBufferBindings = 0;
+	}
+
 	int maxattachments = 1;
 	int maxdrawbuffers = 1;
 
@@ -473,10 +515,10 @@ void OpenGL::initMaxValues()
 		|| GLAD_EXT_framebuffer_multisample || GLAD_APPLE_framebuffer_multisample
 		|| GLAD_ANGLE_framebuffer_multisample)
 	{
-		glGetIntegerv(GL_MAX_SAMPLES, &maxRenderbufferSamples);
+		glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
 	}
 	else
-		maxRenderbufferSamples = 0;
+		maxSamples = 1;
 
 	glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &maxTextureUnits);
 
@@ -501,11 +543,9 @@ void OpenGL::createDefaultTexture()
 	// untextured primitives vs images.
 	const GLubyte pix[] = {255, 255, 255, 255};
 
-	Texture::Filter filter;
-	filter.min = filter.mag = Texture::FILTER_NEAREST;
-
-	Texture::Wrap wrap;
-	wrap.s = wrap.t = wrap.r = Texture::WRAP_CLAMP;
+	SamplerState s;
+	s.minFilter = s.magFilter = SamplerState::FILTER_NEAREST;
+	s.wrapU = s.wrapV = s.wrapW = SamplerState::WRAP_CLAMP;
 
 	for (int i = 0; i < TEXTURE_MAX_ENUM; i++)
 	{
@@ -521,8 +561,7 @@ void OpenGL::createDefaultTexture()
 		glGenTextures(1, &state.defaultTexture[type]);
 		bindTextureToUnit(type, state.defaultTexture[type], 0, false);
 
-		setTextureWrap(type, wrap);
-		setTextureFilter(type, filter);
+		setSamplerState(type, s);
 
 		bool isSRGB = false;
 		rawTexStorage(type, 1, PIXELFORMAT_RGBA8_UNORM, isSRGB, 1, 1);
@@ -552,74 +591,39 @@ void OpenGL::prepareDraw(Graphics *gfx)
 {
 	TempDebugGroup debuggroup("Prepare OpenGL draw");
 
-	if (Shader::current == nullptr)
-		return;
-
 	// Make sure the active shader's love-provided uniforms are up to date.
-	Shader::BuiltinUniformData data;
-
-	data.transformMatrix = gfx->getTransform();
-	data.projectionMatrix = gfx->getProjection();
-
+	if (Shader::current != nullptr)
 	{
-		Rect view = getViewport();
-
-		data.screenSizeParams.x = view.w;
-		data.screenSizeParams.y = view.h;
-
-		// The shader does pixcoord.y = gl_FragCoord.y * params.z + params.w.
-		// This lets us flip pixcoord.y when needed, to be consistent (drawing
-		// with no Canvas active makes the pixel coordinates y-flipped.)
-		if (gfx->isCanvasActive())
-		{
-			// No flipping: pixcoord.y = gl_FragCoord.y * 1.0 + 0.0.
-			data.screenSizeParams.z = 1.0f;
-			data.screenSizeParams.w = 0.0f;
-		}
-		else
-		{
-			// gl_FragCoord.y is flipped when drawing to the screen, so we
-			// un-flip: pixcoord.y = gl_FragCoord.y * -1.0 + height.
-			data.screenSizeParams.z = -1.0f;
-			data.screenSizeParams.w = view.h;
-		}
+		Rect viewport = getViewport();
+		((Shader *)Shader::current)->updateBuiltinUniforms(gfx, viewport.w, viewport.h);
 	}
-
-	data.constantColor = gfx->getColor();
-	gammaCorrectColor(data.constantColor);
-
-	((Shader *)Shader::current)->updateBuiltinUniforms(data);
 }
 
 GLenum OpenGL::getGLPrimitiveType(PrimitiveType type)
 {
 	switch (type)
 	{
-	case PRIMITIVE_TRIANGLES:
-		return GL_TRIANGLES;
-	case PRIMITIVE_TRIANGLE_STRIP:
-		return GL_TRIANGLE_STRIP;
-	case PRIMITIVE_TRIANGLE_FAN:
-		return GL_TRIANGLE_FAN;
-	case PRIMITIVE_POINTS:
-		return GL_POINTS;
-	case PRIMITIVE_MAX_ENUM:
-		return GL_ZERO;
+		case PRIMITIVE_TRIANGLES: return GL_TRIANGLES;
+		case PRIMITIVE_TRIANGLE_STRIP: return GL_TRIANGLE_STRIP;
+		case PRIMITIVE_TRIANGLE_FAN: return GL_TRIANGLE_FAN;
+		case PRIMITIVE_POINTS: return GL_POINTS;
+		case PRIMITIVE_MAX_ENUM: return GL_ZERO;
 	}
 
 	return GL_ZERO;
 }
 
-GLenum OpenGL::getGLBufferType(BufferType type)
+GLenum OpenGL::getGLBufferType(BufferUsage usage)
 {
-	switch (type)
+	switch (usage)
 	{
-	case BUFFER_VERTEX:
-		return GL_ARRAY_BUFFER;
-	case BUFFER_INDEX:
-		return GL_ELEMENT_ARRAY_BUFFER;
-	case BUFFER_MAX_ENUM:
-		return GL_ZERO;
+		case BUFFERUSAGE_VERTEX: return GL_ARRAY_BUFFER;
+		case BUFFERUSAGE_INDEX: return GL_ELEMENT_ARRAY_BUFFER;
+		case BUFFERUSAGE_TEXEL: return GL_TEXTURE_BUFFER;
+		case BUFFERUSAGE_SHADER_STORAGE: return GL_SHADER_STORAGE_BUFFER;
+		case BUFFERUSAGE_COPY_SOURCE: return GL_COPY_READ_BUFFER;
+		case BUFFERUSAGE_COPY_DEST: return GL_COPY_WRITE_BUFFER;
+		case BUFFERUSAGE_MAX_ENUM: return GL_ZERO;
 	}
 
 	return GL_ZERO;
@@ -629,16 +633,11 @@ GLenum OpenGL::getGLTextureType(TextureType type)
 {
 	switch (type)
 	{
-	case TEXTURE_2D:
-		return GL_TEXTURE_2D;
-	case TEXTURE_VOLUME:
-		return GL_TEXTURE_3D;
-	case TEXTURE_2D_ARRAY:
-		return GL_TEXTURE_2D_ARRAY;
-	case TEXTURE_CUBE:
-		return GL_TEXTURE_CUBE_MAP;
-	case TEXTURE_MAX_ENUM:
-		return GL_ZERO;
+		case TEXTURE_2D: return GL_TEXTURE_2D;
+		case TEXTURE_VOLUME: return GL_TEXTURE_3D;
+		case TEXTURE_2D_ARRAY: return GL_TEXTURE_2D_ARRAY;
+		case TEXTURE_CUBE: return GL_TEXTURE_CUBE_MAP;
+		case TEXTURE_MAX_ENUM: return GL_TEXTURE_BUFFER; // Hack
 	}
 
 	return GL_ZERO;
@@ -648,53 +647,163 @@ GLenum OpenGL::getGLIndexDataType(IndexDataType type)
 {
 	switch (type)
 	{
-	case INDEX_UINT16:
-		return GL_UNSIGNED_SHORT;
-	case INDEX_UINT32:
-		return GL_UNSIGNED_INT;
-	default:
-		return GL_ZERO;
+		case INDEX_UINT16: return GL_UNSIGNED_SHORT;
+		case INDEX_UINT32: return GL_UNSIGNED_INT;
+		default: return GL_ZERO;
 	}
 }
 
-GLenum OpenGL::getGLVertexDataType(vertex::DataType type, GLboolean &normalized)
+GLenum OpenGL::getGLVertexDataType(DataFormat format, int &components, GLboolean &normalized, bool &intformat)
 {
 	normalized = GL_FALSE;
+	intformat = false;
+	components = 1;
 
-	switch (type)
+	switch (format)
 	{
-	case vertex::DATA_UNORM8:
+	case DATAFORMAT_FLOAT:
+		components = 1;
+		return GL_FLOAT;
+	case DATAFORMAT_FLOAT_VEC2:
+		components = 2;
+		return GL_FLOAT;
+	case DATAFORMAT_FLOAT_VEC3:
+		components = 3;
+		return GL_FLOAT;
+	case DATAFORMAT_FLOAT_VEC4:
+		components = 4;
+		return GL_FLOAT;
+
+	case DATAFORMAT_FLOAT_MAT2X2:
+	case DATAFORMAT_FLOAT_MAT2X3:
+	case DATAFORMAT_FLOAT_MAT2X4:
+	case DATAFORMAT_FLOAT_MAT3X2:
+	case DATAFORMAT_FLOAT_MAT3X3:
+	case DATAFORMAT_FLOAT_MAT3X4:
+	case DATAFORMAT_FLOAT_MAT4X2:
+	case DATAFORMAT_FLOAT_MAT4X3:
+	case DATAFORMAT_FLOAT_MAT4X4:
+		return GL_ZERO;
+
+	case DATAFORMAT_INT32:
+		components = 1;
+		intformat = true;
+		return GL_INT;
+	case DATAFORMAT_INT32_VEC2:
+		components = 2;
+		intformat = true;
+		return GL_INT;
+	case DATAFORMAT_INT32_VEC3:
+		components = 3;
+		intformat = true;
+		return GL_INT;
+	case DATAFORMAT_INT32_VEC4:
+		components = 4;
+		intformat = true;
+		return GL_INT;
+
+	case DATAFORMAT_UINT32:
+		components = 1;
+		intformat = true;
+		return GL_UNSIGNED_INT;
+	case DATAFORMAT_UINT32_VEC2:
+		components = 2;
+		intformat = true;
+		return GL_UNSIGNED_INT;
+	case DATAFORMAT_UINT32_VEC3:
+		components = 3;
+		intformat = true;
+		return GL_UNSIGNED_INT;
+	case DATAFORMAT_UINT32_VEC4:
+		components = 4;
+		intformat = true;
+		return GL_UNSIGNED_INT;
+
+	case DATAFORMAT_SNORM8_VEC4:
+		components = 4;
+		normalized = GL_TRUE;
+		return GL_BYTE;
+
+	case DATAFORMAT_UNORM8_VEC4:
+		components = 4;
 		normalized = GL_TRUE;
 		return GL_UNSIGNED_BYTE;
-	case vertex::DATA_UNORM16:
+
+	case DATAFORMAT_INT8_VEC4:
+		components = 4;
+		intformat = true;
+		return GL_BYTE;
+
+	case DATAFORMAT_UINT8_VEC4:
+		components = 4;
+		intformat = true;
+		return GL_UNSIGNED_BYTE;
+
+	case DATAFORMAT_SNORM16_VEC2:
+		components = 2;
+		normalized = GL_TRUE;
+		return GL_BYTE;
+	case DATAFORMAT_SNORM16_VEC4:
+		components = 4;
+		normalized = GL_TRUE;
+		return GL_BYTE;
+
+	case DATAFORMAT_UNORM16_VEC2:
+		components = 2;
 		normalized = GL_TRUE;
 		return GL_UNSIGNED_SHORT;
-	case vertex::DATA_FLOAT:
-		normalized = GL_FALSE;
-		return GL_FLOAT;
-	case vertex::DATA_MAX_ENUM:
+	case DATAFORMAT_UNORM16_VEC4:
+		components = 4;
+		normalized = GL_TRUE;
+		return GL_UNSIGNED_SHORT;
+
+	case DATAFORMAT_INT16_VEC2:
+		components = 2;
+		intformat = true;
+		return GL_SHORT;
+	case DATAFORMAT_INT16_VEC4:
+		components = 4;
+		intformat = true;
+		return GL_SHORT;
+
+	case DATAFORMAT_UINT16:
+		components = 1;
+		intformat = true;
+		return GL_UNSIGNED_SHORT;
+	case DATAFORMAT_UINT16_VEC2:
+		components = 2;
+		intformat = true;
+		return GL_UNSIGNED_SHORT;
+	case DATAFORMAT_UINT16_VEC4:
+		components = 4;
+		intformat = true;
+		return GL_UNSIGNED_SHORT;
+
+	case DATAFORMAT_BOOL:
+	case DATAFORMAT_BOOL_VEC2:
+	case DATAFORMAT_BOOL_VEC3:
+	case DATAFORMAT_BOOL_VEC4:
+		return GL_ZERO;
+
+	case DATAFORMAT_MAX_ENUM:
 		return GL_ZERO;
 	}
 
 	return GL_ZERO;
 }
 
-GLenum OpenGL::getGLBufferUsage(vertex::Usage usage)
+GLenum OpenGL::getGLBufferDataUsage(BufferDataUsage usage)
 {
 	switch (usage)
 	{
-	case vertex::USAGE_STREAM:
-		return GL_STREAM_DRAW;
-	case vertex::USAGE_DYNAMIC:
-		return GL_DYNAMIC_DRAW;
-	case vertex::USAGE_STATIC:
-		return GL_STATIC_DRAW;
-	default:
-		return 0;
+		case BUFFERDATAUSAGE_STREAM: return GL_STREAM_DRAW;
+		case BUFFERDATAUSAGE_DYNAMIC: return GL_DYNAMIC_DRAW;
+		case BUFFERDATAUSAGE_STATIC: return GL_STATIC_DRAW;
+		default: return 0;
 	}
 }
 
-void OpenGL::bindBuffer(BufferType type, GLuint buffer)
+void OpenGL::bindBuffer(BufferUsage type, GLuint buffer)
 {
 	if (state.boundBuffers[type] != buffer)
 	{
@@ -707,14 +816,20 @@ void OpenGL::deleteBuffer(GLuint buffer)
 {
 	glDeleteBuffers(1, &buffer);
 
-	for (int i = 0; i < (int) BUFFER_MAX_ENUM; i++)
+	for (int i = 0; i < (int) BUFFERUSAGE_MAX_ENUM; i++)
 	{
 		if (state.boundBuffers[i] == buffer)
 			state.boundBuffers[i] = 0;
+
+		for (GLuint &bufferid : state.boundIndexedBuffers[i])
+		{
+			if (bufferid == buffer)
+				bufferid = 0;
+		}
 	}
 }
 
-void OpenGL::setVertexAttributes(const vertex::Attributes &attributes, const vertex::BufferBindings &buffers)
+void OpenGL::setVertexAttributes(const VertexAttributes &attributes, const BufferBindings &buffers)
 {
 	uint32 enablediff = attributes.enableBits ^ state.enabledAttribArrays;
 	uint32 instanceattribbits = 0;
@@ -747,13 +862,19 @@ void OpenGL::setVertexAttributes(const vertex::Attributes &attributes, const ver
 			if ((state.instancedAttribArrays & bit) ^ divisorbit)
 				glVertexAttribDivisor(i, divisor);
 
+			int components = 0;
 			GLboolean normalized = GL_FALSE;
-			GLenum gltype = getGLVertexDataType(attrib.type, normalized);
+			bool intformat = false;
+			GLenum gltype = getGLVertexDataType(attrib.format, components, normalized, intformat);
 
 			const void *offsetpointer = reinterpret_cast<void*>(bufferinfo.offset + attrib.offsetFromVertex);
 
-			bindBuffer(BUFFER_VERTEX, (GLuint) bufferinfo.buffer->getHandle());
-			glVertexAttribPointer(i, attrib.components, gltype, normalized, layout.stride, offsetpointer);
+			bindBuffer(BUFFERUSAGE_VERTEX, (GLuint) bufferinfo.buffer->getHandle());
+
+			if (intformat)
+				glVertexAttribIPointer(i, components, gltype, layout.stride, offsetpointer);
+			else
+				glVertexAttribPointer(i, components, gltype, normalized, layout.stride, offsetpointer);
 		}
 
 		i++;
@@ -808,31 +929,18 @@ Rect OpenGL::getViewport() const
 	return state.viewport;
 }
 
-void OpenGL::setScissor(const Rect &v, bool canvasActive)
+void OpenGL::setScissor(const Rect &v, bool rtActive)
 {
-	if (canvasActive)
+	if (rtActive)
 		glScissor(v.x, v.y, v.w, v.h);
 	else
 	{
-		// With no Canvas active, we need to compensate for glScissor starting
+		// With no RT active, we need to compensate for glScissor starting
 		// from the lower left of the viewport instead of the top left.
 		glScissor(v.x, state.viewport.h - (v.y + v.h), v.w, v.h);
 	}
 
 	state.scissor = v;
-}
-
-void OpenGL::setPointSize(float size)
-{
-	if (GLAD_VERSION_1_0)
-		glPointSize(size);
-
-	state.pointSize = size;
-}
-
-float OpenGL::getPointSize() const
-{
-	return state.pointSize;
 }
 
 void OpenGL::setEnableState(EnableState enablestate, bool enable)
@@ -841,6 +949,9 @@ void OpenGL::setEnableState(EnableState enablestate, bool enable)
 
 	switch (enablestate)
 	{
+	case ENABLE_BLEND:
+		glstate = GL_BLEND;
+		break;
 	case ENABLE_DEPTH_TEST:
 		glstate = GL_DEPTH_TEST;
 		break;
@@ -990,10 +1101,10 @@ GLuint OpenGL::getCachedFBO(const CachedRenderTargets &rts)
 	int ncolortargets = 0;
 	GLenum drawbuffers[MAX_COLOR_RENDER_TARGETS];
 
-	auto attachCanvas = [&](const CachedRenderTarget &rt)
+	auto attachRT = [&](const CachedRenderTarget &rt)
 	{
-		PixelFormat pixelformat = rt.canvas->getPixelFormat();
-		bool renderbuffer = rt.canvas->getMSAA() > 1 || !rt.canvas->isReadable();
+		PixelFormat pixelformat = rt.texture->getPixelFormat();
+		bool renderbuffer = rt.texture->getMSAA() > 1 || !rt.texture->isReadable();
 		bool srgb = false;
 		OpenGL::TextureFormat fmt = OpenGL::convertPixelFormat(pixelformat, renderbuffer, srgb);
 
@@ -1008,7 +1119,7 @@ GLuint OpenGL::getCachedFBO(const CachedRenderTargets &rts)
 			hasdepthstencil = true;
 		}
 
-		GLuint handle = (GLuint) rt.canvas->getRenderTargetHandle();
+		GLuint handle = (GLuint) rt.texture->getRenderTargetHandle();
 
 		for (GLenum attachment : fmt.framebufferAttachments)
 		{
@@ -1018,7 +1129,7 @@ GLuint OpenGL::getCachedFBO(const CachedRenderTargets &rts)
 				glFramebufferRenderbuffer(GL_FRAMEBUFFER, attachment, GL_RENDERBUFFER, handle);
 			else
 			{
-				TextureType textype = rt.canvas->getTextureType();
+				TextureType textype = rt.texture->getTextureType();
 
 				int layer = textype == TEXTURE_CUBE ? 0 : rt.slice;
 				int face = textype == TEXTURE_CUBE ? rt.slice : 0;
@@ -1030,7 +1141,7 @@ GLuint OpenGL::getCachedFBO(const CachedRenderTargets &rts)
 	};
 
 	for (int i = 0; i < rts.count; i++)
-		attachCanvas(rts.targets[i]);
+		attachRT(rts.targets[i]);
 
 	if (ncolortargets > 1)
 		glDrawBuffers(ncolortargets, drawbuffers);
@@ -1059,23 +1170,23 @@ GLuint OpenGL::getCachedFBO(const CachedRenderTargets &rts)
 	return fbo;
 }
 
-void OpenGL::cleanupCanvas(love::graphics::Canvas *canvas)
+void OpenGL::cleanupTexture(love::graphics::Texture *texture)
 {
 	for (auto it = cachedFBOs.begin(); it != cachedFBOs.end(); /**/)
 	{
-		bool hascanvas = false;
+		bool hastexture = false;
 		const auto &rts = it->first;
 
 		for (int i = 0; i < rts.count; i++)
 		{
-			if (rts.targets[i].canvas == canvas)
+			if (rts.targets[i].texture == texture)
 			{
-				hascanvas = true;
+				hastexture = true;
 				break;
 			}
 		}
 
-		if (hascanvas)
+		if (hastexture)
 		{
 			if (contextInitialized)
 				gl.deleteFramebuffer(it->second);
@@ -1099,7 +1210,7 @@ void OpenGL::setTextureUnit(int textureunit)
 	state.curTextureUnit = textureunit;
 }
 
-void OpenGL::bindTextureToUnit(TextureType target, GLuint texture, int textureunit, bool restoreprev)
+void OpenGL::bindTextureToUnit(TextureType target, GLuint texture, int textureunit, bool restoreprev, bool bindforedit)
 {
 	if (texture != state.boundTextures[target][textureunit])
 	{
@@ -1115,9 +1226,19 @@ void OpenGL::bindTextureToUnit(TextureType target, GLuint texture, int textureun
 		else
 			state.curTextureUnit = textureunit;
 	}
+	else if (bindforedit && !restoreprev && textureunit != state.curTextureUnit)
+	{
+		glActiveTexture(GL_TEXTURE0 + textureunit);
+		state.curTextureUnit = textureunit;
+	}
 }
 
-void OpenGL::bindTextureToUnit(Texture *texture, int textureunit, bool restoreprev)
+void OpenGL::bindBufferTextureToUnit(GLuint texture, int textureunit, bool restoreprev, bool bindforedit)
+{
+	bindTextureToUnit(TEXTURE_MAX_ENUM, texture, textureunit, restoreprev, bindforedit);
+}
+
+void OpenGL::bindTextureToUnit(Texture *texture, int textureunit, bool restoreprev, bool bindforedit)
 {
 	TextureType textype = TEXTURE_2D;
 	GLuint handle = 0;
@@ -1139,14 +1260,27 @@ void OpenGL::bindTextureToUnit(Texture *texture, int textureunit, bool restorepr
 		handle = getDefaultTexture(textype);
 	}
 
-	bindTextureToUnit(textype, handle, textureunit, restoreprev);
+	bindTextureToUnit(textype, handle, textureunit, restoreprev, bindforedit);
+}
+
+void OpenGL::bindIndexedBuffer(GLuint buffer, BufferUsage type, int index)
+{
+	auto &bindings = state.boundIndexedBuffers[type];
+	if (bindings.size() > (size_t) index && buffer != bindings[index])
+	{
+		bindings[index] = buffer;
+		glBindBufferBase(getGLBufferType(type), index, buffer);
+
+		// glBindBufferBase affects glBindBuffer as well... for some reason.
+		state.boundBuffers[type] = buffer;
+	}
 }
 
 void OpenGL::deleteTexture(GLuint texture)
 {
 	// glDeleteTextures binds texture 0 to all texture units the deleted texture
 	// was bound to before deletion.
-	for (int i = 0; i < TEXTURE_MAX_ENUM; i++)
+	for (int i = 0; i < TEXTURE_MAX_ENUM + 1; i++)
 	{
 		for (GLuint &texid : state.boundTextures[i])
 		{
@@ -1158,51 +1292,19 @@ void OpenGL::deleteTexture(GLuint texture)
 	glDeleteTextures(1, &texture);
 }
 
-void OpenGL::setTextureFilter(TextureType target, graphics::Texture::Filter &f)
-{
-	GLint gmin = f.min == Texture::FILTER_NEAREST ? GL_NEAREST : GL_LINEAR;
-	GLint gmag = f.mag == Texture::FILTER_NEAREST ? GL_NEAREST : GL_LINEAR;
-
-	if (f.mipmap != Texture::FILTER_NONE)
-	{
-		if (f.min == Texture::FILTER_NEAREST && f.mipmap == Texture::FILTER_NEAREST)
-			gmin = GL_NEAREST_MIPMAP_NEAREST;
-		else if (f.min == Texture::FILTER_NEAREST && f.mipmap == Texture::FILTER_LINEAR)
-			gmin = GL_NEAREST_MIPMAP_LINEAR;
-		else if (f.min == Texture::FILTER_LINEAR && f.mipmap == Texture::FILTER_NEAREST)
-			gmin = GL_LINEAR_MIPMAP_NEAREST;
-		else if (f.min == Texture::FILTER_LINEAR && f.mipmap == Texture::FILTER_LINEAR)
-			gmin = GL_LINEAR_MIPMAP_LINEAR;
-		else
-			gmin = GL_LINEAR;
-	}
-
-	GLenum gltarget = getGLTextureType(target);
-
-	glTexParameteri(gltarget, GL_TEXTURE_MIN_FILTER, gmin);
-	glTexParameteri(gltarget, GL_TEXTURE_MAG_FILTER, gmag);
-
-	if (GLAD_EXT_texture_filter_anisotropic)
-	{
-		f.anisotropy = std::min(std::max(f.anisotropy, 1.0f), maxAnisotropy);
-		glTexParameterf(gltarget, GL_TEXTURE_MAX_ANISOTROPY_EXT, f.anisotropy);
-	}
-	else
-		f.anisotropy = 1.0f;
-}
-
-GLint OpenGL::getGLWrapMode(Texture::WrapMode wmode)
+GLint OpenGL::getGLWrapMode(SamplerState::WrapMode wmode)
 {
 	switch (wmode)
 	{
-	case Texture::WRAP_CLAMP:
+	case SamplerState::WRAP_CLAMP:
 	default:
 		return GL_CLAMP_TO_EDGE;
-	case Texture::WRAP_CLAMP_ZERO:
+	case SamplerState::WRAP_CLAMP_ZERO:
+	case SamplerState::WRAP_CLAMP_ONE:
 		return GL_CLAMP_TO_BORDER;
-	case Texture::WRAP_REPEAT:
+	case SamplerState::WRAP_REPEAT:
 		return GL_REPEAT;
-	case Texture::WRAP_MIRRORED_REPEAT:
+	case SamplerState::WRAP_MIRRORED_REPEAT:
 		return GL_MIRRORED_REPEAT;
 	}
 }
@@ -1211,34 +1313,123 @@ GLint OpenGL::getGLCompareMode(CompareMode mode)
 {
 	switch (mode)
 	{
-	case COMPARE_LESS:
-		return GL_LESS;
-	case COMPARE_LEQUAL:
-		return GL_LEQUAL;
-	case COMPARE_EQUAL:
-		return GL_EQUAL;
-	case COMPARE_GEQUAL:
-		return GL_GEQUAL;
-	case COMPARE_GREATER:
-		return GL_GREATER;
-	case COMPARE_NOTEQUAL:
-		return GL_NOTEQUAL;
-	case COMPARE_ALWAYS:
-		return GL_ALWAYS;
-	case COMPARE_NEVER:
-		return GL_NEVER;
-	default:
-		return GL_NEVER;
+		case COMPARE_LESS: return GL_LESS;
+		case COMPARE_LEQUAL: return GL_LEQUAL;
+		case COMPARE_EQUAL: return GL_EQUAL;
+		case COMPARE_GEQUAL: return GL_GEQUAL;
+		case COMPARE_GREATER: return GL_GREATER;
+		case COMPARE_NOTEQUAL: return GL_NOTEQUAL;
+		case COMPARE_ALWAYS: return GL_ALWAYS;
+		case COMPARE_NEVER: return GL_NEVER;
+		default: return GL_NEVER;
 	}
 }
 
-void OpenGL::setTextureWrap(TextureType target, const graphics::Texture::Wrap &w)
+static bool isClampOne(SamplerState::WrapMode mode)
 {
-	glTexParameteri(getGLTextureType(target), GL_TEXTURE_WRAP_S, getGLWrapMode(w.s));
-	glTexParameteri(getGLTextureType(target), GL_TEXTURE_WRAP_T, getGLWrapMode(w.t));
+	return mode == SamplerState::WRAP_CLAMP_ONE;
+}
+
+void OpenGL::setSamplerState(TextureType target, SamplerState &s)
+{
+	GLenum gltarget = getGLTextureType(target);
+
+	GLint gmin = s.minFilter == SamplerState::FILTER_NEAREST ? GL_NEAREST : GL_LINEAR;
+	GLint gmag = s.magFilter == SamplerState::FILTER_NEAREST ? GL_NEAREST : GL_LINEAR;
+
+	if (s.mipmapFilter != SamplerState::MIPMAP_FILTER_NONE)
+	{
+		if (s.minFilter == SamplerState::FILTER_NEAREST && s.mipmapFilter == SamplerState::MIPMAP_FILTER_NEAREST)
+			gmin = GL_NEAREST_MIPMAP_NEAREST;
+		else if (s.minFilter == SamplerState::FILTER_NEAREST && s.mipmapFilter == SamplerState::MIPMAP_FILTER_LINEAR)
+			gmin = GL_NEAREST_MIPMAP_LINEAR;
+		else if (s.minFilter == SamplerState::FILTER_LINEAR && s.mipmapFilter == SamplerState::MIPMAP_FILTER_NEAREST)
+			gmin = GL_LINEAR_MIPMAP_NEAREST;
+		else if (s.minFilter == SamplerState::FILTER_LINEAR && s.mipmapFilter == SamplerState::MIPMAP_FILTER_LINEAR)
+			gmin = GL_LINEAR_MIPMAP_LINEAR;
+	}
+
+	glTexParameteri(gltarget, GL_TEXTURE_MIN_FILTER, gmin);
+	glTexParameteri(gltarget, GL_TEXTURE_MAG_FILTER, gmag);
+
+	if (!isClampZeroOneTextureWrapSupported())
+	{
+		if (SamplerState::isClampZeroOrOne(s.wrapU)) s.wrapU = SamplerState::WRAP_CLAMP;
+		if (SamplerState::isClampZeroOrOne(s.wrapV)) s.wrapV = SamplerState::WRAP_CLAMP;
+		if (SamplerState::isClampZeroOrOne(s.wrapW)) s.wrapW = SamplerState::WRAP_CLAMP;
+	}
+
+	if (SamplerState::isClampZeroOrOne(s.wrapU) || SamplerState::isClampZeroOrOne(s.wrapV) || SamplerState::isClampZeroOrOne(s.wrapW))
+	{
+		GLfloat c[] = {0.0f, 0.0f, 0.0f, 0.0f};
+		if (isClampOne(s.wrapU) || isClampOne(s.wrapU) || isClampOne(s.wrapV))
+			c[0] = c[1] = c[2] = c[3] = 1.0f;
+
+		glTexParameterfv(gltarget, GL_TEXTURE_BORDER_COLOR, c);
+	}
+
+	glTexParameteri(gltarget, GL_TEXTURE_WRAP_S, getGLWrapMode(s.wrapU));
+	glTexParameteri(gltarget, GL_TEXTURE_WRAP_T, getGLWrapMode(s.wrapV));
 
 	if (target == TEXTURE_VOLUME)
-		glTexParameteri(getGLTextureType(target), GL_TEXTURE_WRAP_R, getGLWrapMode(w.r));
+		glTexParameteri(gltarget, GL_TEXTURE_WRAP_R, getGLWrapMode(s.wrapW));
+
+	if (isSamplerLODBiasSupported())
+	{
+		float maxbias = getMaxLODBias();
+		if (maxbias > 0.01f)
+			maxbias -= 0.01f;
+
+		s.lodBias = std::min(std::max(s.lodBias, -maxbias), maxbias);
+
+		glTexParameterf(gltarget, GL_TEXTURE_LOD_BIAS, s.lodBias);
+	}
+	else
+	{
+		s.lodBias = 0.0f;
+	}
+
+	if (GLAD_EXT_texture_filter_anisotropic)
+	{
+		uint8 maxAniso = (uint8) std::min(maxAnisotropy, (float)LOVE_UINT8_MAX);
+		s.maxAnisotropy = std::min(std::max(s.maxAnisotropy, (uint8)1), maxAniso);
+		glTexParameteri(gltarget, GL_TEXTURE_MAX_ANISOTROPY_EXT, s.maxAnisotropy);
+	}
+	else
+	{
+		s.maxAnisotropy = 1;
+	}
+
+	if (GLAD_ES_VERSION_3_0 || GLAD_VERSION_1_0)
+	{
+		glTexParameterf(gltarget, GL_TEXTURE_MIN_LOD, (float)s.minLod);
+		glTexParameterf(gltarget, GL_TEXTURE_MAX_LOD, (float)s.maxLod);
+	}
+	else
+	{
+		s.minLod = 0;
+		s.maxLod = LOVE_UINT8_MAX;
+	}
+
+	if (isDepthCompareSampleSupported())
+	{
+		if (s.depthSampleMode.hasValue)
+		{
+			// See the comment in renderstate.h
+			GLenum glmode = getGLCompareMode(getReversedCompareMode(s.depthSampleMode.value));
+
+			glTexParameteri(gltarget, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+			glTexParameteri(gltarget, GL_TEXTURE_COMPARE_FUNC, glmode);
+		}
+		else
+		{
+			glTexParameteri(gltarget, GL_TEXTURE_COMPARE_MODE, GL_NONE);
+		}
+	}
+	else
+	{
+		s.depthSampleMode.hasValue = false;
+	}
 }
 
 bool OpenGL::rawTexStorage(TextureType target, int levels, PixelFormat pixelformat, bool &isSRGB, int width, int height, int depth)
@@ -1335,12 +1526,34 @@ bool OpenGL::isTextureTypeSupported(TextureType type) const
 		return GLAD_VERSION_3_0 || GLAD_ES_VERSION_3_0 || GLAD_EXT_texture_array;
 	case TEXTURE_CUBE:
 		return GLAD_VERSION_1_3 || GLAD_ES_VERSION_2_0;
-	default:
+	case TEXTURE_MAX_ENUM:
 		return false;
 	}
+	return false;
 }
 
-bool OpenGL::isClampZeroTextureWrapSupported() const
+bool OpenGL::isBufferUsageSupported(BufferUsage usage) const
+{
+	switch (usage)
+	{
+	case BUFFERUSAGE_VERTEX:
+	case BUFFERUSAGE_INDEX:
+		return true;
+	case BUFFERUSAGE_TEXEL:
+		// Not supported in ES until 3.2, which we don't support shaders for...
+		return GLAD_VERSION_3_1;
+	case BUFFERUSAGE_SHADER_STORAGE:
+		return (GLAD_VERSION_4_3 && isCoreProfile()) || GLAD_ES_VERSION_3_1;
+	case BUFFERUSAGE_COPY_SOURCE:
+	case BUFFERUSAGE_COPY_DEST:
+		return GLAD_VERSION_3_1 || GLAD_ES_VERSION_3_0;
+	case BUFFERUSAGE_MAX_ENUM:
+		return false;
+	}
+	return false;
+}
+
+bool OpenGL::isClampZeroOneTextureWrapSupported() const
 {
 	return GLAD_VERSION_1_3 || GLAD_EXT_texture_border_clamp || GLAD_NV_texture_border_clamp;
 }
@@ -1373,6 +1586,11 @@ bool OpenGL::isBaseVertexSupported() const
 	return baseVertexSupported;
 }
 
+bool OpenGL::isMultiFormatMRTSupported() const
+{
+	return getMaxRenderTargets() > 1 && (GLAD_ES_VERSION_3_0 || GLAD_VERSION_3_0 || GLAD_ARB_framebuffer_object);
+}
+
 int OpenGL::getMax2DTextureSize() const
 {
 	return std::max(max2DTextureSize, 1);
@@ -1393,19 +1611,34 @@ int OpenGL::getMaxTextureLayers() const
 	return std::max(maxTextureArrayLayers, 1);
 }
 
+int OpenGL::getMaxTexelBufferSize() const
+{
+	return maxTexelBufferSize;
+}
+
+int OpenGL::getMaxShaderStorageBufferSize() const
+{
+	return maxShaderStorageBufferSize;
+}
+
 int OpenGL::getMaxRenderTargets() const
 {
 	return std::min(maxRenderTargets, MAX_COLOR_RENDER_TARGETS);
 }
 
-int OpenGL::getMaxRenderbufferSamples() const
+int OpenGL::getMaxSamples() const
 {
-	return maxRenderbufferSamples;
+	return maxSamples;
 }
 
 int OpenGL::getMaxTextureUnits() const
 {
 	return maxTextureUnits;
+}
+
+int OpenGL::getMaxShaderStorageBufferBindings() const
+{
+	return maxShaderStorageBufferBindings;
 }
 
 float OpenGL::getMaxPointSize() const
@@ -1802,150 +2035,178 @@ OpenGL::TextureFormat OpenGL::convertPixelFormat(PixelFormat pixelformat, bool r
 	return f;
 }
 
-bool OpenGL::isPixelFormatSupported(PixelFormat pixelformat, bool rendertarget, bool readable, bool isSRGB)
+uint32 OpenGL::getPixelFormatUsageFlags(PixelFormat pixelformat)
 {
-	if (rendertarget && isPixelFormatCompressed(pixelformat))
-		return false;
+	const uint32 commonsample = PIXELFORMATUSAGEFLAGS_SAMPLE | PIXELFORMATUSAGEFLAGS_LINEAR;
+	const uint32 commonrender = PIXELFORMATUSAGEFLAGS_RENDERTARGET | PIXELFORMATUSAGEFLAGS_BLEND | PIXELFORMATUSAGEFLAGS_MSAA;
 
-	if (pixelformat == PIXELFORMAT_RGBA8_UNORM && isSRGB)
-		pixelformat = PIXELFORMAT_sRGBA8_UNORM;
+	uint32 flags = PIXELFORMATUSAGEFLAGS_NONE;
 
 	switch (pixelformat)
 	{
 	case PIXELFORMAT_R8_UNORM:
 	case PIXELFORMAT_RG8_UNORM:
 		if (GLAD_VERSION_3_0 || GLAD_ES_VERSION_3_0 || GLAD_ARB_texture_rg || GLAD_EXT_texture_rg)
-			return true;
-		else if (pixelformat == PIXELFORMAT_R8_UNORM && !rendertarget && (GLAD_ES_VERSION_2_0 || GLAD_VERSION_1_1))
-			return true; // We'll use OpenGL's luminance format internally.
-		else
-			return false;
+			flags |= commonsample | commonrender;
+		else if (pixelformat == PIXELFORMAT_R8_UNORM && (GLAD_ES_VERSION_2_0 || GLAD_VERSION_1_1))
+			flags |= commonsample; // We'll use OpenGL's luminance format internally.
+		break;
 	case PIXELFORMAT_RGBA8_UNORM:
-		if (rendertarget)
-			return GLAD_VERSION_1_0 || GLAD_ES_VERSION_3_0 || GLAD_OES_rgb8_rgba8 || GLAD_ARM_rgba8;
-		else
-			return true;
+		flags |= commonsample;
+		if (GLAD_VERSION_1_0 || GLAD_ES_VERSION_3_0 || GLAD_OES_rgb8_rgba8 || GLAD_ARM_rgba8)
+			flags |= commonrender;
+		break;
 	case PIXELFORMAT_sRGBA8_UNORM:
-		if (rendertarget)
-		{
-			if (GLAD_VERSION_1_0)
-			{
-				return GLAD_VERSION_3_0 || ((GLAD_ARB_framebuffer_sRGB || GLAD_EXT_framebuffer_sRGB)
-					   && (GLAD_VERSION_2_1 || GLAD_EXT_texture_sRGB));
-			}
-			else
-				return GLAD_ES_VERSION_3_0 || GLAD_EXT_sRGB;
-		}
-		else
-			return GLAD_ES_VERSION_3_0 || GLAD_EXT_sRGB || GLAD_VERSION_2_1 || GLAD_EXT_texture_sRGB;
+		if (gl.bugs.brokenSRGB)
+			break;
+		if (GLAD_ES_VERSION_3_0 || GLAD_VERSION_2_1 || GLAD_EXT_texture_sRGB)
+			flags |= commonsample;
+		if (GLAD_ES_VERSION_3_0 || GLAD_VERSION_3_0
+			|| ((GLAD_ARB_framebuffer_sRGB || GLAD_EXT_framebuffer_sRGB) && (GLAD_VERSION_2_1 || GLAD_EXT_texture_sRGB)))
+			flags |= commonrender;
+		break;
 	case PIXELFORMAT_R16_UNORM:
 	case PIXELFORMAT_RG16_UNORM:
-		return GLAD_VERSION_3_0
+		if (GLAD_VERSION_3_0
 			|| (GLAD_VERSION_1_1 && GLAD_ARB_texture_rg)
-			|| (GLAD_EXT_texture_norm16 && (GLAD_ES_VERSION_3_0 || GLAD_EXT_texture_rg));
+			|| (GLAD_EXT_texture_norm16 && (GLAD_ES_VERSION_3_0 || GLAD_EXT_texture_rg)))
+			flags |= commonsample | commonrender;
+		break;
 	case PIXELFORMAT_RGBA16_UNORM:
-		return GLAD_VERSION_1_1 || GLAD_EXT_texture_norm16;
+		if (GLAD_VERSION_1_1 || GLAD_EXT_texture_norm16)
+			flags |= commonsample | commonrender;
+		break;
 	case PIXELFORMAT_R16_FLOAT:
 	case PIXELFORMAT_RG16_FLOAT:
-		if (GLAD_VERSION_1_0)
-			return GLAD_VERSION_3_0 || (GLAD_ARB_texture_float && GLAD_ARB_half_float_pixel && GLAD_ARB_texture_rg);
-		else if (rendertarget && !GLAD_EXT_color_buffer_half_float)
-			return false;
-		else
-			return GLAD_ES_VERSION_3_0 || (GLAD_OES_texture_half_float && GLAD_EXT_texture_rg);
+		if (GLAD_VERSION_1_0 && (GLAD_VERSION_3_0 || (GLAD_ARB_texture_float && GLAD_ARB_half_float_pixel && GLAD_ARB_texture_rg)))
+			flags |= commonsample | commonrender;
+		if (GLAD_ES_VERSION_3_0 || (GLAD_OES_texture_half_float && GLAD_EXT_texture_rg))
+			flags |= commonsample;
+		if (GLAD_EXT_color_buffer_half_float && (GLAD_ES_VERSION_3_0 || GLAD_EXT_texture_rg))
+			flags |= commonrender;
+		if (!(GLAD_VERSION_1_1 || GLAD_ES_VERSION_3_0 || GLAD_OES_texture_half_float_linear))
+			flags &= ~PIXELFORMATUSAGEFLAGS_LINEAR;
+		break;
 	case PIXELFORMAT_RGBA16_FLOAT:
-		if (GLAD_VERSION_1_0)
-			return GLAD_VERSION_3_0 || (GLAD_ARB_texture_float && GLAD_ARB_half_float_pixel);
-		else if (rendertarget && !GLAD_EXT_color_buffer_half_float)
-			return false;
-		else
-			return GLAD_ES_VERSION_3_0 || GLAD_OES_texture_half_float;
+		if (GLAD_VERSION_3_0 || (GLAD_VERSION_1_0 && GLAD_ARB_texture_float && GLAD_ARB_half_float_pixel))
+			flags |= commonsample | commonrender;
+		if (GLAD_ES_VERSION_3_0 || GLAD_OES_texture_half_float)
+			flags |= commonsample;
+		if (GLAD_EXT_color_buffer_half_float)
+			flags |= commonrender;
+		if (!(GLAD_VERSION_1_1 || GLAD_ES_VERSION_3_0 || GLAD_OES_texture_half_float_linear))
+			flags &= ~PIXELFORMATUSAGEFLAGS_LINEAR;
+		break;
 	case PIXELFORMAT_R32_FLOAT:
 	case PIXELFORMAT_RG32_FLOAT:
-		if (GLAD_VERSION_1_0)
-			return GLAD_VERSION_3_0 || (GLAD_ARB_texture_float && GLAD_ARB_texture_rg);
-		else if (!rendertarget)
-			return GLAD_ES_VERSION_3_0 || (GLAD_OES_texture_float && GLAD_EXT_texture_rg);
-		else
-			return false;
+		if (GLAD_VERSION_3_0 || (GLAD_VERSION_1_0 && GLAD_ARB_texture_float && GLAD_ARB_texture_rg))
+			flags |= commonsample | commonrender;
+		if (GLAD_ES_VERSION_3_0 || (GLAD_OES_texture_float && GLAD_EXT_texture_rg))
+			flags |= commonsample;
+		if (!(GLAD_VERSION_1_1 || GLAD_ES_VERSION_3_0 || GLAD_OES_texture_half_float_linear))
+			flags &= ~PIXELFORMATUSAGEFLAGS_LINEAR;
+		break;
 	case PIXELFORMAT_RGBA32_FLOAT:
-		if (GLAD_VERSION_1_0)
-			return GLAD_VERSION_3_0 || GLAD_ARB_texture_float;
-		else if (!rendertarget)
-			return GLAD_ES_VERSION_3_0 || GLAD_OES_texture_float;
-		else
-			return false;
+		if (GLAD_VERSION_3_0 || (GLAD_VERSION_1_0 && GLAD_ARB_texture_float))
+			flags |= commonsample | commonrender;
+		if (GLAD_ES_VERSION_3_0 || GLAD_OES_texture_float)
+			flags |= commonsample;
+		if (!(GLAD_VERSION_1_1 || GLAD_OES_texture_float_linear))
+			flags &= ~PIXELFORMATUSAGEFLAGS_LINEAR;
+		break;
 
 	case PIXELFORMAT_LA8_UNORM:
-		return !rendertarget;
+		flags |= commonsample;
+		break;
 
 	case PIXELFORMAT_RGBA4_UNORM:
 	case PIXELFORMAT_RGB5A1_UNORM:
-		return true;
+		flags |= commonsample | commonrender;
+		break;
 	case PIXELFORMAT_RGB565_UNORM:
-		return GLAD_ES_VERSION_2_0 || GLAD_VERSION_4_2 || GLAD_ARB_ES2_compatibility;
+		if (GLAD_ES_VERSION_2_0 || GLAD_VERSION_4_2 || GLAD_ARB_ES2_compatibility)
+			flags |= commonsample | commonrender;
+		break;
 	case PIXELFORMAT_RGB10A2_UNORM:
-		return GLAD_ES_VERSION_3_0 || GLAD_VERSION_1_0;
+		if (GLAD_ES_VERSION_3_0 || GLAD_VERSION_1_0)
+			flags |= commonsample | commonrender;
+		break;
 	case PIXELFORMAT_RG11B10_FLOAT:
-		if (rendertarget)
-			return GLAD_VERSION_3_0 || GLAD_EXT_packed_float || GLAD_APPLE_color_buffer_packed_float;
-		else
-			return GLAD_VERSION_3_0 || GLAD_EXT_packed_float || GLAD_APPLE_texture_packed_float;
+		if (GLAD_VERSION_3_0 || GLAD_EXT_packed_float || GLAD_APPLE_texture_packed_float)
+			flags |= commonsample;
+		if (GLAD_VERSION_3_0 || GLAD_EXT_packed_float || GLAD_APPLE_color_buffer_packed_float)
+			flags |= commonrender;
+		break;
 
 	case PIXELFORMAT_STENCIL8:
-		return rendertarget && !readable;
+		flags |= PIXELFORMATUSAGEFLAGS_RENDERTARGET | PIXELFORMATUSAGEFLAGS_MSAA;
+		break;
 
 	case PIXELFORMAT_DEPTH16_UNORM:
-		if (!rendertarget)
-			return false;
-		else if (readable)
-			return GLAD_VERSION_2_0 || GLAD_ES_VERSION_3_0 || GLAD_OES_depth_texture;
-		else
-			return true;
+		flags |= PIXELFORMATUSAGEFLAGS_RENDERTARGET | PIXELFORMATUSAGEFLAGS_MSAA;
+		if (GLAD_VERSION_2_0 || GLAD_ES_VERSION_3_0 || GLAD_OES_depth_texture)
+			flags |= commonsample;
+		break;
 
 	case PIXELFORMAT_DEPTH24_UNORM:
-		if (!rendertarget)
-			return false;
-		else if (readable)
-			return GLAD_VERSION_2_0 || GLAD_ES_VERSION_3_0 || (GLAD_OES_depth_texture && (GLAD_OES_depth24 || GLAD_OES_depth_texture));
-		else
-			return GLAD_VERSION_2_0 || GLAD_ES_VERSION_3_0 || GLAD_OES_depth24 || GLAD_OES_depth_texture;
+		if (GLAD_VERSION_2_0 || GLAD_ES_VERSION_3_0 || GLAD_OES_depth24 || GLAD_OES_depth_texture)
+			flags |= PIXELFORMATUSAGEFLAGS_RENDERTARGET | PIXELFORMATUSAGEFLAGS_MSAA;
+
+		if (GLAD_VERSION_2_0 || GLAD_ES_VERSION_3_0 || (GLAD_OES_depth_texture && (GLAD_OES_depth24 || GLAD_OES_depth_texture)))
+			flags |= commonsample;
+		break;
 
 	case PIXELFORMAT_DEPTH24_UNORM_STENCIL8:
-		if (!rendertarget)
-			return false;
-		else if (readable)
-			return GLAD_VERSION_3_0 || GLAD_ES_VERSION_3_0 || GLAD_EXT_packed_depth_stencil || (GLAD_OES_depth_texture && GLAD_OES_packed_depth_stencil);
-		else
-			return GLAD_VERSION_3_0 || GLAD_ES_VERSION_3_0 || GLAD_EXT_packed_depth_stencil || GLAD_OES_packed_depth_stencil;
+		if (GLAD_VERSION_3_0 || GLAD_ES_VERSION_3_0 || GLAD_EXT_packed_depth_stencil || GLAD_OES_packed_depth_stencil)
+			flags |= PIXELFORMATUSAGEFLAGS_RENDERTARGET | PIXELFORMATUSAGEFLAGS_MSAA;
+
+		if (GLAD_VERSION_3_0 || GLAD_ES_VERSION_3_0 || GLAD_EXT_packed_depth_stencil || (GLAD_OES_depth_texture && GLAD_OES_packed_depth_stencil))
+			flags |= commonsample;
+		break;
 
 	case PIXELFORMAT_DEPTH32_FLOAT:
 	case PIXELFORMAT_DEPTH32_FLOAT_STENCIL8:
-		return rendertarget && (GLAD_VERSION_3_0 || GLAD_ES_VERSION_3_0 || GLAD_ARB_depth_buffer_float);
+		if (GLAD_VERSION_3_0 || GLAD_ES_VERSION_3_0 || GLAD_ARB_depth_buffer_float)
+			flags |= commonsample | PIXELFORMATUSAGEFLAGS_RENDERTARGET | PIXELFORMATUSAGEFLAGS_MSAA;
+		break;
 
 	case PIXELFORMAT_DXT1_UNORM:
-		return GLAD_EXT_texture_compression_s3tc || GLAD_EXT_texture_compression_dxt1;
+		if (GLAD_EXT_texture_compression_s3tc || GLAD_EXT_texture_compression_dxt1)
+			flags |= commonsample;
+		break;
 	case PIXELFORMAT_DXT3_UNORM:
-		return GLAD_EXT_texture_compression_s3tc || GLAD_ANGLE_texture_compression_dxt3;
+		if (GLAD_EXT_texture_compression_s3tc || GLAD_ANGLE_texture_compression_dxt3)
+			flags |= commonsample;
+		break;
 	case PIXELFORMAT_DXT5_UNORM:
-		return GLAD_EXT_texture_compression_s3tc || GLAD_ANGLE_texture_compression_dxt5;
+		if (GLAD_EXT_texture_compression_s3tc || GLAD_ANGLE_texture_compression_dxt5)
+			flags |= commonsample;
+		break;
 	case PIXELFORMAT_BC4_UNORM:
 	case PIXELFORMAT_BC4_SNORM:
 	case PIXELFORMAT_BC5_UNORM:
 	case PIXELFORMAT_BC5_SNORM:
-		return (GLAD_VERSION_3_0 || GLAD_ARB_texture_compression_rgtc || GLAD_EXT_texture_compression_rgtc);
+		if (GLAD_VERSION_3_0 || GLAD_ARB_texture_compression_rgtc || GLAD_EXT_texture_compression_rgtc)
+			flags |= commonsample;
+		break;
 	case PIXELFORMAT_BC6H_UFLOAT:
 	case PIXELFORMAT_BC6H_FLOAT:
 	case PIXELFORMAT_BC7_UNORM:
-		return GLAD_VERSION_4_2 || GLAD_ARB_texture_compression_bptc;
+		if (GLAD_VERSION_4_2 || GLAD_ARB_texture_compression_bptc)
+			flags |= commonsample;
+		break;
 	case PIXELFORMAT_PVR1_RGB2_UNORM:
 	case PIXELFORMAT_PVR1_RGB4_UNORM:
 	case PIXELFORMAT_PVR1_RGBA2_UNORM:
 	case PIXELFORMAT_PVR1_RGBA4_UNORM:
-		return isSRGB ? GLAD_EXT_pvrtc_sRGB : GLAD_IMG_texture_compression_pvrtc;
+		if (GLAD_IMG_texture_compression_pvrtc)
+			flags |= commonsample;
+		break;
 	case PIXELFORMAT_ETC1_UNORM:
 		// ETC2 support guarantees ETC1 support as well.
-		return GLAD_ES_VERSION_3_0 || GLAD_VERSION_4_3 || GLAD_ARB_ES3_compatibility || GLAD_OES_compressed_ETC1_RGB8_texture;
+		if (GLAD_ES_VERSION_3_0 || GLAD_VERSION_4_3 || GLAD_ARB_ES3_compatibility || GLAD_OES_compressed_ETC1_RGB8_texture)
+			flags |= commonsample;
+		break;
 	case PIXELFORMAT_ETC2_RGB_UNORM:
 	case PIXELFORMAT_ETC2_RGBA_UNORM:
 	case PIXELFORMAT_ETC2_RGBA1_UNORM:
@@ -1953,7 +2214,9 @@ bool OpenGL::isPixelFormatSupported(PixelFormat pixelformat, bool rendertarget, 
 	case PIXELFORMAT_EAC_R_SNORM:
 	case PIXELFORMAT_EAC_RG_UNORM:
 	case PIXELFORMAT_EAC_RG_SNORM:
-		return GLAD_ES_VERSION_3_0 || GLAD_VERSION_4_3 || GLAD_ARB_ES3_compatibility;
+		if (GLAD_ES_VERSION_3_0 || GLAD_VERSION_4_3 || GLAD_ARB_ES3_compatibility)
+			flags |= commonsample;
+		break;
 	case PIXELFORMAT_ASTC_4x4:
 	case PIXELFORMAT_ASTC_5x4:
 	case PIXELFORMAT_ASTC_5x5:
@@ -1968,28 +2231,18 @@ bool OpenGL::isPixelFormatSupported(PixelFormat pixelformat, bool rendertarget, 
 	case PIXELFORMAT_ASTC_10x10:
 	case PIXELFORMAT_ASTC_12x10:
 	case PIXELFORMAT_ASTC_12x12:
-		return GLAD_ES_VERSION_3_2 || GLAD_KHR_texture_compression_astc_ldr;
+		if (GLAD_ES_VERSION_3_2 || GLAD_KHR_texture_compression_astc_ldr)
+			flags |= commonsample;
+		break;
 
-	default:
-		return false;
+	case PIXELFORMAT_UNKNOWN:
+	case PIXELFORMAT_NORMAL:
+	case PIXELFORMAT_HDR:
+	case PIXELFORMAT_MAX_ENUM:
+		break;
 	}
-}
 
-bool OpenGL::hasTextureFilteringSupport(PixelFormat pixelformat)
-{
-	switch (pixelformat)
-	{
-	case PIXELFORMAT_R16_FLOAT:
-	case PIXELFORMAT_RG16_FLOAT:
-	case PIXELFORMAT_RGBA16_FLOAT:
-		return GLAD_VERSION_1_1 || GLAD_ES_VERSION_3_0 || GLAD_OES_texture_half_float_linear;
-	case PIXELFORMAT_R32_FLOAT:
-	case PIXELFORMAT_RG32_FLOAT:
-	case PIXELFORMAT_RGBA32_FLOAT:
-		return GLAD_VERSION_1_1 || GLAD_OES_texture_float_linear;
-	default:
-		return true;
-	}
+	return flags;
 }
 
 const char *OpenGL::errorString(GLenum errorcode)
@@ -2037,7 +2290,7 @@ const char *OpenGL::framebufferStatusString(GLenum status)
 	case GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER:
 		return "Error in graphics driver (incomplete read buffer)";
 	case GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE:
-		return "Canvas with the specified MSAA count cannot be rendered to on this system.";
+		return "Texture with the specified MSAA count cannot be rendered to on this system.";
 	case GL_FRAMEBUFFER_UNSUPPORTED:
 		return "Renderable textures are unsupported";
 	default:

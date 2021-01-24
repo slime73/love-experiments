@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -30,7 +30,6 @@
 #		if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_APP) && !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
 #			define LOVE_WINDOWS_UWP 1
 #			define LOVE_NO_MODPLUG 1
-#			define LOVE_NOMPG123 1
 #		endif
 #	endif
 #endif
@@ -72,7 +71,7 @@
 #endif
 
 // NEON instructions.
-#if defined(__ARM_NEON)
+#if defined(__ARM_NEON) || defined(_M_ARM64)
 #	define LOVE_SIMD_NEON
 #endif
 

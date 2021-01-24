@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -45,9 +45,6 @@ public:
 
 	Message(const std::string &name, const std::vector<Variant> &vargs = {});
 	~Message();
-
-	int toLua(lua_State *L);
-	static Message *fromLua(lua_State *L, int n);
 
 	const std::string name;
 	const std::vector<Variant> args;

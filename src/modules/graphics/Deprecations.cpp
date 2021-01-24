@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -82,7 +82,7 @@ void Deprecations::draw(Graphics *gfx)
 		font.set(gfx->newDefaultFont(9, hinting), Acquire::NORETAIN);
 	}
 
-	gfx->flushStreamDraws();
+	gfx->flushBatchedDraws();
 
 	gfx->push(Graphics::STACK_ALL);
 	gfx->reset();

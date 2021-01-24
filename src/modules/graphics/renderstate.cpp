@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -26,54 +26,89 @@ namespace love
 namespace graphics
 {
 
-BlendState getBlendState(BlendMode mode, BlendAlpha alphamode)
+// These are all with premultiplied alpha. computeBlendState adjusts for
+// alpha-multiply if needed.
+static const BlendState states[BLEND_MAX_ENUM] =
 {
-	BlendState s;
+	// BLEND_ALPHA
+	{BLENDOP_ADD, BLENDOP_ADD, BLENDFACTOR_ONE, BLENDFACTOR_ONE, BLENDFACTOR_ONE_MINUS_SRC_ALPHA, BLENDFACTOR_ONE_MINUS_SRC_ALPHA},
 
-	s.enable = mode != BLEND_NONE;
-	s.operationRGB = BLENDOP_ADD;
-	s.operationA = BLENDOP_ADD;
+	// BLEND_ADD
+	{BLENDOP_ADD, BLENDOP_ADD, BLENDFACTOR_ONE, BLENDFACTOR_ZERO, BLENDFACTOR_ONE, BLENDFACTOR_ONE},
 
-	switch (mode)
-	{
-	case BLEND_ALPHA:
-		s.srcFactorRGB = s.srcFactorA = BLENDFACTOR_ONE;
-		s.dstFactorRGB = s.dstFactorA = BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-		break;
-	case BLEND_MULTIPLY:
-		s.srcFactorRGB = s.srcFactorA = BLENDFACTOR_DST_COLOR;
-		s.dstFactorRGB = s.dstFactorA = BLENDFACTOR_ZERO;
-		break;
-	case BLEND_SUBTRACT:
-		s.operationRGB = s.operationA = BLENDOP_REVERSE_SUBTRACT;
-	case BLEND_ADD:
-		s.srcFactorRGB = BLENDFACTOR_ONE;
-		s.srcFactorA = BLENDFACTOR_ZERO;
-		s.dstFactorRGB = s.dstFactorA = BLENDFACTOR_ONE;
-		break;
-	case BLEND_LIGHTEN:
-		s.operationRGB = s.operationA = BLENDOP_MAX;
-		break;
-	case BLEND_DARKEN:
-		s.operationRGB = s.operationA = BLENDOP_MIN;
-		break;
-	case BLEND_SCREEN:
-		s.srcFactorRGB = s.srcFactorA = BLENDFACTOR_ONE;
-		s.dstFactorRGB = s.dstFactorA = BLENDFACTOR_ONE_MINUS_SRC_COLOR;
-		break;
-	case BLEND_REPLACE:
-	case BLEND_NONE:
-	default:
-		s.srcFactorRGB = s.srcFactorA = BLENDFACTOR_ONE;
-		s.dstFactorRGB = s.dstFactorA = BLENDFACTOR_ZERO;
-		break;
-	}
+	// BLEND_SUBTRACT
+	{BLENDOP_REVERSE_SUBTRACT, BLENDOP_REVERSE_SUBTRACT, BLENDFACTOR_ONE, BLENDFACTOR_ZERO, BLENDFACTOR_ONE, BLENDFACTOR_ONE},
+
+	// BLEND_MULTIPLY
+	{BLENDOP_ADD, BLENDOP_ADD, BLENDFACTOR_DST_COLOR, BLENDFACTOR_DST_COLOR, BLENDFACTOR_ZERO, BLENDFACTOR_ZERO},
+
+	// BLEND_LIGHTEN
+	{BLENDOP_MAX, BLENDOP_MAX, BLENDFACTOR_ZERO, BLENDFACTOR_ZERO, BLENDFACTOR_ONE, BLENDFACTOR_ONE},
+
+	// BLEND_DARKEN
+	{BLENDOP_MAX, BLENDOP_MAX, BLENDFACTOR_ONE, BLENDFACTOR_ONE, BLENDFACTOR_ONE, BLENDFACTOR_ONE},
+
+	// BLEND_SCREEN
+	{BLENDOP_ADD, BLENDOP_ADD, BLENDFACTOR_ONE, BLENDFACTOR_ONE, BLENDFACTOR_ONE_MINUS_SRC_COLOR, BLENDFACTOR_ONE_MINUS_SRC_COLOR},
+
+	// BLEND_REPLACE
+	{BLENDOP_ADD, BLENDOP_ADD, BLENDFACTOR_ONE, BLENDFACTOR_ONE, BLENDFACTOR_ZERO, BLENDFACTOR_ZERO},
+
+	// BLEND_NONE
+	{},
+
+	// BLEND_CUSTOM - N/A
+	{},
+};
+
+BlendState computeBlendState(BlendMode mode, BlendAlpha alphamode)
+{
+	BlendState s = states[mode];
 
 	// We can only do alpha-multiplication when srcRGB would have been unmodified.
 	if (s.srcFactorRGB == BLENDFACTOR_ONE && alphamode == BLENDALPHA_MULTIPLY && mode != BLEND_NONE)
 		s.srcFactorRGB = BLENDFACTOR_SRC_ALPHA;
 
 	return s;
+}
+
+BlendMode computeBlendMode(BlendState s, BlendAlpha &alphamode)
+{
+	if (!s.enable)
+	{
+		alphamode = BLENDALPHA_PREMULTIPLIED;
+		return BLEND_NONE;
+	}
+
+	// Temporarily disable alpha multiplication when comparing to our list.
+	bool alphamultiply = s.srcFactorRGB == BLENDFACTOR_SRC_ALPHA;
+	if (alphamultiply)
+		s.srcFactorRGB = BLENDFACTOR_ONE;
+
+	for (int i = 0; i < (int) BLEND_MAX_ENUM; i++)
+	{
+		if (i != (int) BLEND_CUSTOM && states[i] == s)
+		{
+			alphamode = alphamultiply ? BLENDALPHA_MULTIPLY : BLENDALPHA_PREMULTIPLIED;
+			return (BlendMode) i;
+		}
+	}
+
+	alphamode = BLENDALPHA_PREMULTIPLIED;
+	return BLEND_CUSTOM;
+}
+
+bool isAlphaMultiplyBlendSupported(BlendMode mode)
+{
+	switch (mode)
+	{
+	case BLEND_LIGHTEN:
+	case BLEND_DARKEN:
+	case BLEND_MULTIPLY:
+		return false;
+	default:
+		return true;
+	}
 }
 
 CompareMode getReversedCompareMode(CompareMode mode)
@@ -88,7 +123,7 @@ CompareMode getReversedCompareMode(CompareMode mode)
 	}
 }
 
-static StringMap<BlendMode, BLEND_MAX_ENUM>::Entry blendModeEntries[] =
+STRINGMAP_BEGIN(BlendMode, BLEND_MAX_ENUM, blendMode)
 {
 	{ "alpha",    BLEND_ALPHA    },
 	{ "add",      BLEND_ADD      },
@@ -99,19 +134,18 @@ static StringMap<BlendMode, BLEND_MAX_ENUM>::Entry blendModeEntries[] =
 	{ "screen",   BLEND_SCREEN   },
 	{ "replace",  BLEND_REPLACE  },
 	{ "none",     BLEND_NONE     },
-};
+	{ "custom",   BLEND_CUSTOM   },
+}
+STRINGMAP_END(BlendMode, BLEND_MAX_ENUM, blendMode)
 
-static StringMap<BlendMode, BLEND_MAX_ENUM> blendModes(blendModeEntries, sizeof(blendModeEntries));
-
-static StringMap<BlendAlpha, BLENDALPHA_MAX_ENUM>::Entry blendAlphaEntries[] =
+STRINGMAP_BEGIN(BlendAlpha, BLENDALPHA_MAX_ENUM, blendAlpha)
 {
 	{ "alphamultiply", BLENDALPHA_MULTIPLY      },
 	{ "premultiplied", BLENDALPHA_PREMULTIPLIED },
-};
+}
+STRINGMAP_END(BlendAlpha, BLENDALPHA_MAX_ENUM, blendAlpha)
 
-static StringMap<BlendAlpha, BLENDALPHA_MAX_ENUM> blendAlphaModes(blendAlphaEntries, sizeof(blendAlphaEntries));
-
-static StringMap<BlendFactor, BLENDFACTOR_MAX_ENUM>::Entry blendFactorEntries[] =
+STRINGMAP_BEGIN(BlendFactor, BLENDFACTOR_MAX_ENUM, blendFactor)
 {
 	{ "zero",              BLENDFACTOR_ZERO                 },
 	{ "one",               BLENDFACTOR_ONE                  },
@@ -124,26 +158,20 @@ static StringMap<BlendFactor, BLENDFACTOR_MAX_ENUM>::Entry blendFactorEntries[] 
 	{ "dstalpha",          BLENDFACTOR_DST_ALPHA            },
 	{ "oneminusdstalpha",  BLENDFACTOR_ONE_MINUS_DST_ALPHA  },
 	{ "srcalphasaturated", BLENDFACTOR_SRC_ALPHA_SATURATED  },
-	{ "src2color",         BLENDFACTOR_SRC1_COLOR           },
-	{ "oneminussrc2color", BLENDFACTOR_ONE_MINUS_SRC1_COLOR },
-	{ "src2alpha",         BLENDFACTOR_SRC1_ALPHA           },
-	{ "oneminussrc2alpha", BLENDFACTOR_ONE_MINUS_SRC1_ALPHA },
-};
+}
+STRINGMAP_END(BlendFactor, BLENDFACTOR_MAX_ENUM, blendFactor)
 
-static StringMap<BlendFactor, BLENDFACTOR_MAX_ENUM> blendFactors(blendFactorEntries, sizeof(blendFactorEntries));
-
-static StringMap<BlendOperation, BLENDOP_MAX_ENUM>::Entry blendOperationEntries[] =
+STRINGMAP_BEGIN(BlendOperation, BLENDOP_MAX_ENUM, blendOperation)
 {
 	{ "add",             BLENDOP_ADD              },
 	{ "subtract",        BLENDOP_SUBTRACT         },
 	{ "reversesubtract", BLENDOP_REVERSE_SUBTRACT },
 	{ "min",             BLENDOP_MIN              },
 	{ "max",             BLENDOP_MAX              },
-};
+}
+STRINGMAP_END(BlendOperation, BLENDOP_MAX_ENUM, blendOperation)
 
-static StringMap<BlendOperation, BLENDOP_MAX_ENUM> blendOperations(blendOperationEntries, sizeof(blendOperationEntries));
-
-static StringMap<StencilAction, STENCIL_MAX_ENUM>::Entry stencilActionEntries[] =
+STRINGMAP_BEGIN(StencilAction, STENCIL_MAX_ENUM, stencilAction)
 {
 	{ "keep",          STENCIL_KEEP           },
 	{ "zero",          STENCIL_ZERO           },
@@ -153,11 +181,10 @@ static StringMap<StencilAction, STENCIL_MAX_ENUM>::Entry stencilActionEntries[] 
 	{ "incrementwrap", STENCIL_INCREMENT_WRAP },
 	{ "decrementwrap", STENCIL_DECREMENT_WRAP },
 	{ "invert",        STENCIL_INVERT         },
-};
+}
+STRINGMAP_END(StencilAction, STENCIL_MAX_ENUM, stencilAction)
 
-static StringMap<StencilAction, STENCIL_MAX_ENUM> stencilActions(stencilActionEntries, sizeof(stencilActionEntries));
-
-static StringMap<CompareMode, COMPARE_MAX_ENUM>::Entry compareModeEntries[] =
+STRINGMAP_BEGIN(CompareMode, COMPARE_MAX_ENUM, compareMode)
 {
 	{ "less",     COMPARE_LESS     },
 	{ "lequal",   COMPARE_LEQUAL   },
@@ -167,99 +194,8 @@ static StringMap<CompareMode, COMPARE_MAX_ENUM>::Entry compareModeEntries[] =
 	{ "notequal", COMPARE_NOTEQUAL },
 	{ "always",   COMPARE_ALWAYS   },
 	{ "never",    COMPARE_NEVER    },
-};
-
-static StringMap<CompareMode, COMPARE_MAX_ENUM> compareModes(compareModeEntries, sizeof(compareModeEntries));
-
-bool getConstant(const char *in, BlendMode &out)
-{
-	return blendModes.find(in, out);
 }
-
-bool getConstant(BlendMode in, const char *&out)
-{
-	return blendModes.find(in, out);
-}
-
-std::vector<std::string> getConstants(BlendMode)
-{
-	return blendModes.getNames();
-}
-
-bool getConstant(const char *in, BlendAlpha &out)
-{
-	return blendAlphaModes.find(in, out);
-}
-
-bool getConstant(BlendAlpha in, const char *&out)
-{
-	return blendAlphaModes.find(in, out);
-}
-
-std::vector<std::string> getConstants(BlendAlpha)
-{
-	return blendAlphaModes.getNames();
-}
-
-bool getConstant(const char *in, BlendFactor &out)
-{
-	return blendFactors.find(in, out);
-}
-
-bool getConstant(BlendFactor in, const char *&out)
-{
-	return blendFactors.find(in, out);
-}
-
-std::vector<std::string> getConstants(BlendFactor)
-{
-	return blendFactors.getNames();
-}
-
-bool getConstant(const char *in, BlendOperation &out)
-{
-	return blendOperations.find(in, out);
-}
-
-bool getConstant(BlendOperation in, const char *&out)
-{
-	return blendOperations.find(in, out);
-}
-
-std::vector<std::string> getConstants(BlendOperation)
-{
-	return blendOperations.getNames();
-}
-
-bool getConstant(const char *in, StencilAction &out)
-{
-	return stencilActions.find(in, out);
-}
-
-bool getConstant(StencilAction in, const char *&out)
-{
-	return stencilActions.find(in, out);
-}
-
-std::vector<std::string> getConstants(StencilAction)
-{
-	return stencilActions.getNames();
-}
-
-bool getConstant(const char *in, CompareMode &out)
-{
-	return compareModes.find(in, out);
-}
-
-bool getConstant(CompareMode in, const char *&out)
-{
-	return compareModes.find(in, out);
-}
-
-std::vector<std::string> getConstants(CompareMode)
-{
-	return compareModes.getNames();
-}
+STRINGMAP_END(CompareMode, COMPARE_MAX_ENUM, compareMode)
 
 } // graphics
 } // love

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -52,7 +52,6 @@ namespace graphics
 class Resource;
 class Buffer;
 class Graphics;
-class Canvas;
 
 namespace opengl
 {
@@ -99,6 +98,7 @@ public:
 
 	enum EnableState
 	{
+		ENABLE_BLEND,
 		ENABLE_DEPTH_TEST,
 		ENABLE_STENCIL_TEST,
 		ENABLE_SCISSOR_TEST,
@@ -124,7 +124,7 @@ public:
 
 	struct CachedRenderTarget
 	{
-		love::graphics::Canvas *canvas;
+		love::graphics::Texture *texture;
 		int slice;
 		int mipmap;
 	};
@@ -134,9 +134,9 @@ public:
 		CachedRenderTarget targets[MAX_COLOR_RENDER_TARGETS + 1];
 		int count = 0;
 
-		void add(love::graphics::Canvas *canvas, int slice, int mipmap)
+		void add(love::graphics::Texture *texture, int slice, int mipmap)
 		{
-			targets[count].canvas = canvas;
+			targets[count].texture = texture;
 			targets[count].slice = slice;
 			targets[count].mipmap = mipmap;
 			count++;
@@ -149,7 +149,7 @@ public:
 
 			for (int i = 0; i < count; i++)
 			{
-				if (targets[i].canvas != rts.targets[i].canvas
+				if (targets[i].texture != rts.targets[i].texture
 					|| targets[i].slice != rts.targets[i].slice
 					|| targets[i].mipmap != rts.targets[i].mipmap)
 					return false;
@@ -209,7 +209,7 @@ public:
 		 * initial full-size one (determined after some investigation with an
 		 * affected user on Discord.)
 		 * https://bitbucket.org/rude/love/issues/1436/bug-with-lovegraphicsprint-on-older-ati
-		 *
+		 * https://github.com/love2d/love/issues/1563
 		 **/
 		bool texStorageBreaksSubImage;
 
@@ -220,6 +220,13 @@ public:
 		 * It's possible more Adreno GPUs / drivers are affected as well.
 		 **/
 		bool brokenR8PixelFormat;
+
+		/**
+		 * Intel HD Graphics drivers on Windows prior to the HD 2500/4000 have
+		 * completely broken sRGB support.
+		 * https://github.com/love2d/love/issues/1592
+		 **/
+		bool brokenSRGB;
 
 		/**
 		 * Other bugs which have workarounds that don't use conditional code at
@@ -271,7 +278,7 @@ public:
 	 * NOTE: This does not account for multiple VAOs being used! Index buffer
 	 * bindings are per-VAO in OpenGL, but this doesn't know about that.
 	 **/
-	void bindBuffer(BufferType type, GLuint buffer);
+	void bindBuffer(BufferUsage type, GLuint buffer);
 
 	/**
 	 * glDeleteBuffers which updates our shadowed state.
@@ -281,7 +288,7 @@ public:
 	/**
 	 * Set all vertex attribute state.
 	 **/
-	void setVertexAttributes(const vertex::Attributes &attributes, const vertex::BufferBindings &buffers);
+	void setVertexAttributes(const VertexAttributes &attributes, const BufferBindings &buffers);
 
 	/**
 	 * Wrapper for glCullFace which eliminates redundant state setting.
@@ -304,13 +311,7 @@ public:
 	 * Sets the scissor box to the specified rectangle.
 	 * The y-coordinate starts at the top and is flipped internally.
 	 **/
-	void setScissor(const Rect &v, bool canvasActive);
-
-	/**
-	 * Sets the global point size.
-	 **/
-	void setPointSize(float size);
-	float getPointSize() const;
+	void setScissor(const Rect &v, bool rtActive);
 
 	/**
 	 * State-tracked version of glEnable.
@@ -345,12 +346,21 @@ public:
 	GLuint getDefaultFBO() const;
 
 	GLuint getCachedFBO(const CachedRenderTargets &targets);
-	void cleanupCanvas(love::graphics::Canvas *canvas);
+	void cleanupTexture(love::graphics::Texture *texture);
 
 	/**
 	 * Gets the ID for love's default texture (used for "untextured" primitives.)
 	 **/
 	GLuint getDefaultTexture(TextureType type) const;
+
+	/**
+	 * Gets the texture ID for love's default texel buffer.
+	 **/
+	GLuint getDefaultTexelBuffer() const { return state.defaultTexelBuffer; }
+	void setDefaultTexelBuffer(GLuint tex) { state.defaultTexelBuffer = tex; }
+
+	GLuint getDefaultStorageBuffer() const { return state.defaultStorageBuffer; }
+	void setDefaultStorageBuffer(GLuint buf) { state.defaultStorageBuffer = buf; }
 
 	/**
 	 * Helper for setting the active texture unit.
@@ -364,9 +374,14 @@ public:
 	 *
 	 * @param textureunit Index in the range of [0, maxtextureunits-1]
 	 * @param restoreprev Restore previously bound texture unit when done.
+	 * @param bindforedit If false, the active texture unit may be left alone.
 	 **/
-	void bindTextureToUnit(TextureType target, GLuint texture, int textureunit, bool restoreprev);
-	void bindTextureToUnit(Texture *texture, int textureunit, bool restoreprev);
+	void bindTextureToUnit(TextureType target, GLuint texture, int textureunit, bool restoreprev, bool bindforedit = true);
+	void bindTextureToUnit(Texture *texture, int textureunit, bool restoreprev, bool bindforedit = true);
+
+	void bindBufferTextureToUnit(GLuint texture, int textureunit, bool restoreprev, bool bindforedit);
+
+	void bindIndexedBuffer(GLuint buffer, BufferUsage type, int index);
 
 	/**
 	 * Helper for deleting an OpenGL texture.
@@ -375,16 +390,9 @@ public:
 	void deleteTexture(GLuint texture);
 
 	/**
-	 * Sets the texture filter mode for the currently bound texture.
-	 * The anisotropy parameter of the argument is set to the actual amount of
-	 * anisotropy that was used.
+	 * Sets sampler state parameters for the currently bound texture.
 	 **/
-	void setTextureFilter(TextureType target, graphics::Texture::Filter &f);
-
-	/**
-	 * Sets the texture wrap mode for the currently bound texture.
-	 **/
-	void setTextureWrap(TextureType target, const graphics::Texture::Wrap &w);
+	void setSamplerState(TextureType target, SamplerState &s);
 
 	/**
 	 * Equivalent to glTexStorage2D/3D on platforms that support it. Equivalent
@@ -394,12 +402,14 @@ public:
 	bool rawTexStorage(TextureType target, int levels, PixelFormat pixelformat, bool &isSRGB, int width, int height, int depth = 1);
 
 	bool isTextureTypeSupported(TextureType type) const;
-	bool isClampZeroTextureWrapSupported() const;
+	bool isBufferUsageSupported(BufferUsage usage) const;
+	bool isClampZeroOneTextureWrapSupported() const;
 	bool isPixelShaderHighpSupported() const;
 	bool isInstancingSupported() const;
 	bool isDepthCompareSampleSupported() const;
 	bool isSamplerLODBiasSupported() const;
 	bool isBaseVertexSupported() const;
+	bool isMultiFormatMRTSupported() const;
 
 	/**
 	 * Returns the maximum supported width or height of a texture.
@@ -410,19 +420,34 @@ public:
 	int getMaxTextureLayers() const;
 
 	/**
+	 * Returns the maximum number of values in a texel buffer.
+	 **/
+	int getMaxTexelBufferSize() const;
+
+	/**
+	 * Returns the maximum number of bytes in a shader storage buffer.
+	 **/
+	int getMaxShaderStorageBufferSize() const;
+
+	/**
 	 * Returns the maximum supported number of simultaneous render targets.
 	 **/
 	int getMaxRenderTargets() const;
 
 	/**
-	 * Returns the maximum supported number of MSAA samples for renderbuffers.
+	 * Returns the maximum supported number of MSAA sampless.
 	 **/
-	int getMaxRenderbufferSamples() const;
+	int getMaxSamples() const;
 
 	/**
 	 * Returns the maximum number of accessible texture units.
 	 **/
 	int getMaxTextureUnits() const;
+
+	/**
+	 * Returns the maximum number of shader storage buffer bindings.
+	 **/
+	int getMaxShaderStorageBufferBindings() const;
 
 	/**
 	 * Returns the maximum point size.
@@ -448,18 +473,17 @@ public:
 	Vendor getVendor() const;
 
 	static GLenum getGLPrimitiveType(PrimitiveType type);
-	static GLenum getGLBufferType(BufferType type);
+	static GLenum getGLBufferType(BufferUsage usage);
 	static GLenum getGLIndexDataType(IndexDataType type);
-	static GLenum getGLVertexDataType(vertex::DataType type, GLboolean &normalized);
-	static GLenum getGLBufferUsage(vertex::Usage usage);
+	static GLenum getGLVertexDataType(DataFormat format, int &components, GLboolean &normalized, bool &intformat);
+	static GLenum getGLBufferDataUsage(BufferDataUsage usage);
 	static GLenum getGLTextureType(TextureType type);
-	static GLint getGLWrapMode(Texture::WrapMode wmode);
+	static GLint getGLWrapMode(SamplerState::WrapMode wmode);
 	static GLint getGLCompareMode(CompareMode mode);
 
 	static TextureFormat convertPixelFormat(PixelFormat pixelformat, bool renderbuffer, bool &isSRGB);
 	static bool isTexStorageSupported();
-	static bool isPixelFormatSupported(PixelFormat pixelformat, bool rendertarget, bool readable, bool isSRGB);
-	static bool hasTextureFilteringSupport(PixelFormat pixelformat);
+	static uint32 getPixelFormatUsageFlags(PixelFormat pixelformat);
 
 	static const char *errorString(GLenum errorcode);
 	static const char *framebufferStatusString(GLenum status);
@@ -495,9 +519,12 @@ private:
 	int max3DTextureSize;
 	int maxCubeTextureSize;
 	int maxTextureArrayLayers;
+	int maxTexelBufferSize;
+	int maxShaderStorageBufferSize;
 	int maxRenderTargets;
-	int maxRenderbufferSamples;
+	int maxSamples;
 	int maxTextureUnits;
+	int maxShaderStorageBufferBindings;
 	float maxPointSize;
 
 	bool coreProfile;
@@ -507,10 +534,12 @@ private:
 	// Tracked OpenGL state.
 	struct
 	{
-		GLuint boundBuffers[BUFFER_MAX_ENUM];
+		GLuint boundBuffers[BUFFERUSAGE_MAX_ENUM];
 
 		// Texture unit state (currently bound texture for each texture unit.)
-		std::vector<GLuint> boundTextures[TEXTURE_MAX_ENUM];
+		std::vector<GLuint> boundTextures[TEXTURE_MAX_ENUM + 1];
+
+		std::vector<GLuint> boundIndexedBuffers[BUFFERUSAGE_MAX_ENUM];
 
 		bool enableState[ENABLE_MAX_ENUM];
 
@@ -531,6 +560,8 @@ private:
 		GLuint boundFramebuffers[2];
 
 		GLuint defaultTexture[TEXTURE_MAX_ENUM];
+		GLuint defaultTexelBuffer;
+		GLuint defaultStorageBuffer;
 
 	} state;
 

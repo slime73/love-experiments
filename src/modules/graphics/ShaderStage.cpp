@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -118,6 +118,7 @@ static const TBuiltInResource defaultTBuiltInResource = {
 	/* .maxTaskWorkGroupSizeY_NV = */ 1,
 	/* .maxTaskWorkGroupSizeZ_NV = */ 1,
 	/* .maxMeshViewCountNV = */ 4,
+	/* .maxDualSourceDrawBuffersEXT = */ 1,
 	/* .limits = */ {
 		/* .nonInductiveForLoops = */ 1,
 		/* .whileLoops = */ 1,
@@ -200,6 +201,13 @@ bool ShaderStage::getConstant(const char *in, StageType &out)
 bool ShaderStage::getConstant(StageType in, const char *&out)
 {
 	return stageNames.find(in, out);
+}
+
+const char *ShaderStage::getConstant(StageType in)
+{
+	const char *name = nullptr;
+	getConstant(in, name);
+	return name;
 }
 
 StringMap<ShaderStage::StageType, ShaderStage::STAGE_MAX_ENUM>::Entry ShaderStage::stageNameEntries[] =

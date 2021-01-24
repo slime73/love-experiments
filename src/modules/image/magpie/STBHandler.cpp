@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -30,12 +30,13 @@ static void loveSTBIAssert(bool test, const char *teststr)
 }
 
 // stb_image
- #define STBI_ONLY_JPEG
+#define STBI_ONLY_JPEG
 // #define STBI_ONLY_PNG
 #define STBI_ONLY_BMP
 #define STBI_ONLY_TGA
 #define STBI_ONLY_HDR
 #define STBI_NO_STDIO
+#define STB_IMAGE_STATIC
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ASSERT(A) loveSTBIAssert((A), #A)
 #include "libraries/stb/stb_image.h"

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -72,7 +72,7 @@ int w_newTrueTypeRasterizer(lua_State *L)
 	if (lua_type(L, 1) == LUA_TNUMBER || lua_isnone(L, 1))
 	{
 		// First argument is a number: use the default TrueType font.
-		int size = (int) luaL_optinteger(L, 1, 12);
+		int size = (int) luaL_optinteger(L, 1, 13);
 
 		const char *hintstr = lua_isnoneornil(L, 2) ? nullptr : luaL_checkstring(L, 2);
 		if (hintstr && !TrueTypeRasterizer::getConstant(hintstr, hinting))

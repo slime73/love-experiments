@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -36,46 +36,6 @@ Message::Message(const std::string &name, const std::vector<Variant> &vargs)
 
 Message::~Message()
 {
-}
-
-int Message::toLua(lua_State *L)
-{
-	luax_pushstring(L, name);
-
-	for (const Variant &v : args)
-		v.toLua(L);
-
-	return (int) args.size() + 1;
-}
-
-Message *Message::fromLua(lua_State *L, int n)
-{
-	std::string name = luax_checkstring(L, n);
-	std::vector<Variant> vargs;
-
-	int count = lua_gettop(L) - n;
-	n++;
-
-	Variant varg;
-
-	for (int i = 0; i < count; i++)
-	{
-		if (lua_isnoneornil(L, n+i))
-			break;
-
-		luax_catchexcept(L, [&]() {
-			vargs.push_back(Variant::fromLua(L, n+i));
-		});
-
-		if (vargs.back().getType() == Variant::UNKNOWN)
-		{
-			vargs.clear();
-			luaL_error(L, "Argument %d can't be stored safely\nExpected boolean, number, string or userdata.", n+i);
-			return nullptr;
-		}
-	}
-
-	return new Message(name, vargs);
 }
 
 Event::~Event()

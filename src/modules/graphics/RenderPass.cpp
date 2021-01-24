@@ -182,7 +182,7 @@ void RenderPass::setShader()
 
 void RenderPass::setBlendMode(BlendMode mode, BlendAlpha alphaMode)
 {
-	setBlendState(getBlendState(mode, alphaMode));
+	setBlendState(computeBlendState(mode, alphaMode));
 }
 
 void RenderPass::setBlendState(const BlendState &blend)
@@ -311,29 +311,29 @@ void RenderPass::execute(Graphics *gfx)
 	else
 	{
 		const auto &rt = rts.getFirstTarget();
-		auto c = rt.canvas.get();
-		context.passWidth = c->getWidth(rt.mipmap);
-		context.passHeight = c->getHeight(rt.mipmap);
-		context.passPixelWidth = c->getPixelWidth(rt.mipmap);
-		context.passPixelHeight = c->getPixelHeight(rt.mipmap);
+		auto t = rt.texture.get();
+		context.passWidth = t->getWidth(rt.mipmap);
+		context.passHeight = t->getHeight(rt.mipmap);
+		context.passPixelWidth = t->getPixelWidth(rt.mipmap);
+		context.passPixelHeight = t->getPixelHeight(rt.mipmap);
 	}
 
-	if (!context.isBackbuffer && (rts.autoDepth || rts.autoStencil) && !rts.depthStencil.canvas.get())
+	if (!context.isBackbuffer && (rts.autoDepth || rts.autoStencil) && !rts.depthStencil.texture.get())
 	{
 		PixelFormat dsformat = PIXELFORMAT_STENCIL8;
 		if (rts.autoDepth && rts.autoStencil)
 			dsformat = PIXELFORMAT_DEPTH24_UNORM_STENCIL8;
-		else if (rts.autoDepth && gfx->isCanvasFormatSupported(PIXELFORMAT_DEPTH24_UNORM, false))
+		else if (rts.autoDepth && gfx->isPixelFormatSupported(PIXELFORMAT_DEPTH24_UNORM, true, false))
 			dsformat = PIXELFORMAT_DEPTH24_UNORM;
 		else if (rts.autoStencil)
 			dsformat = PIXELFORMAT_STENCIL8;
 
-		Canvas *colorcanvas = rts.colors[0].canvas.get();
+		Texture *colortex = rts.colors[0].texture.get();
 		int pixelw = context.passPixelWidth;
 		int pixelh = context.passPixelHeight;
-		int reqmsaa = colorcanvas->getRequestedMSAA();
+		int reqmsaa = colortex->getRequestedMSAA();
 
-		rts.depthStencil.canvas = gfx->getTemporaryCanvas(dsformat, pixelw, pixelh, reqmsaa);
+		rts.depthStencil.texture = gfx->getTemporaryTexture(dsformat, pixelw, pixelh, reqmsaa);
 		rts.depthStencil.beginAction = RenderPassAttachment::BEGIN_CLEAR;
 		rts.depthStencil.endAction = RenderPassAttachment::END_DISCARD;
 	}
@@ -450,13 +450,9 @@ void RenderPass::execute(Graphics *gfx)
 	for (int i = 0; i < rts.colorCount; i++)
 	{
 		const auto &rt = rts.colors[i];
-		if (rt.canvas->getMipmapMode() == Canvas::MIPMAPS_AUTO && rt.mipmap == 0)
-			rt.canvas->generateMipmaps();
+		if (rt.texture->getMipmapsMode() == Texture::MIPMAPS_AUTO && rt.mipmap == 0)
+			rt.texture->generateMipmaps();
 	}
-
-	const auto &ds = rts.depthStencil;
-	if (ds.canvas.get() && ds.canvas->getMipmapMode() == Canvas::MIPMAPS_AUTO && ds.mipmap == 0)
-		ds.canvas->generateMipmaps();
 
 	if (autoReset)
 		reset();
@@ -465,9 +461,6 @@ void RenderPass::execute(Graphics *gfx)
 RenderPass::BatchedVertexData RenderPass::requestBatchedDraw(DrawContext *context, const BatchedDrawCommand &cmd)
 {
 	// TODO: This isn't thread-safe
-
-	using namespace vertex;
-
 	BatchedDrawState &state = batchedDrawState;
 
 	bool shouldflush = false;
@@ -476,7 +469,7 @@ RenderPass::BatchedVertexData RenderPass::requestBatchedDraw(DrawContext *contex
 	if (cmd.primitiveType != state.primitiveMode
 		|| cmd.vertexFormats[0] != state.formats[0]
 		|| cmd.vertexFormats[1] != state.formats[1]
-		|| ((cmd.indexMode != TriangleIndexMode::NONE) != (state.indexCount > 0))
+		|| ((cmd.indexMode != TRIANGLEINDEX_NONE) != (state.indexCount > 0))
 		|| cmd.texture != state.texture
 		|| cmd.standardShaderType != state.standardShaderType)
 	{
@@ -486,7 +479,7 @@ RenderPass::BatchedVertexData RenderPass::requestBatchedDraw(DrawContext *contex
 	int totalvertices = state.vertexCount + cmd.vertexCount;
 
 	// We only support uint16 index buffers for now.
-	if (totalvertices > LOVE_UINT16_MAX && cmd.indexMode != TriangleIndexMode::NONE)
+	if (totalvertices > LOVE_UINT16_MAX && cmd.indexMode != TRIANGLEINDEX_NONE)
 		shouldflush = true;
 
 	int reqIndexCount = getIndexCount(cmd.indexMode, cmd.vertexCount);
@@ -515,7 +508,7 @@ RenderPass::BatchedVertexData RenderPass::requestBatchedDraw(DrawContext *contex
 		newdatasizes[i] = stride * cmd.vertexCount;
 	}
 
-	if (cmd.indexMode != TriangleIndexMode::NONE)
+	if (cmd.indexMode != TRIANGLEINDEX_NONE)
 	{
 		size_t datasize = (state.indexCount + reqIndexCount) * sizeof(uint16);
 
@@ -540,11 +533,14 @@ RenderPass::BatchedVertexData RenderPass::requestBatchedDraw(DrawContext *contex
 		state.standardShaderType = cmd.standardShaderType;
 	}
 
-	if (state.vertexCount == 0 && Shader::isDefaultActive())
-		Shader::attachDefault(state.standardShaderType);
+	if (state.vertexCount == 0)
+	{
+		if (Shader::isDefaultActive())
+			Shader::attachDefault(state.standardShaderType);
 
-	if (state.vertexCount == 0 && Shader::current != nullptr && cmd.texture != nullptr)
-		Shader::current->checkMainTexture(cmd.texture);
+		if (Shader::current != nullptr)
+			Shader::current->validateDrawState(cmd.primitiveType, cmd.texture);
+	}
 
 	if (shouldresize)
 	{
@@ -566,7 +562,7 @@ RenderPass::BatchedVertexData RenderPass::requestBatchedDraw(DrawContext *contex
 		}
 	}
 
-	if (cmd.indexMode != TriangleIndexMode::NONE)
+	if (cmd.indexMode != TRIANGLEINDEX_NONE)
 	{
 		if (state.indexBufferMap.data == nullptr)
 			state.indexBufferMap = state.indexBuffer->map(reqIndexSize);
@@ -603,14 +599,12 @@ RenderPass::BatchedVertexData RenderPass::requestBatchedDraw(DrawContext *contex
 
 void RenderPass::flushBatchedDraws(DrawContext *context)
 {
-	using namespace vertex;
-
 	auto &sbstate = batchedDrawState;
 
 	if (sbstate.vertexCount == 0 && sbstate.indexCount == 0)
 		return;
 
-	Attributes attributes;
+	VertexAttributes attributes;
 	BufferBindings buffers;
 
 	size_t usedsizes[3] = {0, 0, 0};
@@ -680,28 +674,28 @@ void RenderPass::validateRenderTargets(Graphics *gfx, const RenderPassAttachment
 {
 	const auto &caps = gfx->getCapabilities();
 	const auto &firsttarget = rts.getFirstTarget();
-	love::graphics::Canvas *firstcanvas = firsttarget.canvas;
+	love::graphics::Texture *firsttex = firsttarget.texture;
 	int ncolors = rts.colorCount;
 
-	if (firstcanvas == nullptr)
+	if (firsttex == nullptr)
 		return;
 
-	if (ncolors > caps.limits[Graphics::LIMIT_MULTI_CANVAS])
-		throw love::Exception("This system can't simultaneously render to %d canvases.", ncolors);
+	if (ncolors > caps.limits[Graphics::LIMIT_RENDER_TARGETS])
+		throw love::Exception("This system can't simultaneously render to %d textures.", ncolors);
 
-	bool multiformatsupported = caps.features[Graphics::FEATURE_MULTI_CANVAS_FORMATS];
+	bool multiformatsupported = caps.features[Graphics::FEATURE_MULTI_RENDER_TARGET_FORMATS];
 
 	PixelFormat firstcolorformat = PIXELFORMAT_UNKNOWN;
 	if (ncolors > 0)
-		firstcolorformat = rts.colors[0].canvas->getPixelFormat();
+		firstcolorformat = rts.colors[0].texture->getPixelFormat();
 
-	int pixelw = firstcanvas->getPixelWidth(firsttarget.mipmap);
-	int pixelh = firstcanvas->getPixelHeight(firsttarget.mipmap);
-	int reqmsaa = firstcanvas->getRequestedMSAA();
+	int pixelw = firsttex->getPixelWidth(firsttarget.mipmap);
+	int pixelh = firsttex->getPixelHeight(firsttarget.mipmap);
+	int reqmsaa = firsttex->getRequestedMSAA();
 
 	for (int i = 0; i < ncolors; i++)
 	{
-		love::graphics::Canvas *c = rts.colors[i].canvas;
+		love::graphics::Texture *c = rts.colors[i].texture;
 		PixelFormat format = c->getPixelFormat();
 		int mip = rts.colors[i].mipmap;
 		int slice = rts.colors[i].slice;
@@ -713,32 +707,32 @@ void RenderPass::validateRenderTargets(Graphics *gfx, const RenderPassAttachment
 			throw love::Exception("Invalid slice index: %d.", slice + 1);
 
 		if (c->getPixelWidth(mip) != pixelw || c->getPixelHeight(mip) != pixelh)
-			throw love::Exception("All canvases must have the same pixel dimensions.");
+			throw love::Exception("All render targets must have the same pixel dimensions.");
 
 		if (!multiformatsupported && format != firstcolorformat)
-			throw love::Exception("This system doesn't support multi-canvas rendering with different canvas formats.");
+			throw love::Exception("This system doesn't support multi-render-target rendering with different pixel formats.");
 
 		if (c->getRequestedMSAA() != reqmsaa)
-			throw love::Exception("All Canvases must have the same MSAA value.");
+			throw love::Exception("All textures must have the same MSAA value.");
 
 		if (isPixelFormatDepthStencil(format))
-			throw love::Exception("Depth/stencil format Canvases must be used with the 'depthstencil' field of a render pass.");
+			throw love::Exception("Depth/stencil format textures must be used with the 'depthstencil' field of a render pass.");
 	}
 
-	if (rts.depthStencil.canvas != nullptr)
+	if (rts.depthStencil.texture != nullptr)
 	{
-		love::graphics::Canvas *c = rts.depthStencil.canvas;
+		love::graphics::Texture *c = rts.depthStencil.texture;
 		int mip = rts.depthStencil.mipmap;
 		int slice = rts.depthStencil.slice;
 
 		if (!isPixelFormatDepthStencil(c->getPixelFormat()))
-			throw love::Exception("Only depth/stencil format Canvases can be used with the 'depthstencil' field of a render pass");
+			throw love::Exception("Only depth/stencil format textures can be used with the 'depthstencil' field of a render pass");
 
 		if (c->getPixelWidth(mip) != pixelw || c->getPixelHeight(mip) != pixelh)
-			throw love::Exception("All canvases must have the same pixel dimensions.");
+			throw love::Exception("All render targets must have the same pixel dimensions.");
 
-		if (c->getRequestedMSAA() != firstcanvas->getRequestedMSAA())
-			throw love::Exception("All Canvases must have the same MSAA value.");
+		if (c->getRequestedMSAA() != firsttex->getRequestedMSAA())
+			throw love::Exception("All render targets must have the same MSAA value.");
 
 		if (mip < 0 || mip >= c->getMipmapCount())
 			throw love::Exception("Invalid mipmap level %d.", mip + 1);

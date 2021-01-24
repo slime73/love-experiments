@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -80,28 +80,62 @@ float MouseJoint::getMaxForce() const
 
 void MouseJoint::setFrequency(float hz)
 {
-	// This is kind of a crappy check. The frequency is used in an internal
+	// This is kind of a crappy check. The Stiffness is used in an internal
 	// box2d calculation whose result must be > FLT_EPSILON, but other variables
 	// go into that calculation...
 	if (hz <= FLT_EPSILON * 2)
-		throw love::Exception("MouseJoint frequency must be a positive number.");
+		throw love::Exception("MouseJoint Stiffness must be a positive number.");
 
-	joint->SetFrequency(hz);
+	float stiffness, damping;
+	b2LinearStiffness(stiffness, damping, hz, getDampingRatio(), joint->GetBodyA(), joint->GetBodyB());
+	joint->SetStiffness(stiffness);
 }
 
 float MouseJoint::getFrequency() const
 {
-	return joint->GetFrequency();
+	float frequency, ratio;
+	Physics::b2LinearFrequency(frequency, ratio, joint->GetStiffness(), joint->GetDamping(), joint->GetBodyA(), joint->GetBodyB());
+	return frequency;
 }
 
-void MouseJoint::setDampingRatio(float d)
+void MouseJoint::setDampingRatio(float ratio)
 {
-	joint->SetDampingRatio(d);
+	float stiffness, damping;
+	b2LinearStiffness(stiffness, damping, getFrequency(), ratio, joint->GetBodyA(), joint->GetBodyB());
+	joint->SetDamping(damping);
 }
 
 float MouseJoint::getDampingRatio() const
 {
-	return joint->GetDampingRatio();
+	float frequency, ratio;
+	Physics::b2LinearFrequency(frequency, ratio, joint->GetStiffness(), joint->GetDamping(), joint->GetBodyA(), joint->GetBodyB());
+	return ratio;
+}
+
+void MouseJoint::setStiffness(float k)
+{
+	// This is kind of a crappy check. The Stiffness is used in an internal
+	// box2d calculation whose result must be > FLT_EPSILON, but other variables
+	// go into that calculation...
+	if (k <= FLT_EPSILON * 2)
+		throw love::Exception("MouseJoint Stiffness must be a positive number.");
+
+	joint->SetStiffness(k);
+}
+
+float MouseJoint::getStiffness() const
+{
+	return joint->GetStiffness();
+}
+
+void MouseJoint::setDamping(float d)
+{
+	joint->SetDamping(d);
+}
+
+float MouseJoint::getDamping() const
+{
+	return joint->GetDamping();
 }
 
 Body *MouseJoint::getBodyA() const

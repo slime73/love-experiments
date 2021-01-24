@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -123,6 +123,21 @@ int w_Body_getAngularVelocity(lua_State *L)
 	Body *t = luax_checkbody(L, 1);
 	lua_pushnumber(L, t->getAngularVelocity());
 	return 1;
+}
+
+int w_Body_getKinematicState(lua_State *L)
+{
+	Body *t = luax_checkbody(L, 1);
+	b2Vec2 pos_o, vel_o;
+	float a_o, da_o;
+	t->getKinematicState(pos_o, a_o, vel_o, da_o);
+	lua_pushnumber(L, pos_o.x);
+	lua_pushnumber(L, pos_o.y);
+	lua_pushnumber(L, a_o);
+	lua_pushnumber(L, vel_o.x);
+	lua_pushnumber(L, vel_o.y);
+	lua_pushnumber(L, da_o);
+	return 6;
 }
 
 int w_Body_getMass(lua_State *L)
@@ -313,6 +328,19 @@ int w_Body_setPosition(lua_State *L)
 	return 0;
 }
 
+int w_Body_setKinematicState(lua_State *L)
+{
+	Body *t = luax_checkbody(L, 1);
+	float x = (float)luaL_checknumber(L, 2);
+	float y = (float)luaL_checknumber(L, 3);
+	float a = (float)luaL_checknumber(L, 4);
+	float dx = (float)luaL_checknumber(L, 5);
+	float dy = (float)luaL_checknumber(L, 6);
+	float da = (float)luaL_checknumber(L, 7);
+	luax_catchexcept(L, [&](){ t->setKinematicState(b2Vec2(x, y), a, b2Vec2(dx, dy), da); });
+	return 0;
+}
+
 int w_Body_resetMassData(lua_State *L)
 {
 	Body *t = luax_checkbody(L, 1);
@@ -444,6 +472,13 @@ int w_Body_getLocalVector(lua_State *L)
 	return 2;
 }
 
+int w_Body_getLocalPoints(lua_State *L)
+{
+	Body *t = luax_checkbody(L, 1);
+	lua_remove(L, 1);
+	return t->getLocalPoints(L);
+}
+
 int w_Body_getLinearVelocityFromWorldPoint(lua_State *L)
 {
 	Body *t = luax_checkbody(L, 1);
@@ -490,7 +525,7 @@ int w_Body_setBullet(lua_State *L)
 int w_Body_isActive(lua_State *L)
 {
 	Body *t = luax_checkbody(L, 1);
-	luax_pushboolean(L, t->isActive());
+	luax_pushboolean(L, t->isEnabled());
 	return 1;
 }
 
@@ -520,7 +555,7 @@ int w_Body_setActive(lua_State *L)
 {
 	Body *t = luax_checkbody(L, 1);
 	bool b = luax_checkboolean(L, 2);
-	luax_catchexcept(L, [&](){ t->setActive(b); });
+	luax_catchexcept(L, [&](){ t->setEnabled(b); });
 	return 0;
 }
 
@@ -631,6 +666,7 @@ static const luaL_Reg w_Body_functions[] =
 	{ "getWorldCenter", w_Body_getWorldCenter },
 	{ "getLocalCenter", w_Body_getLocalCenter },
 	{ "getAngularVelocity", w_Body_getAngularVelocity },
+	{ "getKinematicState", w_Body_getKinematicState },
 	{ "getMass", w_Body_getMass },
 	{ "getInertia", w_Body_getInertia },
 	{ "getMassData", w_Body_getMassData },
@@ -648,6 +684,7 @@ static const luaL_Reg w_Body_functions[] =
 	{ "setAngle", w_Body_setAngle },
 	{ "setAngularVelocity", w_Body_setAngularVelocity },
 	{ "setPosition", w_Body_setPosition },
+	{ "setKinematicState", w_Body_setKinematicState },
 	{ "resetMassData", w_Body_resetMassData },
 	{ "setMassData", w_Body_setMassData },
 	{ "setMass", w_Body_setMass },
@@ -661,6 +698,7 @@ static const luaL_Reg w_Body_functions[] =
 	{ "getWorldPoints", w_Body_getWorldPoints },
 	{ "getLocalPoint", w_Body_getLocalPoint },
 	{ "getLocalVector", w_Body_getLocalVector },
+	{ "getLocalPoints", w_Body_getLocalPoints },
 	{ "getLinearVelocityFromWorldPoint", w_Body_getLinearVelocityFromWorldPoint },
 	{ "getLinearVelocityFromLocalPoint", w_Body_getLinearVelocityFromLocalPoint },
 	{ "isBullet", w_Body_isBullet },

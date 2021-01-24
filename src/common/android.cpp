@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -148,7 +148,14 @@ bool openURL(const std::string &url)
 	JNIEnv *env = (JNIEnv*) SDL_AndroidGetJNIEnv();
 	jclass activity = env->FindClass("org/love2d/android/GameActivity");
 
-	jmethodID openURL = env->GetStaticMethodID(activity, "openURL", "(Ljava/lang/String;)Z");
+	jmethodID openURL = env->GetStaticMethodID(activity, "openURLFromLOVE", "(Ljava/lang/String;)Z");
+
+	if (openURL == nullptr)
+	{
+		env->ExceptionClear();
+		openURL = env->GetStaticMethodID(activity, "openURL", "(Ljava/lang/String;)Z");
+	}
+
 	jstring url_jstring = (jstring) env->NewStringUTF(url.c_str());
 
 	jboolean result = env->CallStaticBooleanMethod(activity, openURL, url_jstring);

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -36,9 +36,6 @@ namespace thread
 
 class Channel : public love::Object
 {
-// FOR WRAPPER USE ONLY
-friend int w_Channel_performAtomic(lua_State *);
-
 public:
 
 	static love::Type type;
@@ -57,10 +54,10 @@ public:
 	bool hasRead(uint64 id) const;
 	void clear();
 
-private:
-
 	void lockMutex();
 	void unlockMutex();
+
+private:
 
 	MutexRef mutex;
 	ConditionalRef cond;

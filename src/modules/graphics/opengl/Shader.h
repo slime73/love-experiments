@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -43,10 +43,6 @@ class Shader final : public love::graphics::Shader, public Volatile
 {
 public:
 
-	/**
-	 * Creates a new Shader using a list of source codes.
-	 * Source must contain either vertex or pixel shader code, or both.
-	 **/
 	Shader(love::graphics::ShaderStage *vertex, love::graphics::ShaderStage *pixel);
 	virtual ~Shader();
 
@@ -61,13 +57,14 @@ public:
 	const UniformInfo *getUniformInfo(const std::string &name) const override;
 	const UniformInfo *getUniformInfo(BuiltinUniform builtin) const override;
 	void updateUniform(const UniformInfo *info, int count) override;
-	void sendTextures(const UniformInfo *info, Texture **textures, int count) override;
+	void sendTextures(const UniformInfo *info, love::graphics::Texture **textures, int count) override;
+	void sendBuffers(const UniformInfo *info, love::graphics::Buffer **buffers, int count) override;
 	bool hasUniform(const std::string &name) const override;
 	ptrdiff_t getHandle() const override;
-	void setVideoTextures(Texture *ytexture, Texture *cbtexture, Texture *crtexture) override;
+	void setVideoTextures(love::graphics::Texture *ytexture, love::graphics::Texture *cbtexture, love::graphics::Texture *crtexture) override;
 
-	void updatePointSize(float size);
 	void updateBuiltinUniforms(const BuiltinUniformData &data);
+	void updateBuiltinUniforms(love::graphics::Graphics *gfx, int viewportW, int viewportH);
 
 private:
 
@@ -75,22 +72,31 @@ private:
 	{
 		GLuint texture = 0;
 		TextureType type = TEXTURE_2D;
+		bool isTexelBuffer = false;
 		bool active = false;
+	};
+
+	struct BufferBinding
+	{
+		int bindingindex = 0;
+		GLuint buffer = 0;
 	};
 
 	// Map active uniform names to their locations.
 	void mapActiveUniforms();
 
 	void updateUniform(const UniformInfo *info, int count, bool internalupdate);
-	void sendTextures(const UniformInfo *info, Texture **textures, int count, bool internalupdate);
+	void sendTextures(const UniformInfo *info, love::graphics::Texture **textures, int count, bool internalupdate);
+	void sendBuffers(const UniformInfo *info, love::graphics::Buffer **buffers, int count, bool internalupdate);
 
 	int getUniformTypeComponents(GLenum type) const;
 	MatrixSize getMatrixSize(GLenum type) const;
 	UniformType getUniformBaseType(GLenum type) const;
 	TextureType getUniformTextureType(GLenum type) const;
+	DataBaseType getUniformTexelBufferType(GLenum type) const;
 	bool isDepthTextureType(GLenum type) const;
 
-	void flushStreamDraws() const;
+	void flushBatchedDraws() const;
 
 	// Get any warnings or errors generated only by the shader program object.
 	std::string getProgramWarnings() const;
@@ -110,12 +116,13 @@ private:
 	// Uniform location buffer map
 	std::map<std::string, UniformInfo> uniforms;
 
-	// Texture unit pool for setting images
+	// Texture unit pool for setting textures
 	std::vector<TextureUnit> textureUnits;
 
-	std::vector<std::pair<const UniformInfo *, int>> pendingUniformUpdates;
+	std::vector<int> storageBufferBindingIndexToActiveBinding;
+	std::vector<BufferBinding> activeStorageBufferBindings;
 
-	float lastPointSize;
+	std::vector<std::pair<const UniformInfo *, int>> pendingUniformUpdates;
 
 }; // Shader
 

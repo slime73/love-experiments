@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2020 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -113,15 +113,18 @@ void Module::registerInstance(Module *instance)
 
 	registry.insert(make_pair(name, instance));
 
-	ModuleType moduletype = instance->getModuleType();
+	ModuleType mtype = instance->getModuleType();
 
-	if (instances[moduletype] != nullptr)
+	if (mtype != M_UNKNOWN)
 	{
-		printf("Warning: overwriting module instance %s with new instance %s\n",
-			   instances[moduletype]->getName(), instance->getName());
-	}
+		if (instances[mtype] != nullptr)
+		{
+			printf("Warning: overwriting module instance %s with new instance %s\n",
+				   instances[mtype]->getName(), instance->getName());
+		}
 
-	instances[moduletype] = instance;
+		instances[mtype] = instance;
+	}
 }
 
 Module *Module::getInstance(const std::string &name)
