@@ -1099,7 +1099,7 @@ GLuint OpenGL::getCachedFBO(const CachedRenderTargets &rts)
 
 	bool hasdepthstencil = false;
 	int ncolortargets = 0;
-	GLenum drawbuffers[MAX_COLOR_RENDER_TARGETS];
+	GLenum drawbuffers[OpenGL::MAX_COLOR_RENDER_TARGETS];
 
 	auto attachRT = [&](const CachedRenderTarget &rt)
 	{
@@ -1623,7 +1623,7 @@ int OpenGL::getMaxShaderStorageBufferSize() const
 
 int OpenGL::getMaxRenderTargets() const
 {
-	return std::min(maxRenderTargets, MAX_COLOR_RENDER_TARGETS);
+	return std::min(maxRenderTargets, love::graphics::MAX_COLOR_RENDER_TARGETS);
 }
 
 int OpenGL::getMaxSamples() const

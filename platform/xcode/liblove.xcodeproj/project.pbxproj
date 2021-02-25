@@ -659,8 +659,6 @@
 		FA22EA6B22D247A600EB2397 /* RenderPass.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA22EA6922D247A600EB2397 /* RenderPass.cpp */; };
 		FA22EA6C22D247A600EB2397 /* RenderPass.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA22EA6922D247A600EB2397 /* RenderPass.cpp */; };
 		FA22EA6D22D247A600EB2397 /* RenderPass.h in Headers */ = {isa = PBXBuildFile; fileRef = FA22EA6A22D247A600EB2397 /* RenderPass.h */; };
-		FA24348421D401CB00B8918A /* pch.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA24348021D401CB00B8918A /* pch.cpp */; };
-		FA24348521D401CB00B8918A /* pch.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA24348021D401CB00B8918A /* pch.cpp */; };
 		FA24348621D401CB00B8918A /* attribute.h in Headers */ = {isa = PBXBuildFile; fileRef = FA24348121D401CB00B8918A /* attribute.h */; };
 		FA24348721D401CB00B8918A /* attribute.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA24348221D401CB00B8918A /* attribute.cpp */; };
 		FA24348821D401CB00B8918A /* attribute.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA24348221D401CB00B8918A /* attribute.cpp */; };
@@ -824,11 +822,11 @@
 		FAAA3FDA1F64B3AD00F89E99 /* lstrlib.h in Headers */ = {isa = PBXBuildFile; fileRef = FAAA3FD51F64B3AD00F89E99 /* lstrlib.h */; };
 		FAAA3FDB1F64B3AD00F89E99 /* lutf8lib.c in Sources */ = {isa = PBXBuildFile; fileRef = FAAA3FD61F64B3AD00F89E99 /* lutf8lib.c */; };
 		FAAA3FDC1F64B3AD00F89E99 /* lutf8lib.h in Headers */ = {isa = PBXBuildFile; fileRef = FAAA3FD71F64B3AD00F89E99 /* lutf8lib.h */; };
+		FAAC2F79251A9D2200BCB81B /* apple.mm in Sources */ = {isa = PBXBuildFile; fileRef = FAAC2F78251A9D2200BCB81B /* apple.mm */; };
+		FAAC2F7A251A9D2200BCB81B /* apple.mm in Sources */ = {isa = PBXBuildFile; fileRef = FAAC2F78251A9D2200BCB81B /* apple.mm */; };
 		FAAD1A5022D3FB300088D6D0 /* RenderPass.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FAAD1A4E22D3FB300088D6D0 /* RenderPass.cpp */; };
 		FAAD1A5122D3FB300088D6D0 /* RenderPass.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FAAD1A4E22D3FB300088D6D0 /* RenderPass.cpp */; };
 		FAAD1A5222D3FB300088D6D0 /* RenderPass.h in Headers */ = {isa = PBXBuildFile; fileRef = FAAD1A4F22D3FB300088D6D0 /* RenderPass.h */; };
-		FAAC2F79251A9D2200BCB81B /* apple.mm in Sources */ = {isa = PBXBuildFile; fileRef = FAAC2F78251A9D2200BCB81B /* apple.mm */; };
-		FAAC2F7A251A9D2200BCB81B /* apple.mm in Sources */ = {isa = PBXBuildFile; fileRef = FAAC2F78251A9D2200BCB81B /* apple.mm */; };
 		FAAFF04416CB11C700CCDE45 /* OpenAL-Soft.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FAAFF04316CB11C700CCDE45 /* OpenAL-Soft.framework */; };
 		FAB17BE61ABFAA9000F9BA27 /* lz4.c in Sources */ = {isa = PBXBuildFile; fileRef = FAB17BE41ABFAA9000F9BA27 /* lz4.c */; };
 		FAB17BE71ABFAA9000F9BA27 /* lz4.c in Sources */ = {isa = PBXBuildFile; fileRef = FAB17BE41ABFAA9000F9BA27 /* lz4.c */; };
@@ -1049,6 +1047,9 @@
 		FAD19A181DFF8CA200D5398A /* ImageDataBase.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FAD19A151DFF8CA200D5398A /* ImageDataBase.cpp */; };
 		FAD19A191DFF8CA200D5398A /* ImageDataBase.h in Headers */ = {isa = PBXBuildFile; fileRef = FAD19A161DFF8CA200D5398A /* ImageDataBase.h */; };
 		FAD43ECC1FF312D800831BB8 /* freetype.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FAD43ECB1FF312D800831BB8 /* freetype.framework */; };
+		FADB447F25E720A100430D2A /* wrap_RenderPass.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FADB447D25E720A100430D2A /* wrap_RenderPass.cpp */; };
+		FADB448025E720A100430D2A /* wrap_RenderPass.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FADB447D25E720A100430D2A /* wrap_RenderPass.cpp */; };
+		FADB448125E720A100430D2A /* wrap_RenderPass.h in Headers */ = {isa = PBXBuildFile; fileRef = FADB447E25E720A100430D2A /* wrap_RenderPass.h */; };
 		FADF53F81E3C7ACD00012CC0 /* Buffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FADF53F61E3C7ACD00012CC0 /* Buffer.cpp */; };
 		FADF53F91E3C7ACD00012CC0 /* Buffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FADF53F61E3C7ACD00012CC0 /* Buffer.cpp */; };
 		FADF53FA1E3C7ACD00012CC0 /* Buffer.h in Headers */ = {isa = PBXBuildFile; fileRef = FADF53F71E3C7ACD00012CC0 /* Buffer.h */; };
@@ -1718,7 +1719,6 @@
 		FA1E88821DF363DB00E808AA /* Filter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Filter.h; sourceTree = "<group>"; };
 		FA22EA6922D247A600EB2397 /* RenderPass.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = RenderPass.cpp; sourceTree = "<group>"; };
 		FA22EA6A22D247A600EB2397 /* RenderPass.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RenderPass.h; sourceTree = "<group>"; };
-		FA24348021D401CB00B8918A /* pch.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = pch.cpp; sourceTree = "<group>"; };
 		FA24348121D401CB00B8918A /* attribute.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = attribute.h; sourceTree = "<group>"; };
 		FA24348221D401CB00B8918A /* attribute.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = attribute.cpp; sourceTree = "<group>"; };
 		FA24348321D401CB00B8918A /* pch.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = pch.h; sourceTree = "<group>"; };
@@ -1835,10 +1835,10 @@
 		FAAA3FD51F64B3AD00F89E99 /* lstrlib.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = lstrlib.h; sourceTree = "<group>"; };
 		FAAA3FD61F64B3AD00F89E99 /* lutf8lib.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = lutf8lib.c; sourceTree = "<group>"; };
 		FAAA3FD71F64B3AD00F89E99 /* lutf8lib.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = lutf8lib.h; sourceTree = "<group>"; };
-		FAAD1A4E22D3FB300088D6D0 /* RenderPass.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = RenderPass.cpp; sourceTree = "<group>"; };
-		FAAD1A4F22D3FB300088D6D0 /* RenderPass.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RenderPass.h; sourceTree = "<group>"; };
 		FAAC2F78251A9D2200BCB81B /* apple.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = apple.mm; sourceTree = "<group>"; };
 		FAAC2F7F251A9D3E00BCB81B /* apple.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = apple.h; sourceTree = "<group>"; };
+		FAAD1A4E22D3FB300088D6D0 /* RenderPass.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = RenderPass.cpp; sourceTree = "<group>"; };
+		FAAD1A4F22D3FB300088D6D0 /* RenderPass.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RenderPass.h; sourceTree = "<group>"; };
 		FAAFF04316CB11C700CCDE45 /* OpenAL-Soft.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "OpenAL-Soft.framework"; path = "/Library/Frameworks/OpenAL-Soft.framework"; sourceTree = "<absolute>"; };
 		FAB17BE41ABFAA9000F9BA27 /* lz4.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = lz4.c; sourceTree = "<group>"; };
 		FAB17BE51ABFAA9000F9BA27 /* lz4.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = lz4.h; sourceTree = "<group>"; };
@@ -2001,6 +2001,8 @@
 		FAD19A151DFF8CA200D5398A /* ImageDataBase.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ImageDataBase.cpp; sourceTree = "<group>"; };
 		FAD19A161DFF8CA200D5398A /* ImageDataBase.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ImageDataBase.h; sourceTree = "<group>"; };
 		FAD43ECB1FF312D800831BB8 /* freetype.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = freetype.framework; path = /Library/Frameworks/freetype.framework; sourceTree = "<absolute>"; };
+		FADB447D25E720A100430D2A /* wrap_RenderPass.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = wrap_RenderPass.cpp; sourceTree = "<group>"; };
+		FADB447E25E720A100430D2A /* wrap_RenderPass.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = wrap_RenderPass.h; sourceTree = "<group>"; };
 		FADF53F61E3C7ACD00012CC0 /* Buffer.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Buffer.cpp; sourceTree = "<group>"; };
 		FADF53F71E3C7ACD00012CC0 /* Buffer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Buffer.h; sourceTree = "<group>"; };
 		FADF53FB1E3D74F200012CC0 /* Text.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Text.cpp; sourceTree = "<group>"; };
@@ -2737,6 +2739,8 @@
 				FADF541F1E3DA52C00012CC0 /* wrap_ParticleSystem.h */,
 				FA620A2E1AA2F8DB005DB4C2 /* wrap_Quad.cpp */,
 				FA620A2F1AA2F8DB005DB4C2 /* wrap_Quad.h */,
+				FADB447D25E720A100430D2A /* wrap_RenderPass.cpp */,
+				FADB447E25E720A100430D2A /* wrap_RenderPass.h */,
 				FA1BA0B51E17043400AA2803 /* wrap_Shader.cpp */,
 				FA1BA0B61E17043400AA2803 /* wrap_Shader.h */,
 				FADF54321E3DAE6E00012CC0 /* wrap_SpriteBatch.cpp */,
@@ -4087,6 +4091,7 @@
 				FA4F2BB11DE1E37B00CA37D7 /* RecordingDevice.h in Headers */,
 				FA0B7E2C1A95902C000E1D17 /* RevoluteJoint.h in Headers */,
 				FA8951A41AA2EDF300EC385A /* wrap_Event.h in Headers */,
+				FADB448125E720A100430D2A /* wrap_RenderPass.h in Headers */,
 				FA0B7B2A1A958EA3000E1D17 /* simplexnoise1234.h in Headers */,
 				FA9D53AE1F5307E900125C6B /* Deprecations.h in Headers */,
 				FA0B7ADC1A958EA3000E1D17 /* glad.hpp in Headers */,
@@ -4315,6 +4320,7 @@
 				FAE64A872071363100BC7981 /* physfs_archiver_slb.c in Sources */,
 				FAF6C9E723C2DE2900D7B5BC /* SpvBuilder.cpp in Sources */,
 				FA0B7DD11A95902C000E1D17 /* love.cpp in Sources */,
+				FADB448025E720A100430D2A /* wrap_RenderPass.cpp in Sources */,
 				FABDA9B42552448300B5C523 /* b2_prismatic_joint.cpp in Sources */,
 				FA15DFAF1F9B8D390042AB22 /* lstrlib.c in Sources */,
 				FA0B7AB61A958EA3000E1D17 /* ddsparse.cpp in Sources */,
@@ -4496,7 +4502,6 @@
 				FABDA9AC2552448300B5C523 /* b2_world.cpp in Sources */,
 				FA0B7DDD1A95902C000E1D17 /* wrap_BezierCurve.cpp in Sources */,
 				FA0A3A6123366CE9001C269E /* floattypes.cpp in Sources */,
-				FA0B7A811A958EA3000E1D17 /* b2EdgeAndCircleContact.cpp in Sources */,
 				FA0B7D071A95902C000E1D17 /* wrap_File.cpp in Sources */,
 				FABDA9D52552448300B5C523 /* b2_block_allocator.cpp in Sources */,
 				FA6A2B751F60B6710074C308 /* ByteData.cpp in Sources */,
@@ -4713,6 +4718,7 @@
 				FA0B7ED81A95902D000E1D17 /* wrap_Timer.cpp in Sources */,
 				FAF1407C1E20934C00F898D2 /* linkValidate.cpp in Sources */,
 				FAF6C9DC23C2DE2900D7B5BC /* SpvPostProcess.cpp in Sources */,
+				FADB447F25E720A100430D2A /* wrap_RenderPass.cpp in Sources */,
 				FABDA9B32552448300B5C523 /* b2_prismatic_joint.cpp in Sources */,
 				FA0B7DD01A95902C000E1D17 /* love.cpp in Sources */,
 				FA0B7D211A95902C000E1D17 /* Rasterizer.cpp in Sources */,

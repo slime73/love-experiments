@@ -18,29 +18,27 @@
  * 3. This notice may not be removed or altered from any source distribution.
  **/
 
-#pragma once
-
-// LOVE
-#include "common/config.h"
-#include "wrap_Font.h"
-#include "wrap_Texture.h"
-#include "wrap_Quad.h"
-#include "wrap_SpriteBatch.h"
-#include "wrap_ParticleSystem.h"
-#include "wrap_Shader.h"
-#include "wrap_Mesh.h"
-#include "wrap_Text.h"
-#include "wrap_Video.h"
-#include "wrap_Buffer.h"
 #include "wrap_RenderPass.h"
-#include "Graphics.h"
 
 namespace love
 {
 namespace graphics
 {
 
-extern "C" LOVE_EXPORT int luaopen_love_graphics(lua_State *L);
+RenderPass *luax_checkrenderpass(lua_State *L, int idx)
+{
+	return luax_checktype<RenderPass>(L, idx);
+}
+
+static const luaL_Reg w_RenderPass_functions[] =
+{
+	{ nullptr, nullptr }
+};
+
+extern "C" int luaopen_renderpass(lua_State *L)
+{
+	return luax_register_type(L, &RenderPass::type, w_RenderPass_functions, nullptr);
+}
 
 } // graphics
 } // love

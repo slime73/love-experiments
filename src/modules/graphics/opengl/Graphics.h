@@ -61,6 +61,7 @@ public:
 
 	love::graphics::Texture *newTexture(const Texture::Settings &settings, const Texture::Slices *data = nullptr) override;
 	love::graphics::Buffer *newBuffer(const Buffer::Settings &settings, const std::vector<Buffer::DataDeclaration> &format, const void *data, size_t size, size_t arraylength) override;
+	love::graphics::RenderPass *newRenderPass(const RenderPassAttachments &attachments) override;
 
 	void setViewportSize(int width, int height, int pixelwidth, int pixelheight) override;
 	bool setMode(int width, int height, int pixelwidth, int pixelheight, bool windowhasstencil, int msaa) override;

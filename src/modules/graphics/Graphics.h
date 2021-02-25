@@ -60,6 +60,8 @@ class ParticleSystem;
 class Text;
 class Video;
 class Buffer;
+class RenderPass;
+struct RenderPassAttachments;
 
 typedef Optional<Colorf> OptionalColorf;
 
@@ -445,6 +447,8 @@ public:
 	Mesh *newMesh(const std::vector<Mesh::BufferAttribute> &attributes, PrimitiveType drawmode);
 
 	Text *newText(Font *font, const std::vector<Font::ColoredString> &text = {});
+
+	virtual RenderPass *newRenderPass(const RenderPassAttachments &attachments) = 0;
 
 	bool validateShader(bool gles, const std::vector<std::string> &stages, std::string &err);
 

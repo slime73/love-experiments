@@ -504,6 +504,8 @@ set(LOVE_SRC_MODULE_GRAPHICS_ROOT
 	src/modules/graphics/Polyline.h
 	src/modules/graphics/Quad.cpp
 	src/modules/graphics/Quad.h
+	src/modules/graphics/RenderPass.cpp
+	src/modules/graphics/RenderPass.h
 	src/modules/graphics/renderstate.cpp
 	src/modules/graphics/renderstate.h
 	src/modules/graphics/Resource.h
@@ -537,6 +539,8 @@ set(LOVE_SRC_MODULE_GRAPHICS_ROOT
 	src/modules/graphics/wrap_ParticleSystem.h
 	src/modules/graphics/wrap_Quad.cpp
 	src/modules/graphics/wrap_Quad.h
+	src/modules/graphics/wrap_RenderPass.cpp
+	src/modules/graphics/wrap_RenderPass.h
 	src/modules/graphics/wrap_Shader.cpp
 	src/modules/graphics/wrap_Shader.h
 	src/modules/graphics/wrap_SpriteBatch.cpp
@@ -558,6 +562,8 @@ set(LOVE_SRC_MODULE_GRAPHICS_OPENGL
 	src/modules/graphics/opengl/Graphics.h
 	src/modules/graphics/opengl/OpenGL.cpp
 	src/modules/graphics/opengl/OpenGL.h
+	src/modules/graphics/opengl/RenderPass.cpp
+	src/modules/graphics/opengl/RenderPass.h
 	src/modules/graphics/opengl/Shader.cpp
 	src/modules/graphics/opengl/Shader.h
 	src/modules/graphics/opengl/ShaderStage.cpp

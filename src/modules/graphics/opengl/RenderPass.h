@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2021 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -34,7 +34,7 @@ class RenderPass : public love::graphics::RenderPass
 {
 public:
 
-	RenderPass(Graphics *gfx, const RenderPassAttachments &rts);
+	RenderPass(love::graphics::Graphics *gfx, const RenderPassAttachments &rts);
 	virtual ~RenderPass();
 
 	void applyState(DrawContext *context) override;

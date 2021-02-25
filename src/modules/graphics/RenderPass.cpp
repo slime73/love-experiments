@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2006-2019 LOVE Development Team
+ * Copyright (c) 2006-2021 LOVE Development Team
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -61,7 +61,7 @@ T *RenderPass::addCommand(CommandType type, size_t size, size_t alignment)
 
 	if (currentOffset + size > dataSize)
 	{
-		size_t newSize = std::max(dataSize * 2, currentOffset + size);
+		size_t newSize = std::max(dataSize * 2, (currentOffset + size) * 3 / 2);
 		uint8 *newData = (uint8 *) realloc(data, newSize);
 		if (newData == nullptr)
 			return nullptr;
@@ -358,12 +358,14 @@ void RenderPass::execute(Graphics *gfx)
 		}
 		case COMMAND_DRAW_LAYER:
 		{
-			// TODO
+			const auto c = read<CommandDrawLayer>(data, cmd.offset);
+			c->texture->drawLayer(gfx, c->layer, c->transform);
 			break;
 		}
 		case COMMAND_DRAW_QUAD_LAYER:
 		{
-			// TODO
+			const auto c = read<CommandDrawQuadLayer>(data, cmd.offset);
+			c->texture->drawLayer(gfx, c->layer, c->quad, c->transform);
 			break;
 		}
 		case COMMAND_DRAW_MESH_INSTANCED:

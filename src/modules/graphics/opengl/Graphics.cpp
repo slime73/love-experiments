@@ -30,6 +30,7 @@
 #include "window/Window.h"
 #include "Buffer.h"
 #include "ShaderStage.h"
+#include "RenderPass.h"
 
 #include "libraries/xxHash/xxhash.h"
 
@@ -163,6 +164,11 @@ love::graphics::Shader *Graphics::newShaderInternal(love::graphics::ShaderStage 
 love::graphics::Buffer *Graphics::newBuffer(const Buffer::Settings &settings, const std::vector<Buffer::DataDeclaration> &format, const void *data, size_t size, size_t arraylength)
 {
 	return new Buffer(this, settings, format, data, size, arraylength);
+}
+
+love::graphics::RenderPass *Graphics::newRenderPass(const RenderPassAttachments &attachments)
+{
+	return new RenderPass(this, attachments);
 }
 
 void Graphics::setViewportSize(int width, int height, int pixelwidth, int pixelheight)

@@ -2040,6 +2040,20 @@ int w_newText(lua_State *L)
 	return 1;
 }
 
+int w_newRenderPass(lua_State *L)
+{
+	luax_checkgraphicscreated(L);
+
+	RenderPassAttachments attachments;
+
+	RenderPass *renderpass = nullptr;
+	luax_catchexcept(L, [&](){ renderpass = instance()->newRenderPass(attachments); });
+
+	luax_pushtype(L, renderpass);
+	renderpass->release();
+	return 1;
+}
+
 int w_newVideo(lua_State *L)
 {
 	luax_checkgraphicscreated(L);
@@ -3410,6 +3424,7 @@ static const luaL_Reg functions[] =
 	{ "newIndexBuffer", w_newIndexBuffer },
 	{ "newMesh", w_newMesh },
 	{ "newText", w_newText },
+	{ "newRenderPass", w_newRenderPass },
 	{ "_newVideo", w_newVideo },
 
 	{ "validateShader", w_validateShader },
@@ -3546,6 +3561,7 @@ static const lua_CFunction types[] =
 	luaopen_mesh,
 	luaopen_text,
 	luaopen_video,
+	luaopen_renderpass,
 	0
 };
 
