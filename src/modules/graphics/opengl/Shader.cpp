@@ -36,6 +36,15 @@ namespace graphics
 namespace opengl
 {
 
+static void checkActiveProgram(GLint expectedprogram, const char *prefix)
+{
+	GLint activeprogram = 0;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &activeprogram);
+
+	if (activeprogram != expectedprogram)
+		printf("Problem when calling %s: active opengl shader id (%d) is different from the expected active shader id (%d)\n", prefix, activeprogram, expectedprogram);
+}
+
 Shader::Shader(love::graphics::ShaderStage *vertex, love::graphics::ShaderStage *pixel)
 	: love::graphics::Shader(vertex, pixel)
 	, program(0)
@@ -151,6 +160,11 @@ void Shader::mapActiveUniforms()
 			u.dataSize = oldu->second.dataSize;
 			u.textures = oldu->second.textures;
 
+			if (u.baseType == UNIFORM_SAMPLER)
+			{
+				printf("    shader id %d: re-setting texture name %s to unit %d\n", program, u.name.c_str(), u.ints[0]);
+			}
+
 			updateUniform(&u, u.count, true);
 		}
 		else
@@ -194,6 +208,10 @@ void Shader::mapActiveUniforms()
 
 					for (int i = 0; i < u.count; i++)
 						u.ints[i] = startunit + i;
+
+					printf("    shader id %d: initializing texture name %s to unit %d\n", program, u.name.c_str(), startunit);
+
+					checkActiveProgram(program, "Shader::mapActiveUniforms");
 
 					glUniform1iv(u.location, u.count, u.ints);
 
@@ -320,6 +338,8 @@ bool Shader::loadVolatile()
 
 	program = glCreateProgram();
 
+	printf("    created opengl shader id %d\n", program);
+
 	if (program == 0)
 		throw love::Exception("Cannot create shader program object.");
 
@@ -346,6 +366,7 @@ bool Shader::loadVolatile()
 	{
 		std::string warnings = getProgramWarnings();
 		glDeleteProgram(program);
+		printf("    deleted opengl shader id %d\n", program);
 		program = 0;
 		throw love::Exception("Cannot link shader program object:\n%s", warnings.c_str());
 	}
@@ -381,6 +402,7 @@ void Shader::unloadVolatile()
 			gl.useProgram(0);
 
 		glDeleteProgram(program);
+		printf("    deleted opengl shader id %d\n", program);
 		program = 0;
 	}
 
@@ -495,6 +517,8 @@ void Shader::updateUniform(const UniformInfo *info, int count, bool internalupda
 
 	int location = info->location;
 	UniformType type = info->baseType;
+
+	checkActiveProgram(program, "Shader::updateUniform");
 
 	if (type == UNIFORM_FLOAT)
 	{
@@ -733,6 +757,8 @@ void Shader::updateScreenParams()
 		params[3] = (GLfloat) view.h;
 	}
 
+	checkActiveProgram(program, "Shader::updateScreenParams");
+
 	GLint location = builtinUniforms[BUILTIN_SCREEN_SIZE];
 	if (location >= 0)
 		glUniform4fv(location, 1, params);
@@ -745,6 +771,8 @@ void Shader::updatePointSize(float size)
 {
 	if (size == lastPointSize || current != this)
 		return;
+
+	checkActiveProgram(program, "Shader::updatePointSize");
 
 	GLint location = builtinUniforms[BUILTIN_POINT_SIZE];
 	if (location >= 0)
@@ -806,6 +834,7 @@ void Shader::updateBuiltinUniforms()
 		GLint location = builtinUniforms[BUILTIN_MATRIX_CLIP_FROM_LOCAL];
 		if (location >= 0)
 		{
+			checkActiveProgram(program, "Shader::updateBuiltinUniforms");
 			Matrix4 tp_matrix(curproj, curxform);
 			glUniformMatrix4fv(location, 1, GL_FALSE, tp_matrix.getElements());
 		}
