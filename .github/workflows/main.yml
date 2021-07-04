@@ -50,8 +50,8 @@ jobs:
       uses: actions/checkout@v2
       with:
         path: megasource
-        repository: love2d/megasource
-        ref: 12.x
+        repository: slime73/megasource
+        ref: luajit-verbose
     - name: Checkout
       uses: actions/checkout@v2
       with:
