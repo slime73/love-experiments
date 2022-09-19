@@ -37,6 +37,7 @@ end
 
 local no_game_code = false
 local invalid_game_path = nil
+local main_file = "main.lua"
 
 -- This can't be overridden.
 function love.boot()
@@ -80,6 +81,9 @@ function love.boot()
 
 	love.setDeprecationOutput(not love.filesystem.isFused())
 
+	main_file = "main.lua"
+	local custom_main_file = false
+
 	local identity = ""
 	if not can_has_game and o.game.set and o.game.arg[1] then
 		local nouri = o.game.arg[1]
@@ -89,6 +93,14 @@ function love.boot()
 		end
 
 		local full_source = love.path.getFull(nouri)
+		local source_leaf = love.path.leaf(full_source)
+
+		if source_leaf:match("%.lua$") then
+			main_file = source_leaf
+			custom_main_file = true
+			full_source = love.path.getFull(full_source:sub(1, -(#source_leaf + 1)))
+		end
+
 		can_has_game = pcall(love.filesystem.setSource, full_source)
 
 		if not can_has_game then
@@ -104,7 +116,7 @@ function love.boot()
 
 	-- Try to use the archive containing main.lua as the identity name. It
 	-- might not be available, in which case the fallbacks above are used.
-	local realdir = love.filesystem.getRealDirectory("main.lua")
+	local realdir = love.filesystem.getRealDirectory(main_file)
 	if realdir then
 		identity = love.path.leaf(realdir)
 	end
@@ -118,7 +130,7 @@ function love.boot()
 	-- before the save directory (the identity should be appended.)
 	pcall(love.filesystem.setIdentity, identity, true)
 
-	if can_has_game and not (love.filesystem.getInfo("main.lua") or love.filesystem.getInfo("conf.lua")) then
+	if can_has_game and not (love.filesystem.getInfo(main_file) or (not custom_main_file and love.filesystem.getInfo("conf.lua"))) then
 		no_game_code = true
 	end
 
@@ -145,7 +157,7 @@ function love.init()
 			minheight = 1,
 			fullscreen = false,
 			fullscreentype = "desktop",
-			display = 1,
+			displayindex = 1,
 			vsync = 1,
 			msaa = 0,
 			borderless = false,
@@ -184,6 +196,8 @@ function love.init()
 		accelerometerjoystick = true, -- Only relevant for Android / iOS.
 		gammacorrect = false,
 		highdpi = false,
+		renderers = nil,
+		excluderenderers = nil,
 	}
 
 	-- Console hack, part 1.
@@ -219,6 +233,45 @@ function love.init()
 
 	if love._setGammaCorrect then
 		love._setGammaCorrect(c.gammacorrect)
+	end
+
+	if love._setRenderers then
+		local renderers = love._getDefaultRenderers()
+		if type(c.renderers) == "table" then
+			renderers = {}
+			for i,v in ipairs(c.renderers) do
+				renderers[i] = v
+			end
+		end
+
+		if love.arg.options.renderers.set then
+			local renderersstr = love.arg.options.renderers.arg[1]
+			renderers = {}
+			for r in renderersstr:gmatch("[^,]+") do
+				table.insert(renderers, r)
+			end
+		end
+		local excluderenderers = c.excluderenderers
+		if love.arg.options.excluderenderers.set then
+			local excludestr = love.arg.options.excluderenderers.arg[1]
+			excluderenderers = {}
+			for r in excludestr:gmatch("[^,]+") do
+				table.insert(excluderenderers, r)
+			end
+		end
+
+		if type(excluderenderers) == "table" then
+			for i,v in ipairs(excluderenderers) do
+				for j=#renderers, 1, -1 do
+					if renderers[j] == v then
+						table.remove(renderers, j)
+						break
+					end
+				end
+			end
+		end
+
+		love._setRenderers(renderers)
 	end
 
 	if love._setHighDPIAllowed then
@@ -321,13 +374,16 @@ function love.init()
 	if love.filesystem then
 		love.filesystem._setAndroidSaveExternal(c.externalstorage)
 		love.filesystem.setIdentity(c.identity or love.filesystem.getIdentity(), c.appendidentity)
-		if love.filesystem.getInfo("main.lua") then
-			require("main")
+		if love.filesystem.getInfo(main_file) then
+			require(main_file:gsub("%.lua$", ""))
 		end
 	end
 
 	if no_game_code then
-		error("No code to run\nYour game might be packaged incorrectly.\nMake sure main.lua is at the top level of the zip.")
+		local opts = love.arg.options
+		local gamepath = opts.game.set and opts.game.arg[1] or ""
+		local gamestr = gamepath == "" and "" or " at "..gamepath
+		error("No code to run"..gamestr.."\nYour game might be packaged incorrectly.\nMake sure "..main_file.." is at the top level of the zip or folder.")
 	elseif invalid_game_path then
 		error("Cannot load game at path '" .. invalid_game_path .. "'.\nMake sure a folder exists at the specified path.")
 	end

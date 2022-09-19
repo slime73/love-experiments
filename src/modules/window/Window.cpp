@@ -28,8 +28,13 @@ namespace window
 
 static bool highDPIAllowed = false;
 
+// TODO: find a cleaner way to do this...
+// The window backend (e.g. love.window.sdl) is expected to implement this.
+void setHighDPIAllowedImplementation(bool enable);
+
 void setHighDPIAllowed(bool enable)
 {
+	setHighDPIAllowedImplementation(enable);
 	highDPIAllowed = enable;
 }
 
@@ -114,6 +119,7 @@ StringMap<Window::Setting, Window::SETTING_MAX_ENUM>::Entry Window::settingEntri
 	{"minheight", SETTING_MIN_HEIGHT},
 	{"borderless", SETTING_BORDERLESS},
 	{"centered", SETTING_CENTERED},
+	{"displayindex", SETTING_DISPLAYINDEX},
 	{"display", SETTING_DISPLAY},
 	{"highdpi", SETTING_HIGHDPI},
 	{"usedpiscale", SETTING_USE_DPISCALE},

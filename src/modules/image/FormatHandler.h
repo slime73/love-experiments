@@ -43,6 +43,7 @@ public:
 	{
 		ENCODED_TGA,
 		ENCODED_PNG,
+		ENCODED_EXR,
 		ENCODED_MAX_ENUM
 	};
 
@@ -107,7 +108,7 @@ public:
 	 *
 	 * @return The single block of memory containing the parsed images.
 	 **/
-	virtual StrongRef<CompressedMemory> parseCompressed(Data *filedata,
+	virtual StrongRef<ByteData> parseCompressed(Data *filedata,
 	        std::vector<StrongRef<CompressedSlice>> &images,
 	        PixelFormat &format, bool &sRGB);
 
@@ -115,6 +116,11 @@ public:
 	 * Frees raw pixel memory allocated by the format handler.
 	 **/
 	virtual void freeRawPixels(unsigned char *mem);
+
+	/**
+	 * Frees encoded image memory allocated by the format handler.
+	 **/
+	virtual void freeEncodedImage(unsigned char *mem);
 
 }; // FormatHandler
 

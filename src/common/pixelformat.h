@@ -60,7 +60,9 @@ enum PixelFormat
 
 	// 4-channel normal formats
 	PIXELFORMAT_RGBA8_UNORM,
-	PIXELFORMAT_sRGBA8_UNORM,
+	PIXELFORMAT_RGBA8_UNORM_sRGB,
+	PIXELFORMAT_BGRA8_UNORM,
+	PIXELFORMAT_BGRA8_UNORM_sRGB,
 	PIXELFORMAT_RGBA8_INT,
 	PIXELFORMAT_RGBA8_UINT,
 	PIXELFORMAT_RGBA16_UNORM,
@@ -156,9 +158,19 @@ bool getConstant(const char *in, PixelFormat &out);
 const PixelFormatInfo &getPixelFormatInfo(PixelFormat format);
 
 /**
+ * Gets the name of the specified pixel format.
+ **/
+const char *getPixelFormatName(PixelFormat format);
+
+/**
  * Gets whether the specified pixel format is a compressed type.
  **/
 bool isPixelFormatCompressed(PixelFormat format);
+
+/**
+ * Gets whether the specified pixel format is a color type.
+ **/
+bool isPixelFormatColor(PixelFormat format);
 
 /**
  * Gets whether the specified pixel format is a depth or stencil type.
@@ -174,6 +186,11 @@ bool isPixelFormatDepth(PixelFormat format);
  * Gets whether the specified pixel format is a stencil type.
  **/
 bool isPixelFormatStencil(PixelFormat format);
+
+/**
+ * Gets whether the specified color pixel format is sRGB-encoded.
+ **/
+bool isPixelFormatSRGB(PixelFormat format);
 
 /**
  * Gets whether the specified pixel format is a signed or unsigned integer type.

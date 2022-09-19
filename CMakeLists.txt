@@ -34,7 +34,12 @@ set(CMAKE_MODULE_PATH "${love_SOURCE_DIR}/extra/cmake" ${CMAKE_MODULE_PATH})
 # Needed for shared libs on Linux. (-fPIC).
 set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
 
-set (CMAKE_CXX_STANDARD 11)
+set (CMAKE_CXX_STANDARD 17)
+
+if(APPLE)
+	message(WARNING "CMake is not an officially supported build system for love on Apple platforms.")
+	message(WARNING "Use the prebuilt .app or the xcode project in platform/xcode/ instead.")
+endif()
 
 if(MSVC)
 	set(LOVE_CONSOLE_EXE_NAME lovec)
@@ -48,11 +53,15 @@ else()
 	set(LOVE_TARGET_PLATFORM x86)
 endif()
 
-option(LOVE_JIT "Use LuaJIT" TRUE)
+if(APPLE)
+	option(LOVE_JIT "Use LuaJIT" FALSE)
+else()
+	option(LOVE_JIT "Use LuaJIT" TRUE)
+endif()
 
 if(LOVE_JIT)
 	if(APPLE)
-		message(FATAL_ERROR "JIT not supported yet on Mac. Please use -DLOVE_JIT=0.")
+		message(WARNING "JIT not supported yet on Mac.")
 	endif()
 	message(STATUS "LuaJIT: Enabled")
 else()
@@ -235,6 +244,8 @@ endfunction()
 #
 
 set(LOVE_SRC_COMMON
+	src/common/android.cpp
+	src/common/android.h
 	src/common/b64.cpp
 	src/common/b64.h
 	src/common/Color.h
@@ -287,6 +298,9 @@ if (APPLE)
 	set(LOVE_SRC_COMMON ${LOVE_SRC_COMMON}
 		src/common/macosx.mm
 	)
+	set(LOVE_LINK_LIBRARIES ${LOVE_LINK_LIBRARIES} objc)
+	set(LOVE_LINK_LIBRARIES ${LOVE_LINK_LIBRARIES} "-framework CoreFoundation")
+	set(LOVE_LINK_LIBRARIES ${LOVE_LINK_LIBRARIES} "-framework AppKit")
 endif()
 
 source_group("common" FILES ${LOVE_SRC_COMMON})
@@ -361,6 +375,8 @@ set(LOVE_SRC_MODULE_DATA
 	src/modules/data/Compressor.h
 	src/modules/data/DataModule.cpp
 	src/modules/data/DataModule.h
+	src/modules/data/DataStream.cpp
+	src/modules/data/DataStream.h
 	src/modules/data/DataView.cpp
 	src/modules/data/DataView.h
 	src/modules/data/HashFunction.cpp
@@ -496,6 +512,8 @@ set(LOVE_SRC_MODULE_GRAPHICS_ROOT
 	src/modules/graphics/Font.h
 	src/modules/graphics/Graphics.cpp
 	src/modules/graphics/Graphics.h
+	src/modules/graphics/GraphicsReadback.cpp
+	src/modules/graphics/GraphicsReadback.h
 	src/modules/graphics/Mesh.cpp
 	src/modules/graphics/Mesh.h
 	src/modules/graphics/ParticleSystem.cpp
@@ -531,6 +549,8 @@ set(LOVE_SRC_MODULE_GRAPHICS_ROOT
 	src/modules/graphics/wrap_Font.h
 	src/modules/graphics/wrap_Graphics.cpp
 	src/modules/graphics/wrap_Graphics.h
+	src/modules/graphics/wrap_GraphicsReadback.cpp
+	src/modules/graphics/wrap_GraphicsReadback.h
 	src/modules/graphics/wrap_Mesh.cpp
 	src/modules/graphics/wrap_Mesh.h
 	src/modules/graphics/wrap_ParticleSystem.cpp
@@ -556,6 +576,8 @@ set(LOVE_SRC_MODULE_GRAPHICS_OPENGL
 	src/modules/graphics/opengl/FenceSync.h
 	src/modules/graphics/opengl/Graphics.cpp
 	src/modules/graphics/opengl/Graphics.h
+	src/modules/graphics/opengl/GraphicsReadback.cpp
+	src/modules/graphics/opengl/GraphicsReadback.h
 	src/modules/graphics/opengl/OpenGL.cpp
 	src/modules/graphics/opengl/OpenGL.h
 	src/modules/graphics/opengl/Shader.cpp
@@ -879,8 +901,6 @@ set(LOVE_SRC_MODULE_SOUND_ROOT
 set(LOVE_SRC_MODULE_SOUND_LULLABY
 	src/modules/sound/lullaby/FLACDecoder.cpp
 	src/modules/sound/lullaby/FLACDecoder.h
-	src/modules/sound/lullaby/GmeDecoder.cpp
-	src/modules/sound/lullaby/GmeDecoder.h
 	src/modules/sound/lullaby/ModPlugDecoder.cpp
 	src/modules/sound/lullaby/ModPlugDecoder.h
 	src/modules/sound/lullaby/MP3Decoder.h
@@ -1246,8 +1266,8 @@ set(LOVE_SRC_3P_GLSLANG_GLSLANG_INCLUDE
 	src/libraries/glslang/glslang/Include/intermediate.h
 	src/libraries/glslang/glslang/Include/PoolAlloc.h
 	src/libraries/glslang/glslang/Include/ResourceLimits.h
-	src/libraries/glslang/glslang/Include/revision.h
 	src/libraries/glslang/glslang/Include/ShHandle.h
+	src/libraries/glslang/glslang/Include/SpirvIntrinsics.h
 	src/libraries/glslang/glslang/Include/Types.h
 )
 
@@ -1298,6 +1318,7 @@ set(LOVE_SRC_3P_GLSLANG_GLSLANG_MACHINEINDEPENDENT
 	src/libraries/glslang/glslang/MachineIndependent/Scan.h
 	src/libraries/glslang/glslang/MachineIndependent/ScanContext.h
 	src/libraries/glslang/glslang/MachineIndependent/ShaderLang.cpp
+	src/libraries/glslang/glslang/MachineIndependent/SpirvIntrinsics.cpp
 	src/libraries/glslang/glslang/MachineIndependent/SymbolTable.cpp
 	src/libraries/glslang/glslang/MachineIndependent/SymbolTable.h
 	src/libraries/glslang/glslang/MachineIndependent/Versions.cpp
@@ -1489,6 +1510,73 @@ add_library(love_3p_lua53 ${LOVE_SRC_3P_LUA53})
 target_link_libraries(love_3p_lua53 ${LOVE_LUA_LIBRARY})
 
 #
+# Lua HTTPS
+#
+
+set(LOVE_SRC_3P_LUAHTTPS_ANDROID
+	src/libraries/luahttps/src/android/AndroidClient.cpp
+	src/libraries/luahttps/src/android/AndroidClient.h
+)
+
+set(LOVE_SRC_3P_LUAHTTPS_APPLE
+	src/libraries/luahttps/src/apple/NSURLClient.mm
+	src/libraries/luahttps/src/apple/NSURLClient.h
+)
+
+set(LOVE_SRC_3P_LUAHTTPS_COMMON
+	src/libraries/luahttps/src/common/config.h
+	src/libraries/luahttps/src/common/Connection.h
+	src/libraries/luahttps/src/common/ConnectionClient.h
+	src/libraries/luahttps/src/common/HTTPRequest.cpp
+	src/libraries/luahttps/src/common/HTTPRequest.h
+	src/libraries/luahttps/src/common/HTTPS.cpp
+	src/libraries/luahttps/src/common/HTTPS.h
+	src/libraries/luahttps/src/common/HTTPSClient.cpp
+	src/libraries/luahttps/src/common/HTTPSClient.h
+	src/libraries/luahttps/src/common/PlaintextConnection.cpp
+	src/libraries/luahttps/src/common/PlaintextConnection.h
+)
+
+set(LOVE_SRC_3P_LUAHTTPS_GENERIC
+	src/libraries/luahttps/src/generic/CurlClient.cpp
+	src/libraries/luahttps/src/generic/CurlClient.h
+	src/libraries/luahttps/src/generic/OpenSSLConnection.cpp
+	src/libraries/luahttps/src/generic/OpenSSLConnection.h
+)
+
+set(LOVE_SRC_3P_LUAHTTPS_LUA
+	src/libraries/luahttps/src/lua/main.cpp
+)
+
+set(LOVE_SRC_3P_LUAHTTPS_WINDOWS
+	src/libraries/luahttps/src/windows/SChannelConnection.cpp
+	src/libraries/luahttps/src/windows/SChannelConnection.h
+)
+
+# These are platform-dependent but have ifdef guards to make sure they only
+# compile on supported platforms.
+set(LOVE_SRC_3P_LUAHTTPS
+	${LOVE_SRC_3P_LUAHTTPS_ANDROID}
+	${LOVE_SRC_3P_LUAHTTPS_APPLE}
+	${LOVE_SRC_3P_LUAHTTPS_COMMON}
+	${LOVE_SRC_3P_LUAHTTPS_GENERIC}
+	${LOVE_SRC_3P_LUAHTTPS_LUA}
+	${LOVE_SRC_3P_LUAHTTPS_WINDOWS}
+)
+
+set(LOVE_LINK_L3P_LUAHTTPS)
+if(MSVC)
+	set(LOVE_LINK_L3P_LUAHTTPS
+		${LOVE_LINK_L3P_LUASOCKET_LIBLUASOCKET}
+		ws2_32
+		secur32
+	)
+endif()
+
+add_library(love_3p_luahttps ${LOVE_SRC_3P_LUAHTTPS})
+target_link_libraries(love_3p_luahttps ${LOVE_LUA_LIBRARY} ${LOVE_LINK_L3P_LUAHTTPS})
+
+#
 # lz4
 #
 
@@ -1554,6 +1642,7 @@ if(APPLE)
 	set(LOVE_SRC_3P_PHYSFS ${LOVE_SRC_3P_PHYSFS}
 		src/libraries/physfs/physfs_platform_apple.m
 	)
+	set(LOVE_LINK_LIBRARIES ${LOVE_LINK_LIBRARIES} "-framework IOKit")
 endif()
 
 add_library(love_3p_physfs ${LOVE_SRC_3P_PHYSFS})
@@ -1635,6 +1724,7 @@ set(LOVE_3P
 	love_3p_lodepng
 	love_3p_luasocket
 	love_3p_lua53
+	love_3p_luahttps
 	love_3p_lz4
 	love_3p_noise1234
 	love_3p_physfs
@@ -1673,6 +1763,7 @@ set(LOVE_LIB_SRC
 )
 
 include_directories(
+	BEFORE
 	src
 	src/libraries
 	src/libraries/box2D
@@ -1688,6 +1779,7 @@ if(MSVC)
 	set(LOVE_LINK_LIBRARIES ${LOVE_LINK_LIBRARIES}
 		ws2_32.lib
 		winmm.lib
+		dwmapi.lib
 	)
 
 	set(LOVE_RC
@@ -1701,6 +1793,7 @@ if(ANDROID)
 	# as shared library, so change the library name and add love.cpp
 	set(LOVE_LIB_NAME ${LOVE_EXE_NAME})
 	set(LOVE_LIB_SRC ${LOVE_LIB_SRC} src/love.cpp)
+	set(LOVE_LINK_LIBRARIES ${LOVE_LINK_LIBRARIES} android)
 endif()
 
 add_library(${LOVE_LIB_NAME} SHARED ${LOVE_LIB_SRC} ${LOVE_RC})

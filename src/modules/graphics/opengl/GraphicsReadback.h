@@ -18,56 +18,39 @@
  * 3. This notice may not be removed or altered from any source distribution.
  **/
 
-#ifndef LOVE_SOUND_LULLABY_GME_DECODER_H
-#define LOVE_SOUND_LULLABY_GME_DECODER_H
-
-#ifdef LOVE_SUPPORT_GME
+#pragma once
 
 // LOVE
-#include "common/Data.h"
-#include "sound/Decoder.h"
-
-#ifdef LOVE_APPLE_USE_FRAMEWORKS
-#include <Game_Music_Emu/gme.h>
-#else
-#include <gme.h>
-#endif
+#include "graphics/GraphicsReadback.h"
+#include "FenceSync.h"
+#include "common/math.h"
 
 namespace love
 {
-namespace sound
+namespace graphics
 {
-namespace lullaby
+namespace opengl
 {
 
-class GmeDecoder : public Decoder
+class GraphicsReadback final : public love::graphics::GraphicsReadback
 {
 public:
 
-	GmeDecoder(Data *data, int bufferSize);
-	virtual ~GmeDecoder();
+	GraphicsReadback(love::graphics::Graphics *gfx, ReadbackMethod method, love::graphics::Buffer *buffer, size_t offset, size_t size, data::ByteData *dest, size_t destoffset);
+	GraphicsReadback(love::graphics::Graphics *gfx, ReadbackMethod method, love::graphics::Texture *texture, int slice, int mipmap, const Rect &rect, image::ImageData *dest, int destx, int desty);
+	virtual ~GraphicsReadback();
 
-	static bool accepts(const std::string &ext);
-
-	love::sound::Decoder *clone();
-	int decode();
-	bool seek(double s);
-	bool rewind();
-	bool isSeekable();
-	int getChannelCount() const;
-	int getBitDepth() const;
-	double getDuration();
+	void wait() override;
+	void update() override;
 
 private:
-	Music_Emu *emu;
-	int num_tracks;
-	int cur_track;
-}; // Decoder
 
-} // lullaby
-} // sound
+	FenceSync sync;
+
+	StrongRef<love::graphics::Buffer> stagingBuffer;
+
+}; // GraphicsReadback
+
+} // opengl
+} // graphics
 } // love
-
-#endif // LOVE_SUPPORT_GME
-
-#endif // LOVE_SOUND_LULLABY_GME_DECODER_H

@@ -38,6 +38,8 @@
 #endif
 #if defined(__ANDROID__)
 #	define LOVE_ANDROID 1
+// Needed for ENet
+#	define HAS_SOCKLEN_T 1
 #endif
 #if defined(__APPLE__)
 #	include <TargetConditionals.h>
@@ -124,6 +126,10 @@
 #	define LOVE_LEGENDARY_ACCELEROMETER_AS_JOYSTICK_HACK
 #endif
 
+#if defined(LOVE_MACOS) || defined(LOVE_IOS)
+#	define LOVE_GRAPHICS_METAL
+#endif
+
 // Autotools config.h
 #ifdef HAVE_CONFIG_H
 #	include <../config.h>
@@ -160,6 +166,7 @@
 #	define LOVE_ENABLE_ENET
 #	define LOVE_ENABLE_LUASOCKET
 #	define LOVE_ENABLE_LUA53
+#	define LOVE_ENABLE_LUAHTTPS
 #endif
 
 // Check we have a sane configuration

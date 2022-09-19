@@ -267,9 +267,6 @@ static Graphics::RenderTarget checkRenderTarget(lua_State *L, int idx)
 
 int w_setCanvas(lua_State *L)
 {
-	// Disable stencil writes.
-	luax_catchexcept(L, [](){ instance()->stopDrawToStencilBuffer(); });
-
 	// called with none -> reset to default buffer
 	if (lua_isnoneornil(L, 1))
 	{
@@ -607,77 +604,57 @@ int w_getScissor(lua_State *L)
 	return 4;
 }
 
-int w_stencil(lua_State *L)
+int w_setStencilMode(lua_State *L)
 {
-	luaL_checktype(L, 1, LUA_TFUNCTION);
-
-	StencilAction action = STENCIL_REPLACE;
-
-	if (!lua_isnoneornil(L, 2))
+	if (lua_gettop(L) <= 1 && lua_isnoneornil(L, 1))
 	{
-		const char *actionstr = luaL_checkstring(L, 2);
-		if (!getConstant(actionstr, action))
-			return luax_enumerror(L, "stencil draw action", getConstants(action), actionstr);
+		luax_catchexcept(L, [&](){ instance()->setStencilMode(); });
+		return 0;
 	}
 
-	int stencilvalue = (int) luaL_optinteger(L, 3, 1);
+	StencilAction action = STENCIL_KEEP;
+	const char *actionstr = luaL_checkstring(L, 1);
+	if (!getConstant(actionstr, action))
+		return luax_enumerror(L, "stencil draw action", getConstants(action), actionstr);
 
-	// Fourth argument: whether to keep the contents of the stencil buffer.
-	OptionalInt stencilclear;
-	int argtype = lua_type(L, 4);
-	if (argtype == LUA_TNONE || argtype == LUA_TNIL || (argtype == LUA_TBOOLEAN && luax_toboolean(L, 4) == false))
-		stencilclear.set(0);
-	else if (argtype == LUA_TNUMBER)
-		stencilclear.set((int) luaL_checkinteger(L, 4));
-	else if (argtype != LUA_TBOOLEAN)
-		luaL_checktype(L, 4, LUA_TBOOLEAN);
+	CompareMode compare = COMPARE_ALWAYS;
+	const char *comparestr = luaL_checkstring(L, 2);
+	if (!getConstant(comparestr, compare))
+		return luax_enumerror(L, "compare mode", getConstants(compare), comparestr);
 
-	if (stencilclear.hasValue)
-		instance()->clear(OptionalColorD(), stencilclear, OptionalDouble());
+	int value = (int) luaL_optinteger(L, 3, 0);
 
-	luax_catchexcept(L, [&](){ instance()->drawToStencilBuffer(action, stencilvalue); });
+	uint32 readmask = (uint32) luaL_optnumber(L, 4, LOVE_UINT32_MAX);
+	uint32 writemask = (uint32) luaL_optnumber(L, 5, LOVE_UINT32_MAX);
 
-	// Call stencilfunc()
-	lua_pushvalue(L, 1);
-	lua_call(L, 0, 0);
-
-	luax_catchexcept(L, [&](){ instance()->stopDrawToStencilBuffer(); });
+	luax_catchexcept(L, [&](){ instance()->setStencilMode(action, compare, value, readmask, writemask); });
 	return 0;
 }
 
-int w_setStencilTest(lua_State *L)
+int w_getStencilMode(lua_State *L)
 {
-	// COMPARE_ALWAYS effectively disables stencil testing.
+	StencilAction action = STENCIL_KEEP;
 	CompareMode compare = COMPARE_ALWAYS;
-	int comparevalue = 0;
+	int value = 1;
+	uint32 readmask = LOVE_UINT32_MAX;
+	uint32 writemask = LOVE_UINT32_MAX;
 
-	if (!lua_isnoneornil(L, 1))
-	{
-		const char *comparestr = luaL_checkstring(L, 1);
-		if (!getConstant(comparestr, compare))
-			return luax_enumerror(L, "compare mode", getConstants(compare), comparestr);
+	instance()->getStencilMode(action, compare, value, readmask, writemask);
 
-		comparevalue = (int) luaL_checkinteger(L, 2);
-	}
-
-	luax_catchexcept(L, [&](){ instance()->setStencilTest(compare, comparevalue); });
-	return 0;
-}
-
-int w_getStencilTest(lua_State *L)
-{
-	CompareMode compare = COMPARE_ALWAYS;
-	int comparevalue = 1;
-
-	instance()->getStencilTest(compare, comparevalue);
+	const char *actionstr;
+	if (!getConstant(action, actionstr))
+		return luaL_error(L, "Unknown stencil draw action.");
 
 	const char *comparestr;
 	if (!getConstant(compare, comparestr))
 		return luaL_error(L, "Unknown compare mode.");
 
+	lua_pushstring(L, actionstr);
 	lua_pushstring(L, comparestr);
-	lua_pushnumber(L, comparevalue);
-	return 2;
+	lua_pushnumber(L, value);
+	lua_pushnumber(L, readmask);
+	lua_pushnumber(L, writemask);
+	return 5;
 }
 
 static void parseDPIScale(Data *d, float *dpiscale)
@@ -1370,7 +1347,7 @@ int w_newParticleSystem(lua_State *L)
 	return 1;
 }
 
-static int w_getShaderSource(lua_State *L, int startidx, std::vector<std::string> &stages)
+static int w_getShaderSource(lua_State *L, int startidx, std::vector<std::string> &stages, Shader::CompileOptions &options)
 {
 	using namespace love::filesystem;
 
@@ -1392,7 +1369,6 @@ static int w_getShaderSource(lua_State *L, int startidx, std::vector<std::string
 
 				lua_replace(L, i);
 			}
-
 			continue;
 		}
 
@@ -1435,18 +1411,61 @@ static int w_getShaderSource(lua_State *L, int startidx, std::vector<std::string
 	if (has_arg2)
 		stages.push_back(luax_checkstring(L, startidx + 1));
 
+	int optionsidx = has_arg2 ? startidx + 2 : startidx + 1;
+	if (!lua_isnoneornil(L, optionsidx))
+	{
+		luaL_checktype(L, optionsidx, LUA_TTABLE);
+		lua_getfield(L, optionsidx, "defines");
+		if (!lua_isnoneornil(L, -1))
+		{
+			if (!lua_istable(L, -1))
+				luaL_argerror(L, optionsidx, "expected 'defines' field to be a table");
+
+			lua_pushnil(L);
+			while (lua_next(L, -2))
+			{
+				std::string defname;
+				std::string defval;
+
+				if (lua_type(L, -2) == LUA_TNUMBER && lua_type(L, -1) == LUA_TSTRING)
+					defname = luaL_checkstring(L, -1);
+				else if (lua_type(L, -2) != LUA_TSTRING)
+					luaL_argerror(L, optionsidx, "all fields in the 'defines' table must use string keys.");
+				else
+				{
+					defname = luaL_checkstring(L, -2);
+					if (lua_type(L, -1) == LUA_TBOOLEAN)
+						defval = luax_toboolean(L, -1) ? "1" : "0";
+					else
+					{
+						const char *val = lua_tostring(L, -1);
+						if (val == nullptr)
+							luaL_argerror(L, optionsidx, "'defines' table values must be strings, numbers, or booleans.");
+						defval = val;
+					}
+				}
+
+				options.defines[defname] = defval;
+
+				lua_pop(L, 1);
+			}
+		}
+		lua_pop(L, 1);
+	}
+
 	return 0;
 }
 
 int w_newShader(lua_State *L)
 {
 	std::vector<std::string> stages;
-	w_getShaderSource(L, 1, stages);
+	Shader::CompileOptions options;
+	w_getShaderSource(L, 1, stages, options);
 
 	bool should_error = false;
 	try
 	{
-		Shader *shader = instance()->newShader(stages);
+		Shader *shader = instance()->newShader(stages, options);
 		luax_pushtype(L, shader);
 		shader->release();
 	}
@@ -1469,12 +1488,13 @@ int w_newShader(lua_State *L)
 int w_newComputeShader(lua_State* L)
 {
 	std::vector<std::string> stages;
-	w_getShaderSource(L, 1, stages);
+	Shader::CompileOptions options;
+	w_getShaderSource(L, 1, stages, options);
 
 	bool should_error = false;
 	try
 	{
-		Shader *shader = instance()->newComputeShader(stages[0]);
+		Shader *shader = instance()->newComputeShader(stages[0], options);
 		luax_pushtype(L, shader);
 		shader->release();
 	}
@@ -1499,13 +1519,14 @@ int w_validateShader(lua_State *L)
 	bool gles = luax_checkboolean(L, 1);
 
 	std::vector<std::string> stages;
-	w_getShaderSource(L, 2, stages);
+	Shader::CompileOptions options;
+	w_getShaderSource(L, 2, stages, options);
 
 	bool success = true;
 	std::string err;
 	try
 	{
-		success = instance()->validateShader(gles, stages, err);
+		success = instance()->validateShader(gles, stages, options, err);
 	}
 	catch (love::Exception &e)
 	{
@@ -2120,6 +2141,126 @@ int w_newVideo(lua_State *L)
 	return 1;
 }
 
+int w_readbackBuffer(lua_State *L)
+{
+	Buffer *b = luax_checkbuffer(L, 1);
+	lua_Integer offset = luaL_optinteger(L, 2, 0);
+	lua_Integer size = luaL_optinteger(L, 3, b->getSize() - offset);
+
+	data::ByteData *dest = nullptr;
+	size_t destoffset = 0;
+	if (!lua_isnoneornil(L, 4))
+	{
+		dest = luax_checktype<data::ByteData>(L, 4);
+		destoffset = (size_t) luaL_optinteger(L, 5, 0);
+	}
+
+	love::data::ByteData *data = nullptr;
+	luax_catchexcept(L, [&]() { data = instance()->readbackBuffer(b, offset, size, dest, destoffset); });
+
+	luax_pushtype(L, data);
+	data->release();
+	return 1;
+}
+
+int w_readbackBufferAsync(lua_State *L)
+{
+	Buffer *b = luax_checkbuffer(L, 1);
+	lua_Integer offset = luaL_optinteger(L, 2, 0);
+	lua_Integer size = luaL_optinteger(L, 3, b->getSize() - offset);
+
+	data::ByteData *dest = nullptr;
+	size_t destoffset = 0;
+	if (!lua_isnoneornil(L, 4))
+	{
+		dest = luax_checktype<data::ByteData>(L, 4);
+		destoffset = (size_t) luaL_optinteger(L, 5, 0);
+	}
+
+	GraphicsReadback *r = nullptr;
+	luax_catchexcept(L, [&]() { r = instance()->readbackBufferAsync(b, offset, size, dest, destoffset); });
+
+	luax_pushtype(L, r);
+	r->release();
+	return 1;
+}
+
+int w_readbackTexture(lua_State *L)
+{
+	Texture *t = luax_checktexture(L, 1);
+
+	int slice = 0;
+	if (t->getTextureType() != TEXTURE_2D)
+		slice = (int) luaL_checkinteger(L, 2) - 1;
+
+	int mipmap = (int) luaL_optinteger(L, 3, 1) - 1;
+
+	Rect rect = {0, 0, t->getPixelWidth(mipmap), t->getPixelHeight(mipmap)};
+	if (!lua_isnoneornil(L, 4))
+	{
+		rect.x = (int) luaL_checkinteger(L, 4);
+		rect.y = (int) luaL_checkinteger(L, 5);
+		rect.w = (int) luaL_checkinteger(L, 6);
+		rect.h = (int) luaL_checkinteger(L, 7);
+	}
+
+	image::ImageData *dest = nullptr;
+	int destx = 0;
+	int desty = 0;
+
+	if (!lua_isnoneornil(L, 8))
+	{
+		dest = luax_checktype<image::ImageData>(L, 8);
+		destx = (int) luaL_optinteger(L, 9, 0);
+		desty = (int) luaL_optinteger(L, 10, 0);
+	}
+
+	image::ImageData *imagedata = nullptr;
+	luax_catchexcept(L, [&]() { imagedata = instance()->readbackTexture(t, slice, mipmap, rect, dest, destx, desty); });
+
+	luax_pushtype(L, imagedata);
+	imagedata->release();
+	return 1;
+}
+
+int w_readbackTextureAsync(lua_State *L)
+{
+	Texture *t = luax_checktexture(L, 1);
+
+	int slice = 0;
+	if (t->getTextureType() != TEXTURE_2D)
+		slice = (int) luaL_checkinteger(L, 2) - 1;
+
+	int mipmap = (int) luaL_optinteger(L, 3, 1) - 1;
+
+	Rect rect = {0, 0, t->getPixelWidth(mipmap), t->getPixelHeight(mipmap)};
+	if (!lua_isnoneornil(L, 4))
+	{
+		rect.x = (int) luaL_checkinteger(L, 4);
+		rect.y = (int) luaL_checkinteger(L, 5);
+		rect.w = (int) luaL_checkinteger(L, 6);
+		rect.h = (int) luaL_checkinteger(L, 7);
+	}
+
+	image::ImageData *dest = nullptr;
+	int destx = 0;
+	int desty = 0;
+
+	if (!lua_isnoneornil(L, 8))
+	{
+		dest = luax_checktype<image::ImageData>(L, 8);
+		destx = (int) luaL_optinteger(L, 9, 0);
+		desty = (int) luaL_optinteger(L, 10, 0);
+	}
+
+	GraphicsReadback *r = nullptr;
+	luax_catchexcept(L, [&]() { r = instance()->readbackTextureAsync(t, slice, mipmap, rect, dest, destx, desty); });
+
+	luax_pushtype(L, r);
+	r->release();
+	return 1;
+}
+
 int w_setColor(lua_State *L)
 {
 	Colorf c;
@@ -2220,10 +2361,10 @@ int w_setColorMask(lua_State *L)
 {
 	ColorChannelMask mask;
 
-	if (lua_gettop(L) <= 1 && lua_isnoneornil(L, 1))
+	if (lua_gettop(L) <= 1)
 	{
-		// Enable all color components if no argument is given.
-		mask.r = mask.g = mask.b = mask.a = true;
+		// Set all color components if a single argument is given.
+		mask.r = mask.g = mask.b = mask.a = luax_checkboolean(L, 1);
 	}
 	else
 	{
@@ -3629,6 +3770,11 @@ static const luaL_Reg functions[] =
 	{ "newText", w_newText },
 	{ "_newVideo", w_newVideo },
 
+	{ "readbackBuffer", w_readbackBuffer },
+	{ "readbackBufferAsync", w_readbackBufferAsync },
+	{ "readbackTexture", w_readbackTexture },
+	{ "readbackTextureAsync", w_readbackTextureAsync },
+
 	{ "validateShader", w_validateShader },
 
 	{ "setCanvas", w_setCanvas },
@@ -3712,9 +3858,8 @@ static const luaL_Reg functions[] =
 	{ "intersectScissor", w_intersectScissor },
 	{ "getScissor", w_getScissor },
 
-	{ "stencil", w_stencil },
-	{ "setStencilTest", w_setStencilTest },
-	{ "getStencilTest", w_getStencilTest },
+	{ "setStencilMode", w_setStencilMode },
+	{ "getStencilMode", w_getStencilMode },
 
 	{ "points", w_points },
 	{ "line", w_line },
@@ -3767,6 +3912,7 @@ static const lua_CFunction types[] =
 	luaopen_font,
 	luaopen_quad,
 	luaopen_graphicsbuffer,
+	luaopen_graphicsreadback,
 	luaopen_spritebatch,
 	luaopen_particlesystem,
 	luaopen_shader,
@@ -3778,13 +3924,13 @@ static const lua_CFunction types[] =
 
 extern "C" int luaopen_love_graphics(lua_State *L)
 {
-	Graphics *instance = instance();
+	Graphics *instance = Graphics::createInstance();
+
 	if (instance == nullptr)
 	{
-		luax_catchexcept(L, [&](){ instance = new love::graphics::opengl::Graphics(); });
+		printf("Cannot create graphics: no supported renderer on this system.\n");
+		return luaL_error(L, "Cannot create graphics: no supported renderer on this system.");
 	}
-	else
-		instance->retain();
 
 	WrappedModule w;
 	w.module = instance;

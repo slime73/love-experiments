@@ -38,7 +38,7 @@ class Texture final : public love::graphics::Texture, public Volatile
 {
 public:
 
-	Texture(const Settings &settings, const Slices *data);
+	Texture(love::graphics::Graphics *gfx, const Settings &settings, const Slices *data);
 
 	virtual ~Texture();
 
@@ -53,9 +53,12 @@ public:
 
 	ptrdiff_t getHandle() const override;
 	ptrdiff_t getRenderTargetHandle() const override;
+	ptrdiff_t getSamplerHandle() const override { return 0; }
 	int getMSAA() const override { return actualSamples; }
 
 	inline GLuint getFBO() const { return fbo; }
+
+	void readbackInternal(int slice, int mipmap, const Rect &rect, int destwidth, size_t size, void *dest);
 
 private:
 
@@ -64,8 +67,6 @@ private:
 	void uploadByteData(PixelFormat pixelformat, const void *data, size_t size, int level, int slice, const Rect &r) override;
 
 	void generateMipmapsInternal() override;
-
-	void readbackImageData(love::image::ImageData *imagedata, int slice, int mipmap, const Rect &rect) override;
 
 	Slices slices;
 

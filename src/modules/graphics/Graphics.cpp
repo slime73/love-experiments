@@ -32,6 +32,7 @@
 #include "Video.h"
 #include "Text.h"
 #include "common/deprecation.h"
+#include "common/config.h"
 
 // C++
 #include <algorithm>
@@ -104,6 +105,67 @@ bool isDebugEnabled()
 
 love::Type Graphics::type("graphics", &Module::type);
 
+namespace opengl { extern love::graphics::Graphics *createInstance(); }
+#ifdef LOVE_GRAPHICS_METAL
+namespace metal { extern love::graphics::Graphics *createInstance(); }
+#endif
+
+static const Renderer rendererOrder[] = {
+	RENDERER_METAL,
+	RENDERER_OPENGL,
+};
+
+static std::vector<Renderer> defaultRenderers =
+{
+	RENDERER_METAL,
+	RENDERER_OPENGL,
+};
+
+static std::vector<Renderer> _renderers = defaultRenderers;
+
+const std::vector<Renderer> &getDefaultRenderers()
+{
+	return defaultRenderers;
+}
+
+const std::vector<Renderer> &getRenderers()
+{
+	return _renderers;
+}
+
+void setRenderers(const std::vector<Renderer> &renderers)
+{
+	_renderers = renderers;
+}
+
+Graphics *Graphics::createInstance()
+{
+	Graphics *instance = Module::getInstance<Graphics>(M_GRAPHICS);
+
+	if (instance != nullptr)
+		instance->retain();
+	else
+	{
+		for (auto r : rendererOrder)
+		{
+			if (std::find(_renderers.begin(), _renderers.end(), r) == _renderers.end())
+				continue;
+
+			if (r == RENDERER_OPENGL)
+				instance = opengl::createInstance();
+#ifdef LOVE_GRAPHICS_METAL
+			if (r == RENDERER_METAL)
+				instance = metal::createInstance();
+#endif
+
+			if (instance != nullptr)
+				break;
+		}
+	}
+
+	return instance;
+}
+
 Graphics::DisplayState::DisplayState()
 {
 	defaultSamplerState.mipmapFilter = SamplerState::MIPMAP_FILTER_LINEAR;
@@ -116,13 +178,13 @@ Graphics::Graphics()
 	, pixelHeight(0)
 	, created(false)
 	, active(true)
-	, writingToStencil(false)
 	, batchedDrawState()
 	, deviceProjectionMatrix()
 	, renderTargetSwitchCount(0)
 	, drawCalls(0)
 	, drawCallsBatched(0)
 	, quadIndexBuffer(nullptr)
+	, fanIndexBuffer(nullptr)
 	, capabilities()
 	, cachedShaderStages()
 {
@@ -141,7 +203,10 @@ Graphics::Graphics()
 
 Graphics::~Graphics()
 {
-	delete quadIndexBuffer;
+	if (quadIndexBuffer != nullptr)
+		quadIndexBuffer->release();
+	if (fanIndexBuffer != nullptr)
+		fanIndexBuffer->release();
 
 	// Clean up standard shaders before the active shader. If we do it after,
 	// the active shader may try to activate a standard shader when deactivating
@@ -160,12 +225,18 @@ Graphics::~Graphics()
 
 	defaultFont.set(nullptr);
 
-	delete batchedDrawState.vb[0];
-	delete batchedDrawState.vb[1];
-	delete batchedDrawState.indexBuffer;
+	if (batchedDrawState.vb[0])
+		batchedDrawState.vb[0]->release();
+	if (batchedDrawState.vb[1])
+		batchedDrawState.vb[1]->release();
+	if (batchedDrawState.indexBuffer)
+		batchedDrawState.indexBuffer->release();
 
 	for (int i = 0; i < (int) SHADERSTAGE_MAX_ENUM; i++)
 		cachedShaderStages[i].clear();
+
+	pendingReadbacks.clear();
+	clearTemporaryResources();
 
 	Shader::deinitialize();
 }
@@ -175,15 +246,33 @@ void Graphics::createQuadIndexBuffer()
 	if (quadIndexBuffer != nullptr)
 		return;
 
-	size_t size = sizeof(uint16) * (LOVE_UINT16_MAX / 4) * 6;
+	size_t size = sizeof(uint16) * getIndexCount(TRIANGLEINDEX_QUADS, LOVE_UINT16_MAX);
 
 	Buffer::Settings settings(BUFFERUSAGEFLAG_INDEX, BUFFERDATAUSAGE_STATIC);
 	quadIndexBuffer = newBuffer(settings, DATAFORMAT_UINT16, nullptr, size, 0);
 
-	Buffer::Mapper map(*quadIndexBuffer);
-	fillIndices(TRIANGLEINDEX_QUADS, 0, LOVE_UINT16_MAX, (uint16 *) map.data);
+	{
+		Buffer::Mapper map(*quadIndexBuffer);
+		fillIndices(TRIANGLEINDEX_QUADS, 0, LOVE_UINT16_MAX, (uint16 *) map.data);
+	}
 
 	quadIndexBuffer->setImmutable(true);
+}
+
+void Graphics::createFanIndexBuffer()
+{
+	if (fanIndexBuffer != nullptr)
+		return;
+
+	size_t size = sizeof(uint16) * getIndexCount(TRIANGLEINDEX_FAN, LOVE_UINT16_MAX);
+
+	Buffer::Settings settings(BUFFERUSAGEFLAG_INDEX, BUFFERDATAUSAGE_STATIC);
+	fanIndexBuffer = newBuffer(settings, DATAFORMAT_UINT16, nullptr, size, 0);
+
+	Buffer::Mapper map(*fanIndexBuffer);
+	fillIndices(TRIANGLEINDEX_FAN, 0, LOVE_UINT16_MAX, (uint16 *) map.data);
+
+	fanIndexBuffer->setImmutable(true);
 }
 
 Quad *Graphics::newQuad(Quad::Viewport v, double sw, double sh)
@@ -221,12 +310,18 @@ love::graphics::ParticleSystem *Graphics::newParticleSystem(Texture *texture, in
 	return new ParticleSystem(texture, size);
 }
 
-ShaderStage *Graphics::newShaderStage(ShaderStageType stage, const std::string &source, const Shader::SourceInfo &info)
+ShaderStage *Graphics::newShaderStage(ShaderStageType stage, const std::string &source, const Shader::CompileOptions &options, const Shader::SourceInfo &info, bool cache)
 {
 	ShaderStage *s = nullptr;
 	std::string cachekey;
 
-	if (!source.empty())
+	// Never cache if there are custom defines set... because hashing would get
+	// more complicated/expensive, and there shouldn't be a lot of duplicate
+	// shader stages with custom defines anyway.
+	if (!options.defines.empty())
+		cache = false;
+
+	if (cache && !source.empty())
 	{
 		data::HashFunction::Value hashvalue;
 		data::hash(data::HashFunction::FUNCTION_SHA1, source.c_str(), source.size(), hashvalue);
@@ -243,17 +338,17 @@ ShaderStage *Graphics::newShaderStage(ShaderStageType stage, const std::string &
 
 	if (s == nullptr)
 	{
-		bool gles = getRenderer() == Graphics::RENDERER_OPENGLES;
-		std::string glsl = Shader::createShaderStageCode(this, stage, source, info, gles, true);
-		s = newShaderStageInternal(stage, cachekey, glsl, getRenderer() == RENDERER_OPENGLES);
-		if (!cachekey.empty())
+		bool glsles = usesGLSLES();
+		std::string glsl = Shader::createShaderStageCode(this, stage, source, options, info, glsles, true);
+		s = newShaderStageInternal(stage, cachekey, glsl, glsles);
+		if (cache && !cachekey.empty())
 			cachedShaderStages[stage][cachekey] = s;
 	}
 
 	return s;
 }
 
-Shader *Graphics::newShader(const std::vector<std::string> &stagessource)
+Shader *Graphics::newShader(const std::vector<std::string> &stagessource, const Shader::CompileOptions &options)
 {
 	StrongRef<ShaderStage> stages[SHADERSTAGE_MAX_ENUM] = {};
 
@@ -274,12 +369,12 @@ Shader *Graphics::newShader(const std::vector<std::string> &stagessource)
 			if (info.stages[i] != Shader::ENTRYPOINT_NONE)
 			{
 				isanystage = true;
-				stages[i].set(newShaderStage((ShaderStageType) i, source, info), Acquire::NORETAIN);
+				stages[i].set(newShaderStage((ShaderStageType) i, source, options, info, true), Acquire::NORETAIN);
 			}
 		}
 
 		if (!isanystage)
-			throw love::Exception("Could not parse shader code (missing 'position' or 'effect' function?)");
+			throw love::Exception("Could not parse shader code (missing shader entry point function such as 'position' or 'effect')");
 	}
 
 	for (int i = 0; i < SHADERSTAGE_MAX_ENUM; i++)
@@ -289,7 +384,8 @@ Shader *Graphics::newShader(const std::vector<std::string> &stagessource)
 		{
 			const std::string &source = Shader::getDefaultCode(Shader::STANDARD_DEFAULT, stype);
 			Shader::SourceInfo info = Shader::getSourceInfo(source);
-			stages[i].set(newShaderStage(stype, source, info), Acquire::NORETAIN);
+			Shader::CompileOptions opts;
+			stages[i].set(newShaderStage(stype, source, opts, info, true), Acquire::NORETAIN);
 		}
 
 	}
@@ -297,7 +393,7 @@ Shader *Graphics::newShader(const std::vector<std::string> &stagessource)
 	return newShaderInternal(stages);
 }
 
-Shader *Graphics::newComputeShader(const std::string &source)
+Shader *Graphics::newComputeShader(const std::string &source, const Shader::CompileOptions &options)
 {
 	Shader::SourceInfo info = Shader::getSourceInfo(source);
 
@@ -305,7 +401,11 @@ Shader *Graphics::newComputeShader(const std::string &source)
 		throw love::Exception("Could not parse compute shader code (missing 'computemain' function?)");
 
 	StrongRef<ShaderStage> stages[SHADERSTAGE_MAX_ENUM];
-	stages[SHADERSTAGE_COMPUTE].set(newShaderStage(SHADERSTAGE_COMPUTE, source, info));
+
+	// Don't bother caching compute shader intermediate source, since there
+	// shouldn't be much reuse.
+	stages[SHADERSTAGE_COMPUTE].set(newShaderStage(SHADERSTAGE_COMPUTE, source, options, info, false));
+
 	return newShaderInternal(stages);
 }
 
@@ -335,12 +435,52 @@ love::graphics::Text *Graphics::newText(graphics::Font *font, const std::vector<
 	return new Text(font, text);
 }
 
+love::data::ByteData *Graphics::readbackBuffer(Buffer *buffer, size_t offset, size_t size, data::ByteData *dest, size_t destoffset)
+{
+	StrongRef<GraphicsReadback> readback;
+	readback.set(newReadbackInternal(READBACK_IMMEDIATE, buffer, offset, size, dest, destoffset), Acquire::NORETAIN);
+
+	auto data = readback->getBufferData();
+	if (data == nullptr)
+		throw love::Exception("love.graphics.readbackBuffer failed.");
+
+	data->retain();
+	return data;
+}
+
+GraphicsReadback *Graphics::readbackBufferAsync(Buffer *buffer, size_t offset, size_t size, data::ByteData *dest, size_t destoffset)
+{
+	auto readback = newReadbackInternal(READBACK_ASYNC, buffer, offset, size, dest, destoffset);
+	pendingReadbacks.push_back(readback);
+	return readback;
+}
+
+image::ImageData *Graphics::readbackTexture(Texture *texture, int slice, int mipmap, const Rect &rect, image::ImageData *dest, int destx, int desty)
+{
+	StrongRef<GraphicsReadback> readback;
+	readback.set(newReadbackInternal(READBACK_IMMEDIATE, texture, slice, mipmap, rect, dest, destx, desty), Acquire::NORETAIN);
+
+	auto imagedata = readback->getImageData();
+	if (imagedata == nullptr)
+		throw love::Exception("love.graphics.readbackTexture failed.");
+
+	imagedata->retain();
+	return imagedata;
+}
+
+GraphicsReadback *Graphics::readbackTextureAsync(Texture *texture, int slice, int mipmap, const Rect &rect, image::ImageData *dest, int destx, int desty)
+{
+	auto readback = newReadbackInternal(READBACK_ASYNC, texture, slice, mipmap, rect, dest, destx, desty);
+	pendingReadbacks.push_back(readback);
+	return readback;
+}
+
 void Graphics::cleanupCachedShaderStage(ShaderStageType type, const std::string &hashkey)
 {
 	cachedShaderStages[type].erase(hashkey);
 }
 
-bool Graphics::validateShader(bool gles, const std::vector<std::string> &stagessource, std::string &err)
+bool Graphics::validateShader(bool gles, const std::vector<std::string> &stagessource, const Shader::CompileOptions &options, std::string &err)
 {
 	StrongRef<ShaderStage> stages[SHADERSTAGE_MAX_ENUM] = {};
 
@@ -366,7 +506,7 @@ bool Graphics::validateShader(bool gles, const std::vector<std::string> &stagess
 			if (info.stages[i] != Shader::ENTRYPOINT_NONE)
 			{
 				isanystage = true;
-				std::string glsl = Shader::createShaderStageCode(this, stype, source, info, gles, false);
+				std::string glsl = Shader::createShaderStageCode(this, stype, source, options, info, gles, false);
 				stages[i].set(new ShaderStageForValidation(this, stype, glsl, gles), Acquire::NORETAIN);
 			}
 		}
@@ -431,7 +571,6 @@ bool Graphics::isActive() const
 void Graphics::reset()
 {
 	DisplayState s;
-	stopDrawToStencilBuffer();
 	restoreState(s);
 	origin();
 }
@@ -458,15 +597,15 @@ void Graphics::restoreState(const DisplayState &s)
 	else
 		setScissor();
 
-	setStencilTest(s.stencilCompare, s.stencilTestValue);
-	setDepthMode(s.depthTest, s.depthWrite);
-
 	setMeshCullMode(s.meshCullMode);
 	setFrontFaceWinding(s.winding);
 
 	setFont(s.font.get());
 	setShader(s.shader.get());
 	setRenderTargets(s.renderTargets);
+
+	setStencilMode(s.stencil.action, s.stencil.compare, s.stencil.value, s.stencil.readMask, s.stencil.writeMask);
+	setDepthMode(s.depthTest, s.depthWrite);
 
 	setColorMask(s.colorMask);
 	setWireframe(s.wireframe);
@@ -507,12 +646,6 @@ void Graphics::restoreStateChecked(const DisplayState &s)
 			setScissor();
 	}
 
-	if (s.stencilCompare != cur.stencilCompare || s.stencilTestValue != cur.stencilTestValue)
-		setStencilTest(s.stencilCompare, s.stencilTestValue);
-
-	if (s.depthTest != cur.depthTest || s.depthWrite != cur.depthWrite)
-		setDepthMode(s.depthTest, s.depthWrite);
-
 	setMeshCullMode(s.meshCullMode);
 
 	if (s.winding != cur.winding)
@@ -545,6 +678,12 @@ void Graphics::restoreStateChecked(const DisplayState &s)
 
 	if (rtschanged)
 		setRenderTargets(s.renderTargets);
+
+	if (!(s.stencil == cur.stencil))
+		setStencilMode(s.stencil.action, s.stencil.compare, s.stencil.value, s.stencil.readMask, s.stencil.writeMask);
+
+	if (s.depthTest != cur.depthTest || s.depthWrite != cur.depthWrite)
+		setDepthMode(s.depthTest, s.depthWrite);
 
 	if (s.colorMask != cur.colorMask)
 		setColorMask(s.colorMask);
@@ -702,10 +841,10 @@ void Graphics::setRenderTargets(const RenderTargets &rts)
 	if (firsttarget.mipmap < 0 || firsttarget.mipmap >= firsttex->getMipmapCount())
 		throw love::Exception("Invalid mipmap level %d.", firsttarget.mipmap + 1);
 
-	if (!firsttex->isValidSlice(firsttarget.slice))
+	if (!firsttex->isValidSlice(firsttarget.slice, firsttarget.mipmap))
 		throw love::Exception("Invalid slice index: %d.", firsttarget.slice + 1);
 
-	bool hasSRGBtexture = firstcolorformat == PIXELFORMAT_sRGBA8_UNORM;
+	bool hasSRGBtexture = isPixelFormatSRGB(firstcolorformat);
 	int pixelw = firsttex->getPixelWidth(firsttarget.mipmap);
 	int pixelh = firsttex->getPixelHeight(firsttarget.mipmap);
 	int reqmsaa = firsttex->getRequestedMSAA();
@@ -723,7 +862,7 @@ void Graphics::setRenderTargets(const RenderTargets &rts)
 		if (mip < 0 || mip >= c->getMipmapCount())
 			throw love::Exception("Invalid mipmap level %d.", mip + 1);
 
-		if (!c->isValidSlice(slice))
+		if (!c->isValidSlice(slice, mip))
 			throw love::Exception("Invalid slice index: %d.", slice + 1);
 
 		if (c->getPixelWidth(mip) != pixelw || c->getPixelHeight(mip) != pixelh)
@@ -738,7 +877,7 @@ void Graphics::setRenderTargets(const RenderTargets &rts)
 		if (isPixelFormatDepthStencil(format))
 			throw love::Exception("Depth/stencil format textures must be used with the 'depthstencil' field of the table passed into setRenderTargets.");
 
-		if (format == PIXELFORMAT_sRGBA8_UNORM)
+		if (isPixelFormatSRGB(format))
 			hasSRGBtexture = true;
 	}
 
@@ -763,12 +902,9 @@ void Graphics::setRenderTargets(const RenderTargets &rts)
 		if (mip < 0 || mip >= c->getMipmapCount())
 			throw love::Exception("Invalid mipmap level %d.", mip + 1);
 
-		if (!c->isValidSlice(slice))
+		if (!c->isValidSlice(slice, mip))
 			throw love::Exception("Invalid slice index: %d.", slice + 1);
 	}
-
-	int w = firsttex->getWidth(firsttarget.mipmap);
-	int h = firsttex->getHeight(firsttarget.mipmap);
 
 	flushBatchedDraws();
 
@@ -794,10 +930,14 @@ void Graphics::setRenderTargets(const RenderTargets &rts)
 		realRTs.depthStencil.texture = getTemporaryTexture(dsformat, pixelw, pixelh, reqmsaa);
 		realRTs.depthStencil.slice = 0;
 
-		setRenderTargetsInternal(realRTs, w, h, pixelw, pixelh, hasSRGBtexture);
+		// TODO: fix this to call release at the right time.
+		// This only works here because nothing else calls getTemporaryTexture.
+		releaseTemporaryTexture(realRTs.depthStencil.texture);
+
+		setRenderTargetsInternal(realRTs, pixelw, pixelh, hasSRGBtexture);
 	}
 	else
-		setRenderTargetsInternal(rts, w, h, pixelw, pixelh, hasSRGBtexture);
+		setRenderTargetsInternal(rts, pixelw, pixelh, hasSRGBtexture);
 
 	RenderTargetsStrongRef refs;
 	refs.colors.reserve(rts.colors.size());
@@ -813,6 +953,11 @@ void Graphics::setRenderTargets(const RenderTargets &rts)
 	renderTargetSwitchCount++;
 
 	resetProjection();
+
+	// Invalidate temporary depth/stencil. This could be a clear, but if the
+	// user also clears a double-clear may be slow...
+	if (rts.depthStencil.texture == nullptr && rts.temporaryRTFlags != 0)
+		discard({}, true);
 }
 
 void Graphics::setRenderTarget()
@@ -823,7 +968,7 @@ void Graphics::setRenderTarget()
 		return;
 
 	flushBatchedDraws();
-	setRenderTargetsInternal(RenderTargets(), width, height, pixelWidth, pixelHeight, isGammaCorrect());
+	setRenderTargetsInternal(RenderTargets(), pixelWidth, pixelHeight, isGammaCorrect());
 
 	state.renderTargets = RenderTargetsStrongRef();
 	renderTargetSwitchCount++;
@@ -891,12 +1036,15 @@ Texture *Graphics::getTemporaryTexture(PixelFormat format, int w, int h, int sam
 
 	for (TemporaryTexture &temp : temporaryTextures)
 	{
+		if (temp.framesSinceUse < 0)
+			continue;
+
 		Texture *c = temp.texture;
 		if (c->getPixelFormat() == format && c->getPixelWidth() == w
 			&& c->getPixelHeight() == h && c->getRequestedMSAA() == samples)
 		{
 			texture = c;
-			temp.framesSinceUse = 0;
+			temp.framesSinceUse = -1;
 			break;
 		}
 	}
@@ -916,6 +1064,115 @@ Texture *Graphics::getTemporaryTexture(PixelFormat format, int w, int h, int sam
 	}
 
 	return texture;
+}
+
+void Graphics::releaseTemporaryTexture(Texture *texture)
+{
+	for (TemporaryTexture &temp : temporaryTextures)
+	{
+		if (temp.texture == texture)
+		{
+			temp.framesSinceUse = 0;
+			break;
+		}
+	}
+}
+
+Buffer *Graphics::getTemporaryBuffer(size_t size, DataFormat format, uint32 usageflags, BufferDataUsage datausage)
+{
+	Buffer *buffer = nullptr;
+
+	for (TemporaryBuffer &temp : temporaryBuffers)
+	{
+		if (temp.framesSinceUse < 0)
+			continue;
+
+		Buffer *b = temp.buffer;
+
+		if (temp.size == size && b->getDataMember(0).decl.format == format
+			&& b->getUsageFlags() == usageflags && b->getDataUsage() == datausage)
+		{
+			buffer = b;
+			temp.framesSinceUse = -1;
+			break;
+		}
+	}
+
+	if (buffer == nullptr)
+	{
+		Buffer::Settings settings(usageflags, datausage);
+		buffer = newBuffer(settings, format, nullptr, size, 0);
+
+		temporaryBuffers.emplace_back(buffer, size);
+	}
+
+	return buffer;
+}
+
+void Graphics::releaseTemporaryBuffer(Buffer *buffer)
+{
+	for (TemporaryBuffer &temp : temporaryBuffers)
+	{
+		if (temp.buffer == buffer)
+		{
+			temp.framesSinceUse = 0;
+			break;
+		}
+	}
+}
+
+void Graphics::updateTemporaryResources()
+{
+	for (int i = (int) temporaryTextures.size() - 1; i >= 0; i--)
+	{
+		auto &t = temporaryTextures[i];
+		if (t.framesSinceUse >= MAX_TEMPORARY_RESOURCE_UNUSED_FRAMES)
+		{
+			t.texture->release();
+			t = temporaryTextures.back();
+			temporaryTextures.pop_back();
+		}
+		else if (t.framesSinceUse >= 0)
+			t.framesSinceUse++;
+	}
+
+	for (int i = (int) temporaryBuffers.size() - 1; i >= 0; i--)
+	{
+		auto &t = temporaryBuffers[i];
+		if (t.framesSinceUse >= MAX_TEMPORARY_RESOURCE_UNUSED_FRAMES)
+		{
+			t.buffer->release();
+			t = temporaryBuffers.back();
+			temporaryBuffers.pop_back();
+		}
+		else if (t.framesSinceUse >= 0)
+			t.framesSinceUse++;
+	}
+}
+
+void Graphics::clearTemporaryResources()
+{
+	for (auto temp :temporaryBuffers)
+		temp.buffer->release();
+
+	for (auto temp : temporaryTextures)
+		temp.texture->release();
+
+	temporaryBuffers.clear();
+	temporaryTextures.clear();
+}
+
+void Graphics::updatePendingReadbacks()
+{
+	for (int i = (int)pendingReadbacks.size() - 1; i >= 0; i--)
+	{
+		pendingReadbacks[i]->update();
+		if (pendingReadbacks[i]->isComplete())
+		{
+			pendingReadbacks[i] = pendingReadbacks.back();
+			pendingReadbacks.pop_back();
+		}
+	}
 }
 
 void Graphics::intersectScissor(const Rect &rect)
@@ -947,16 +1204,19 @@ bool Graphics::getScissor(Rect &rect) const
 	return state.scissor;
 }
 
-void Graphics::setStencilTest()
+void Graphics::setStencilMode()
 {
-	setStencilTest(COMPARE_ALWAYS, 0);
+	setStencilMode(STENCIL_KEEP, COMPARE_ALWAYS, 0, LOVE_UINT32_MAX, LOVE_UINT32_MAX);
 }
 
-void Graphics::getStencilTest(CompareMode &compare, int &value) const
+void Graphics::getStencilMode(StencilAction &action, CompareMode &compare, int &value, uint32 &readmask, uint32 &writemask) const
 {
 	const DisplayState &state = states.back();
-	compare = state.stencilCompare;
-	value = state.stencilTestValue;
+	action = state.stencil.action;
+	compare = state.stencil.compare;
+	value = state.stencil.value;
+	readmask = state.stencil.readMask;
+	writemask = state.stencil.writeMask;
 }
 
 void Graphics::setDepthMode()
@@ -1080,6 +1340,9 @@ void Graphics::copyBuffer(Buffer *source, Buffer *dest, size_t sourceoffset, siz
 	if (dest->getDataUsage() == BUFFERDATAUSAGE_STREAM)
 		throw love::Exception("Buffers created with 'stream' data usage cannot be used as a copy destination.");
 
+	if (source->getDataUsage() == BUFFERDATAUSAGE_READBACK)
+		throw love::Exception("Buffers created with 'readback' data usage cannot be used as a copy source.");
+
 	if (sourcerange.getMax() >= source->getSize())
 		throw love::Exception("Buffer copy source offset and size doesn't fit within the source Buffer's size.");
 
@@ -1188,6 +1451,9 @@ void Graphics::copyBufferToTexture(Buffer *source, Texture *dest, size_t sourceo
 {
 	if (!capabilities.features[FEATURE_COPY_BUFFER_TO_TEXTURE])
 		throw love::Exception("Copying a Buffer to a Texture is not supported on this system.");
+
+	if (source->getDataUsage() == BUFFERDATAUSAGE_READBACK)
+		throw love::Exception("Buffers created with 'readback' data usage cannot be used as a copy source.");
 
 	PixelFormat format = dest->getPixelFormat();
 
@@ -1378,14 +1644,14 @@ Graphics::BatchedVertexData Graphics::requestBatchedDraw(const BatchedDrawComman
 		{
 			if (state.vb[i]->getSize() < buffersizes[i])
 			{
-				delete state.vb[i];
+				state.vb[i]->release();
 				state.vb[i] = newStreamBuffer(BUFFERUSAGE_VERTEX, buffersizes[i]);
 			}
 		}
 
 		if (state.indexBuffer->getSize() < buffersizes[2])
 		{
-			delete state.indexBuffer;
+			state.indexBuffer->release();
 			state.indexBuffer = newStreamBuffer(BUFFERUSAGE_INDEX, buffersizes[2]);
 		}
 	}
@@ -1540,6 +1806,17 @@ void Graphics::drawInstanced(Mesh *mesh, const Matrix4 &m, int instancecount)
 
 void Graphics::drawShaderVertices(PrimitiveType primtype, int vertexcount, int instancecount, Texture *maintexture)
 {
+	if (primtype == PRIMITIVE_TRIANGLE_FAN && vertexcount > LOVE_UINT16_MAX)
+		throw love::Exception("drawShaderVertices cannot draw more than %d vertices when the 'fan' draw mode is used.", LOVE_UINT16_MAX);
+
+	// Emulated triangle fan via an index buffer.
+	if (primtype == PRIMITIVE_TRIANGLE_FAN && getFanIndexBuffer())
+	{
+		int indexcount = getIndexCount(TRIANGLEINDEX_FAN, vertexcount);
+		drawShaderVertices(getFanIndexBuffer(), indexcount, instancecount, 0, maintexture);
+		return;
+	}
+
 	flushBatchedDraws();
 
 	if (!capabilities.features[FEATURE_GLSL3])
@@ -2225,6 +2502,7 @@ STRINGMAP_CLASS_BEGIN(Graphics, Graphics::Feature, Graphics::FEATURE_MAX_ENUM, f
 {
 	{ "multirendertargetformats", Graphics::FEATURE_MULTI_RENDER_TARGET_FORMATS },
 	{ "clampzero",                Graphics::FEATURE_CLAMP_ZERO           },
+	{ "clampone",                 Graphics::FEATURE_CLAMP_ONE            },
 	{ "blendminmax",              Graphics::FEATURE_BLEND_MINMAX         },
 	{ "lighten",                  Graphics::FEATURE_LIGHTEN              },
 	{ "fullnpot",                 Graphics::FEATURE_FULL_NPOT            },
@@ -2266,6 +2544,13 @@ STRINGMAP_CLASS_BEGIN(Graphics, Graphics::StackType, Graphics::STACK_MAX_ENUM, s
 	{ "transform", Graphics::STACK_TRANSFORM },
 }
 STRINGMAP_CLASS_END(Graphics, Graphics::StackType, Graphics::STACK_MAX_ENUM, stackType)
+
+STRINGMAP_BEGIN(Renderer, RENDERER_MAX_ENUM, renderer)
+{
+	{ "opengl", RENDERER_OPENGL },
+	{ "metal",  RENDERER_METAL  },
+}
+STRINGMAP_END(Renderer, RENDERER_MAX_ENUM, renderer)
 
 } // graphics
 } // love

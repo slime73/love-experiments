@@ -159,7 +159,7 @@ love::Type Texture::type("Texture", &Drawable::type);
 int Texture::textureCount = 0;
 int64 Texture::totalGraphicsMemory = 0;
 
-Texture::Texture(const Settings &settings, const Slices *slices)
+Texture::Texture(Graphics *gfx, const Settings &settings, const Slices *slices)
 	: texType(settings.type)
 	, format(settings.format)
 	, renderTarget(settings.renderTarget)
@@ -179,8 +179,6 @@ Texture::Texture(const Settings &settings, const Slices *slices)
 	, graphicsMemorySize(0)
 	, usingDefaultTexture(false)
 {
-	auto gfx = Module::getInstance<Graphics>(Module::M_GRAPHICS);
-
 	if (slices != nullptr && slices->getMipmapCount() > 0 && slices->getSliceCount() > 0)
 	{
 		texType = slices->getTextureType();
@@ -234,8 +232,13 @@ Texture::Texture(const Settings &settings, const Slices *slices)
 	if (mipmapsMode != MIPMAPS_NONE)
 		mipmapCount = getTotalMipmapCount(pixelWidth, pixelHeight, depth);
 
-	if (mipmapsMode == MIPMAPS_AUTO && isPixelFormatDepthStencil(format))
-		throw love::Exception("Automatic mipmap generation cannot be used for depth/stencil textures.");
+	const char *miperr = nullptr;
+	if (mipmapsMode == MIPMAPS_AUTO && !supportsGenerateMipmaps(miperr))
+	{
+		const char *fstr = "unknown";
+		love::getConstant(format, fstr);
+		throw love::Exception("Automatic mipmap generation is not supported for textures with the %s pixel format.", fstr);
+	}
 
 	if (pixelWidth <= 0 || pixelHeight <= 0 || layers <= 0 || depth <= 0)
 		throw love::Exception("Texture dimensions must be greater than 0.");
@@ -513,62 +516,51 @@ void Texture::replacePixels(const void *data, size_t size, int slice, int mipmap
 		generateMipmaps();
 }
 
-void Texture::generateMipmaps()
+bool Texture::supportsGenerateMipmaps(const char *&outReason) const
 {
-	if (getMipmapCount() == 1 || getMipmapsMode() == MIPMAPS_NONE)
-		throw love::Exception("generateMipmaps can only be called on a Texture which was created with mipmaps enabled.");
+	if (getMipmapsMode() == MIPMAPS_NONE)
+	{
+		outReason = "generateMipmaps can only be called on a Texture which was created with mipmaps enabled.";
+		return false;
+	}
 
 	if (isPixelFormatCompressed(format))
-		throw love::Exception("generateMipmaps cannot be called on a compressed Texture.");
+	{
+		outReason = "generateMipmaps cannot be called on a compressed Texture.";
+		return false;
+	}
 
 	if (isPixelFormatDepthStencil(format))
-		throw love::Exception("generateMipmaps cannot be called on a depth/stencil Texture.");
+	{
+		outReason = "generateMipmaps cannot be called on a depth/stencil Texture.";
+		return false;
+	}
 
 	if (isPixelFormatInteger(format))
-		throw love::Exception("generateMipmaps cannot be called on an integer Texture.");
+	{
+		outReason = "generateMipmaps cannot be called on an integer Texture.";
+		return false;
+	}
 
-	generateMipmapsInternal();
+	// This should be linear | rt because that's what metal needs, but the above
+	// code handles textures can't be used as RTs in metal.
+	auto gfx = Module::getInstance<Graphics>(Module::M_GRAPHICS);
+	if (gfx != nullptr && !gfx->isPixelFormatSupported(format, PIXELFORMATUSAGEFLAGS_LINEAR))
+	{
+		outReason = "generateMipmaps cannot be called on textures with formats that don't support linear filtering on this system.";
+		return false;
+	}
+
+	return true;
 }
 
-love::image::ImageData *Texture::newImageData(love::image::Image *module, int slice, int mipmap, const Rect &r)
+void Texture::generateMipmaps()
 {
-	if (!isReadable())
-		throw love::Exception("Texture:newImageData cannot be called on non-readable Textures.");
+	const char *err = nullptr;
+	if (!supportsGenerateMipmaps(err))
+		throw love::Exception("%s", err);
 
-	if (!isRenderTarget())
-		throw love::Exception("Texture:newImageData can only be called on render target Textures.");
-
-	if (isPixelFormatDepthStencil(getPixelFormat()))
-		throw love::Exception("Texture:newImageData cannot be called on Textures with depth/stencil pixel formats.");
-
-	if (r.x < 0 || r.y < 0 || r.w <= 0 || r.h <= 0 || (r.x + r.w) > getPixelWidth(mipmap) || (r.y + r.h) > getPixelHeight(mipmap))
-		throw love::Exception("Invalid rectangle dimensions.");
-
-	if (slice < 0 || (texType == TEXTURE_VOLUME && slice >= getDepth(mipmap))
-		|| (texType == TEXTURE_2D_ARRAY && slice >= layers)
-		|| (texType == TEXTURE_CUBE && slice >= 6))
-	{
-		throw love::Exception("Invalid slice index.");
-	}
-
-	Graphics *gfx = Module::getInstance<Graphics>(Module::M_GRAPHICS);
-	if (gfx != nullptr && gfx->isRenderTargetActive(this))
-		throw love::Exception("Texture:newImageData cannot be called while that Texture is an active render target.");
-
-	PixelFormat dataformat = getLinearPixelFormat(getPixelFormat());
-
-	if (!image::ImageData::validPixelFormat(dataformat))
-	{
-		const char *formatname = "unknown";
-		love::getConstant(dataformat, formatname);
-		throw love::Exception("ImageData with the '%s' pixel format is not supported.", formatname);
-	}
-
-	auto imagedata = module->newImageData(r.w, r.h, dataformat);
-
-	readbackImageData(imagedata, slice, mipmap, r);
-
-	return imagedata;
+	generateMipmapsInternal();
 }
 
 TextureType Texture::getTextureType() const
@@ -608,24 +600,25 @@ bool Texture::isCompressed() const
 
 bool Texture::isFormatLinear() const
 {
-	return isGammaCorrect() && !sRGB && format != PIXELFORMAT_sRGBA8_UNORM;
+	return isGammaCorrect() && !sRGB && !isPixelFormatSRGB(format);
 }
 
-bool Texture::isValidSlice(int slice) const
+bool Texture::isValidSlice(int slice, int mip) const
 {
-	if (slice < 0)
-		return false;
+	return slice >= 0 && slice < getSliceCount(mip);
+}
 
-	if (texType == TEXTURE_CUBE)
-		return slice < 6;
-	else if (texType == TEXTURE_VOLUME)
-		return slice < depth;
+int Texture::getSliceCount(int mip) const
+{
+	if (texType == TEXTURE_2D)
+		return 1;
+	else if (texType == TEXTURE_CUBE)
+		return 6;
 	else if (texType == TEXTURE_2D_ARRAY)
-		return slice < layers;
-	else if (slice > 0)
-		return false;
-
-	return true;
+		return layers;
+	else if (texType == TEXTURE_VOLUME)
+		return getDepth(mip);
+	return 1;
 }
 
 int Texture::getWidth(int mip) const

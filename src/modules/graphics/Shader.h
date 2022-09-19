@@ -64,6 +64,7 @@ public:
 		BUILTIN_TEXTURE_VIDEO_CB,
 		BUILTIN_TEXTURE_VIDEO_CR,
 		BUILTIN_UNIFORMS_PER_DRAW,
+		BUILTIN_UNIFORMS_PER_DRAW_2,
 		BUILTIN_MAX_ENUM
 	};
 
@@ -105,6 +106,11 @@ public:
 		ACCESS_NONE = 0,
 		ACCESS_READ = (1 << 0),
 		ACCESS_WRITE = (1 << 1),
+	};
+
+	struct CompileOptions
+	{
+		std::map<std::string, std::string> defines;
 	};
 
 	struct SourceInfo
@@ -158,14 +164,23 @@ public:
 		};
 	};
 
+	union LocalUniformValue
+	{
+		float f;
+		int32 i;
+		uint32 u;
+	};
+
 	// The members in here must respect uniform buffer alignment/padding rules.
  	struct BuiltinUniformData
  	{
  		Matrix4 transformMatrix;
  		Matrix4 projectionMatrix;
  		Vector4 normalMatrix[3]; // 3x3 matrix padded to an array of 3 vector4s.
- 		Vector4 screenSizeParams;
  		Colorf constantColor;
+
+		// Pixel shader-centric variables past this point.
+		Vector4 screenSizeParams;
  	};
 
 	// Pointer to currently active Shader.
@@ -229,7 +244,7 @@ public:
 	void getLocalThreadgroupSize(int *x, int *y, int *z);
 
 	static SourceInfo getSourceInfo(const std::string &src);
-	static std::string createShaderStageCode(Graphics *gfx, ShaderStageType stage, const std::string &code, const SourceInfo &info, bool gles, bool checksystemfeatures);
+	static std::string createShaderStageCode(Graphics *gfx, ShaderStageType stage, const std::string &code, const CompileOptions &options, const SourceInfo &info, bool gles, bool checksystemfeatures);
 
 	static bool validate(StrongRef<ShaderStage> stages[], std::string &err);
 
@@ -259,10 +274,17 @@ protected:
 		Access access;
 	};
 
+	struct LocalUniform
+	{
+		DataBaseType dataType;
+		std::vector<LocalUniformValue> initializerValues;
+	};
+
 	struct ValidationReflection
 	{
 		std::map<std::string, BufferReflection> storageBuffers;
 		std::map<std::string, StorageTextureReflection> storageTextures;
+		std::map<std::string, LocalUniform> localUniforms;
 		int localThreadgroupSize[3];
 		bool usesPointSize;
 	};
@@ -270,6 +292,9 @@ protected:
 	static bool validateInternal(StrongRef<ShaderStage> stages[], std::string& err, ValidationReflection &reflection);
 	static DataBaseType getDataBaseType(PixelFormat format);
 	static bool isResourceBaseTypeCompatible(DataBaseType a, DataBaseType b);
+
+	static bool validateTexture(const UniformInfo *info, Texture *tex, bool internalUpdate);
+	static bool validateBuffer(const UniformInfo *info, Buffer *buffer, bool internalUpdate);
 
 	StrongRef<ShaderStage> stages[SHADERSTAGE_MAX_ENUM];
 

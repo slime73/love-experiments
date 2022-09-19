@@ -173,6 +173,10 @@ extern "C"
 	extern int luaopen_love_arg(lua_State*);
 	extern int luaopen_love_callbacks(lua_State*);
 	extern int luaopen_love_boot(lua_State*);
+
+#ifdef LOVE_ENABLE_LUAHTTPS
+	extern int luaopen_https(lua_State*);
+#endif
 }
 
 static const luaL_Reg modules[] = {
@@ -356,6 +360,75 @@ static int w__setGammaCorrect(lua_State *L)
 	return 0;
 }
 
+static int w__getDefaultRenderers(lua_State *L)
+{
+#ifdef LOVE_ENABLE_GRAPHICS
+	const auto &renderers = love::graphics::getDefaultRenderers();
+
+	lua_createtable(L, (int) renderers.size(), 0);
+
+	int n = 1;
+	for (auto r : renderers)
+	{
+		const char *str = nullptr;
+		if (love::graphics::getConstant(r, str))
+		{
+			lua_pushstring(L, str);
+			lua_rawseti(L, -2, n++);
+		}
+	}
+#else
+	lua_createtable(L, 0, 0);
+#endif
+	return 1;
+}
+
+static int w__getRenderers(lua_State *L)
+{
+#ifdef LOVE_ENABLE_GRAPHICS
+	const auto &renderers = love::graphics::getRenderers();
+
+	lua_createtable(L, (int) renderers.size(), 0);
+
+	int n = 1;
+	for (auto r : renderers)
+	{
+		const char *str = nullptr;
+		if (love::graphics::getConstant(r, str))
+		{
+			lua_pushstring(L, str);
+			lua_rawseti(L, -2, n++);
+		}
+	}
+#else
+	lua_createtable(L, 0, 0);
+#endif
+	return 1;
+}
+
+static int w__setRenderers(lua_State *L)
+{
+#ifdef LOVE_ENABLE_GRAPHICS
+	std::vector<love::graphics::Renderer> renderers;
+
+	luaL_checktype(L, 1, LUA_TTABLE);
+	for (size_t i = 1; i <= love::luax_objlen(L, 1); i++)
+	{
+		lua_rawgeti(L, -1, (int) i);
+		const char *str = luaL_checkstring(L, -1);
+
+		love::graphics::Renderer r;
+		if (love::graphics::getConstant(str, r))
+			renderers.push_back(r);
+
+		lua_pop(L, 1);
+	}
+
+	love::graphics::setRenderers(renderers);
+#endif
+	return 0;
+}
+
 static int w__setHighDPIAllowed(lua_State *L)
 {
 #ifdef LOVE_ENABLE_WINDOW
@@ -491,6 +564,15 @@ int luaopen_love(lua_State *L)
 	lua_pushcfunction(L, w__setGammaCorrect);
 	lua_setfield(L, -2, "_setGammaCorrect");
 
+	lua_pushcfunction(L, w__getDefaultRenderers);
+	lua_setfield(L, -2, "_getDefaultRenderers");
+
+	lua_pushcfunction(L, w__getRenderers);
+	lua_setfield(L, -2, "_getRenderers");
+
+	lua_pushcfunction(L, w__setRenderers);
+	lua_setfield(L, -2, "_setRenderers");
+
 	lua_pushcfunction(L, w__setHighDPIAllowed);
 	lua_setfield(L, -2, "_setHighDPIAllowed");
 
@@ -577,6 +659,9 @@ int luaopen_love(lua_State *L)
 #endif
 #ifdef LOVE_ENABLE_LUA53
 	love::luax_preload(L, luaopen_luautf8, "utf8");
+#endif
+#ifdef LOVE_ENABLE_LUAHTTPS
+	love::luax_preload(L, luaopen_https, "https");
 #endif
 
 #ifdef LOVE_ENABLE_WINDOW

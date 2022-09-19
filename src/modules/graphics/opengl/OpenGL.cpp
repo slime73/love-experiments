@@ -283,6 +283,7 @@ void OpenGL::setupContext()
 	state.curTextureUnit = 0;
 
 	setDepthWrites(state.depthWritesEnabled);
+	setStencilWriteMask(state.stencilWriteMask);
 
 	createDefaultTexture();
 
@@ -842,7 +843,7 @@ GLenum OpenGL::getGLBufferDataUsage(BufferDataUsage usage)
 		case BUFFERDATAUSAGE_STREAM: return GL_STREAM_DRAW;
 		case BUFFERDATAUSAGE_DYNAMIC: return GL_DYNAMIC_DRAW;
 		case BUFFERDATAUSAGE_STATIC: return GL_STATIC_DRAW;
-		case BUFFERDATAUSAGE_STAGING:
+		case BUFFERDATAUSAGE_READBACK:
 			return (GLAD_VERSION_1_1 || GLAD_ES_VERSION_3_0) ? GL_STREAM_READ : GL_STREAM_DRAW;
 		default: return 0;
 	}
@@ -1110,6 +1111,17 @@ void OpenGL::setDepthWrites(bool enable)
 bool OpenGL::hasDepthWrites() const
 {
 	return state.depthWritesEnabled;
+}
+
+void OpenGL::setStencilWriteMask(uint32 mask)
+{
+	glStencilMask(mask);
+	state.stencilWriteMask = mask;
+}
+
+uint32 OpenGL::getStencilWriteMask() const
+{
+	return state.stencilWriteMask;
 }
 
 void OpenGL::useProgram(GLuint program)
@@ -1438,19 +1450,10 @@ bool OpenGL::rawTexStorage(TextureType target, int levels, PixelFormat pixelform
 
 bool OpenGL::isTexStorageSupported()
 {
-	bool supportsTexStorage = GLAD_VERSION_4_2 || GLAD_ARB_texture_storage;
-
-	// Apparently there are bugs with glTexStorage on some Android drivers. I'd
-	// rather not find out the hard way, so we'll avoid it for now...
-#ifndef LOVE_ANDROID
-	if (GLAD_ES_VERSION_3_0)
-		supportsTexStorage = true;
-#endif
-
 	if (gl.bugs.texStorageBreaksSubImage)
-		supportsTexStorage = false;
+		return false;
 
-	return supportsTexStorage;
+	return GLAD_ES_VERSION_3_0 || GLAD_VERSION_4_2 || GLAD_ARB_texture_storage;
 }
 
 bool OpenGL::isTextureTypeSupported(TextureType type) const
@@ -1646,8 +1649,8 @@ OpenGL::TextureFormat OpenGL::convertPixelFormat(PixelFormat pixelformat, bool r
 	f.framebufferAttachments[0] = GL_COLOR_ATTACHMENT0;
 	f.framebufferAttachments[1] = GL_NONE;
 
-	if (pixelformat == PIXELFORMAT_RGBA8_UNORM && isSRGB)
-		pixelformat = PIXELFORMAT_sRGBA8_UNORM;
+	if (isSRGB)
+		pixelformat = getSRGBPixelFormat(pixelformat);
 	else if (pixelformat == PIXELFORMAT_ETC1_UNORM)
 	{
 		// The ETC2 format can load ETC1 textures.
@@ -1681,13 +1684,17 @@ OpenGL::TextureFormat OpenGL::convertPixelFormat(PixelFormat pixelformat, bool r
 		f.externalformat = GL_RGBA;
 		f.type = GL_UNSIGNED_BYTE;
 		break;
-	case PIXELFORMAT_sRGBA8_UNORM:
+	case PIXELFORMAT_RGBA8_UNORM_sRGB:
 		f.internalformat = GL_SRGB8_ALPHA8;
 		f.type = GL_UNSIGNED_BYTE;
 		if (GLAD_ES_VERSION_2_0 && !GLAD_ES_VERSION_3_0)
 			f.externalformat = GL_SRGB_ALPHA;
 		else
 			f.externalformat = GL_RGBA;
+		break;
+	case PIXELFORMAT_BGRA8_UNORM:
+	case PIXELFORMAT_BGRA8_UNORM_sRGB:
+		// Not supported right now.
 		break;
 	case PIXELFORMAT_R16_UNORM:
 		f.internalformat = GL_R16;
@@ -2087,13 +2094,20 @@ OpenGL::TextureFormat OpenGL::convertPixelFormat(PixelFormat pixelformat, bool r
 
 	if (!isPixelFormatCompressed(pixelformat))
 	{
-		if (GLAD_ES_VERSION_2_0 && !(GLAD_ES_VERSION_3_0 && pixelformat == PIXELFORMAT_LA8_UNORM)
+		// glTexImage in OpenGL ES 2 only accepts internal format enums that
+		// match the external format. GLES3 doesn't have that restriction - 
+		// except for GL_LUMINANCE_ALPHA which doesn't have a sized version in
+		// ES3. However we always use RG8 for PIXELFORMAT_LA8 on GLES3 so it
+		// doesn't matter there.
+		// Also note that GLES2+extension sRGB format enums are different from
+		// desktop GL and GLES3+ (this is handled above).
+		if (GLAD_ES_VERSION_2_0 && !GLAD_ES_VERSION_3_0
 			&& !renderbuffer && !isTexStorageSupported())
 		{
 			f.internalformat = f.externalformat;
 		}
 
-		if (pixelformat != PIXELFORMAT_sRGBA8_UNORM)
+		if (!isPixelFormatSRGB(pixelformat))
 			isSRGB = false;
 	}
 
@@ -2126,7 +2140,7 @@ uint32 OpenGL::getPixelFormatUsageFlags(PixelFormat pixelformat)
 		if (GLAD_VERSION_4_3 || GLAD_ES_VERSION_3_1)
 			flags |= computewrite;
 		break;
-	case PIXELFORMAT_sRGBA8_UNORM:
+	case PIXELFORMAT_RGBA8_UNORM_sRGB:
 		if (gl.bugs.brokenSRGB)
 			break;
 		if (GLAD_ES_VERSION_3_0 || GLAD_VERSION_2_1 || GLAD_EXT_texture_sRGB)
@@ -2136,6 +2150,10 @@ uint32 OpenGL::getPixelFormatUsageFlags(PixelFormat pixelformat)
 			flags |= commonrender;
 		if (GLAD_VERSION_4_3 || GLAD_ES_VERSION_3_1)
 			flags |= computewrite;
+		break;
+	case PIXELFORMAT_BGRA8_UNORM:
+	case PIXELFORMAT_BGRA8_UNORM_sRGB:
+		// Not supported right now.
 		break;
 	case PIXELFORMAT_R16_UNORM:
 	case PIXELFORMAT_RG16_UNORM:

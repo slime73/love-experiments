@@ -22,6 +22,10 @@
 #include "NativeFile.h"
 #include "common/utf8.h"
 
+#ifdef LOVE_ANDROID
+#include "common/android.h"
+#endif
+
 // Assume POSIX or Visual Studio.
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -39,13 +43,26 @@ namespace filesystem
 
 love::Type NativeFile::type("NativeFile", &File::type);
 
-NativeFile::NativeFile(const std::string &filename)
+NativeFile::NativeFile(const std::string &filename, Mode mode)
 	: filename(filename)
 	, file(nullptr)
 	, mode(MODE_CLOSED)
 	, bufferMode(BUFFER_NONE)
 	, bufferSize(0)
 {
+	if (!open(mode))
+		throw love::Exception("Could not open file at path %s", filename.c_str());
+}
+
+NativeFile::NativeFile(const NativeFile &other)
+	: filename(other.filename)
+	, file(nullptr)
+	, mode(MODE_CLOSED)
+	, bufferMode(other.bufferMode)
+	, bufferSize(other.bufferSize)
+{
+	if (!open(other.mode))
+		throw love::Exception("Could not open file at path %s", filename.c_str());
 }
 
 NativeFile::~NativeFile()
@@ -54,16 +71,39 @@ NativeFile::~NativeFile()
 		close();
 }
 
+NativeFile *NativeFile::clone()
+{
+	return new NativeFile(*this);
+}
+
 bool NativeFile::open(Mode newmode)
 {
 	if (newmode == MODE_CLOSED)
+	{
+		close();
 		return true;
+	}
 
 	// File already open?
 	if (file != nullptr)
 		return false;
 
-#ifdef LOVE_WINDOWS
+#if defined(LOVE_ANDROID)
+	// Try to handle content:// URI
+	int fd = love::android::getFDFromContentProtocol(filename.c_str());
+	if (fd != -1)
+	{
+		if (newmode != MODE_READ)
+		{
+			::close(fd);
+			throw love::Exception("%s is read-only.", filename.c_str());
+		}
+
+		file = fdopen(fd, "rb");
+	}
+	else
+		file = fopen(filename.c_str(), getModeString(newmode));
+#elif defined(LOVE_WINDOWS)
 	// make sure non-ASCII filenames work.
 	std::wstring modestr = to_widestr(getModeString(newmode));
 	std::wstring wfilename = to_widestr(filename);
@@ -197,15 +237,22 @@ int64 NativeFile::tell()
 #endif
 }
 
-bool NativeFile::seek(uint64 pos)
+bool NativeFile::seek(int64 pos, SeekOrigin origin)
 {
 	if (file == nullptr)
 		return false;
 
+	int forigin = SEEK_SET;
+	if (origin == SEEKORIGIN_CURRENT)
+		forigin = SEEK_CUR;
+	else if (origin == SEEKORIGIN_END)
+		forigin = SEEK_END;
+
+	// TODO
 #ifdef LOVE_WINDOWS
-	return _fseeki64(file, (int64) pos, SEEK_SET) == 0;
+	return _fseeki64(file, pos, forigin) == 0;
 #else
-	return fseeko(file, (off_t) pos, SEEK_SET) == 0;
+	return fseeko(file, (off_t) pos, forigin) == 0;
 #endif
 }
 

@@ -93,6 +93,18 @@ ALenum Audio::getFormat(int bitDepth, int channels)
 	return AL_NONE;
 }
 
+static const char *getDeviceSpecifier(ALCdevice *device)
+{
+#ifndef ALC_ALL_DEVICES_SPECIFIER
+	constexpr ALCenum ALC_ALL_DEVICES_SPECIFIER = 0x1013;
+#endif
+	static ALCenum deviceEnum = alcIsExtensionPresent(nullptr, "ALC_ENUMERATE_ALL_EXT") == ALC_TRUE
+		? ALC_ALL_DEVICES_SPECIFIER
+		: ALC_DEVICE_SPECIFIER;
+
+	return alcGetString(device, deviceEnum);
+}
+
 Audio::Audio()
 	: device(nullptr)
 	, context(nullptr)
@@ -100,10 +112,8 @@ Audio::Audio()
 	, poolThread(nullptr)
 	, distanceModel(DISTANCE_INVERSE_CLAMPED)
 {
-#if defined(LOVE_LINUX)
-	// Temporarly block signals, as the thread inherits this mask
-	love::thread::disableSignals();
-#endif
+	attribs.push_back(0);
+	attribs.push_back(0);
 
 	// Before opening new device, check if recording
 	// is requested.
@@ -114,29 +124,31 @@ Audio::Audio()
 			requestRecordingPermission();
 	}
 
-	// Passing null for default device.
-	device = alcOpenDevice(nullptr);
+	{
+#if defined(LOVE_LINUX)
+		// Temporarly block signals, as the thread inherits this mask
+		love::thread::ScopedDisableSignals disableSignals;
+#endif
 
-	if (device == nullptr)
-		throw love::Exception("Could not open device.");
+		// Passing null for default device.
+		device = alcOpenDevice(nullptr);
+
+		if (device == nullptr)
+			throw love::Exception("Could not open device.");
 
 #ifdef ALC_EXT_EFX
-	ALint attribs[4] = { ALC_MAX_AUXILIARY_SENDS, MAX_SOURCE_EFFECTS, 0, 0 };
-#else
-	ALint *attribs = nullptr;
+		attribs.insert(attribs.begin(), ALC_MAX_AUXILIARY_SENDS);
+		attribs.insert(attribs.begin() + 1, MAX_SOURCE_EFFECTS);
 #endif
 
-	context = alcCreateContext(device, attribs);
+		context = alcCreateContext(device, attribs.data());
 
-	if (context == nullptr)
-		throw love::Exception("Could not create context.");
+		if (context == nullptr)
+			throw love::Exception("Could not create context.");
 
-	if (!alcMakeContextCurrent(context) || alcGetError(device) != ALC_NO_ERROR)
-		throw love::Exception("Could not make context current.");
-
-#if defined(LOVE_LINUX)
-	love::thread::reenableSignals();
-#endif
+		if (!alcMakeContextCurrent(context) || alcGetError(device) != ALC_NO_ERROR)
+			throw love::Exception("Could not make context current.");
+	}
 
 #ifdef ALC_EXT_EFX
 	initializeEFX();
@@ -167,7 +179,7 @@ Audio::Audio()
 
 	try
 	{
-		pool = new Pool();
+		pool = new Pool(device);
 	}
 	catch (love::Exception &)
 	{
@@ -314,6 +326,52 @@ void Audio::resumeContext()
 {
 	if (context && alcGetCurrentContext() != context)
 		alcMakeContextCurrent(context);
+}
+
+std::string Audio::getPlaybackDevice()
+{
+	const char *dev = getDeviceSpecifier(device);
+
+	if (dev == nullptr)
+		throw Exception("Failed to get current device: %s", alcGetString(device, alcGetError(device)));
+
+	return dev;
+}
+
+void Audio::getPlaybackDevices(std::vector<std::string> &list)
+{
+	const char *devices = getDeviceSpecifier(nullptr);
+
+	if (devices == nullptr)
+		throw Exception("Failed to enumerate devices: %s", alcGetString(nullptr, alcGetError(nullptr)));
+
+	for (const char *device = devices; *device; device++)
+	{
+		list.emplace_back(device);
+		device += list.back().length();
+	}
+}
+
+void Audio::setPlaybackDevice(const char* name)
+{
+#ifndef ALC_SOFT_reopen_device
+	typedef ALCboolean (ALC_APIENTRY*LPALCREOPENDEVICESOFT)(ALCdevice *device,
+		const ALCchar *deviceName, const ALCint *attribs);
+#endif
+	static LPALCREOPENDEVICESOFT alcReopenDeviceSOFT = alcIsExtensionPresent(device, "ALC_SOFT_reopen_device") == ALC_TRUE
+		? (LPALCREOPENDEVICESOFT) alcGetProcAddress(device, "alcReopenDeviceSOFT")
+		: nullptr;
+
+	if (alcReopenDeviceSOFT == nullptr)
+	{
+		// Default implementation throws exception. To make
+		// error message consistent, call the base class.
+		love::audio::Audio::setPlaybackDevice(name);
+		return;
+	}
+
+	if (alcReopenDeviceSOFT(device, (const ALCchar *) name, attribs.data()) == ALC_FALSE)
+		throw love::Exception("Cannot set output device: %s", alcGetString(device, alcGetError(device)));
 }
 
 void Audio::setVolume(float volume)

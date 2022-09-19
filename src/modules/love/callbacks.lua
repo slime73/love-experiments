@@ -112,6 +112,12 @@ function love.createhandlers()
 		directorydropped = function (dir)
 			if love.directorydropped then return love.directorydropped(dir) end
 		end,
+		dropbegan = function ()
+			if love.dropbegan then return love.dropbegan() end
+		end,
+		dropcompleted = function ()
+			if love.dropcompleted then return love.dropcompleted() end
+		end,
 		lowmemory = function ()
 			if love.lowmemory then love.lowmemory() end
 			collectgarbage()
@@ -119,6 +125,14 @@ function love.createhandlers()
 		end,
 		displayrotated = function (display, orient)
 			if love.displayrotated then return love.displayrotated(display, orient) end
+		end,
+		localechanged = function ()
+			if love.localechanged then return love.localechanged() end
+		end,
+		audiodisconnected = function (sources)
+			if not love.audiodisconnected or not love.audiodisconnected(sources) then
+				love.audio.setPlaybackDevice()
+			end
 		end,
 	}, {
 		__index = function(self, name)

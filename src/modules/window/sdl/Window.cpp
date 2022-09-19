@@ -44,6 +44,8 @@
 
 #if defined(LOVE_WINDOWS)
 #include <windows.h>
+#include <dwmapi.h>
+#include <VersionHelpers.h>
 #elif defined(LOVE_MACOS)
 #include "common/macos.h"
 #endif
@@ -52,10 +54,27 @@
 #define APIENTRY
 #endif
 
+#ifndef SDL_HINT_WINDOWS_DPI_SCALING
+#define SDL_HINT_WINDOWS_DPI_SCALING "SDL_WINDOWS_DPI_SCALING"
+#endif
+
 namespace love
 {
 namespace window
 {
+
+// See src/modules/window/Window.cpp.
+void setHighDPIAllowedImplementation(bool enable)
+{
+#if defined(LOVE_WINDOWS)
+	// Windows uses a different API than SDL_WINDOW_ALLOW_HIGHDPI.
+	// This must be set before the video subsystem is initialized.
+	SDL_SetHint(SDL_HINT_WINDOWS_DPI_SCALING, enable ? "1" : "0");
+#else
+	LOVE_UNUSED(enable);
+#endif
+}
+
 namespace sdl
 {
 
@@ -63,7 +82,10 @@ Window::Window()
 	: open(false)
 	, mouseGrabbed(false)
 	, window(nullptr)
-	, context(nullptr)
+	, glcontext(nullptr)
+#ifdef LOVE_GRAPHICS_METAL
+	, metalView(nullptr)
+#endif
 	, displayedWindowError(false)
 	, hasSDL203orEarlier(false)
 	, contextAttribs()
@@ -82,9 +104,7 @@ Window::Window()
 Window::~Window()
 {
 	close(false);
-
 	graphics.set(nullptr);
-
 	SDL_QuitSubSystem(SDL_INIT_VIDEO);
 }
 
@@ -294,9 +314,12 @@ std::vector<Window::ContextAttribs> Window::getContextAttribsList() const
 	return attribslist;
 }
 
-bool Window::createWindowAndContext(int x, int y, int w, int h, Uint32 windowflags)
+bool Window::createWindowAndContext(int x, int y, int w, int h, Uint32 windowflags, graphics::Renderer renderer)
 {
-	std::vector<ContextAttribs> attribslist = getContextAttribsList();
+	bool needsglcontext = (windowflags & SDL_WINDOW_OPENGL) != 0;
+#ifdef LOVE_GRAPHICS_METAL
+	bool needsmetalview = (windowflags & SDL_WINDOW_METAL) != 0;
+#endif
 
 	std::string windowerror;
 	std::string contexterror;
@@ -308,13 +331,21 @@ bool Window::createWindowAndContext(int x, int y, int w, int h, Uint32 windowfla
 	// Also, apparently some Intel drivers on Windows give back a Microsoft
 	// OpenGL 1.1 software renderer context when high MSAA values are requested!
 
-	const auto create = [&](ContextAttribs attribs) -> bool
+	const auto create = [&](const ContextAttribs *attribs) -> bool
 	{
-		if (context)
+		if (glcontext)
 		{
-			SDL_GL_DeleteContext(context);
-			context = nullptr;
+			SDL_GL_DeleteContext(glcontext);
+			glcontext = nullptr;
 		}
+
+#ifdef LOVE_GRAPHICS_METAL
+		if (metalView)
+		{
+			SDL_Metal_DestroyView(metalView);
+			metalView = nullptr;
+		}
+#endif
 
 		if (window)
 		{
@@ -331,68 +362,100 @@ bool Window::createWindowAndContext(int x, int y, int w, int h, Uint32 windowfla
 			return false;
 		}
 
-		context = SDL_GL_CreateContext(window);
-
-		if (!context)
-			contexterror = std::string(SDL_GetError());
-
-		// Make sure the context's version is at least what we requested.
-		if (context && !checkGLVersion(attribs, glversion))
+		if (attribs != nullptr)
 		{
-			SDL_GL_DeleteContext(context);
-			context = nullptr;
-		}
+			glcontext = SDL_GL_CreateContext(window);
 
-		if (!context)
-		{
-			SDL_DestroyWindow(window);
-			window = nullptr;
-			return false;
+			if (!glcontext)
+				contexterror = std::string(SDL_GetError());
+
+			// Make sure the context's version is at least what we requested.
+			if (glcontext && !checkGLVersion(*attribs, glversion))
+			{
+				SDL_GL_DeleteContext(glcontext);
+				glcontext = nullptr;
+			}
+
+			if (!glcontext)
+			{
+				SDL_DestroyWindow(window);
+				window = nullptr;
+				return false;
+			}
 		}
 
 		return true;
 	};
 
-	// Try each context profile in order.
-	for (ContextAttribs attribs : attribslist)
+	if (renderer == graphics::RENDERER_OPENGL)
 	{
-		bool curSRGB = love::graphics::isGammaCorrect();
+		std::vector<ContextAttribs> attribslist = getContextAttribsList();
 
-		setGLFramebufferAttributes(curSRGB);
-		setGLContextAttributes(attribs);
-
-		windowerror.clear();
-		contexterror.clear();
-
-		create(attribs);
-
-		if (!window && curSRGB)
+		// Try each context profile in order.
+		for (ContextAttribs attribs : attribslist)
 		{
-			// The sRGB setting could have caused the failure.
-			setGLFramebufferAttributes(false);
-			if (create(attribs))
-				curSRGB = false;
-		}
+			bool curSRGB = love::graphics::isGammaCorrect();
 
-		if (window && context)
-		{
-			// Store the successful context attributes so we can re-use them in
-			// subsequent calls to createWindowAndContext.
-			contextAttribs = attribs;
-			love::graphics::setGammaCorrect(curSRGB);
-			break;
+			setGLFramebufferAttributes(curSRGB);
+			setGLContextAttributes(attribs);
+
+			windowerror.clear();
+			contexterror.clear();
+
+			create(&attribs);
+
+			if (!window && curSRGB)
+			{
+				// The sRGB setting could have caused the failure.
+				setGLFramebufferAttributes(false);
+				if (create(&attribs))
+					curSRGB = false;
+			}
+
+			if (window && glcontext)
+			{
+				// Store the successful context attributes so we can re-use them in
+				// subsequent calls to createWindowAndContext.
+				contextAttribs = attribs;
+				love::graphics::setGammaCorrect(curSRGB);
+				break;
+			}
 		}
 	}
-
-	if (!context || !window)
+#ifdef LOVE_GRAPHICS_METAL
+	else if (renderer == graphics::RENDERER_METAL)
 	{
-		std::string title = "Unable to create OpenGL window";
+		if (create(nullptr) && window != nullptr)
+			metalView = SDL_Metal_CreateView(window);
+
+		if (metalView == nullptr && window != nullptr)
+		{
+			contexterror = SDL_GetError();
+			SDL_DestroyWindow(window);
+			window = nullptr;
+		}
+	}
+#endif
+	else
+	{
+		create(nullptr);
+	}
+
+	bool failed = window == nullptr;
+	failed |= (needsglcontext && !glcontext);
+#ifdef LOVE_GRAPHICS_METAL
+	failed |= (needsmetalview && !metalView);
+#endif
+
+	if (failed)
+	{
+		std::string title = "Unable to create renderer";
 		std::string message = "This program requires a graphics card and video drivers which support OpenGL 2.1 or OpenGL ES 2.";
 
 		if (!glversion.empty())
 			message += "\n\nDetected OpenGL version:\n" + glversion;
 		else if (!contexterror.empty())
-			message += "\n\nOpenGL context creation error: " + contexterror;
+			message += "\n\nRenderer context creation error: " + contexterror;
 		else if (!windowerror.empty())
 			message += "\n\nSDL window creation error: " + windowerror;
 
@@ -421,6 +484,8 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 	if (graphics.get() && graphics->isRenderTargetActive())
 		throw love::Exception("love.window.setMode cannot be called while a render target is active in love.graphics.");
 
+	auto renderer = graphics != nullptr ? graphics->getRenderer() : graphics::RENDERER_NONE;
+
 	if (isOpen())
 		updateSettings(this->settings, false);
 
@@ -432,13 +497,13 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 	f.minwidth = std::max(f.minwidth, 1);
 	f.minheight = std::max(f.minheight, 1);
 
-	f.display = std::min(std::max(f.display, 0), getDisplayCount() - 1);
+	f.displayindex = std::min(std::max(f.displayindex, 0), getDisplayCount() - 1);
 
 	// Use the desktop resolution if a width or height of 0 is specified.
 	if (width == 0 || height == 0)
 	{
 		SDL_DisplayMode mode = {};
-		SDL_GetDesktopDisplayMode(f.display, &mode);
+		SDL_GetDesktopDisplayMode(f.displayindex, &mode);
 		width = mode.w;
 		height = mode.h;
 	}
@@ -463,16 +528,16 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 	{
 		// The position needs to be in the global coordinate space.
 		SDL_Rect displaybounds = {};
-		SDL_GetDisplayBounds(f.display, &displaybounds);
+		SDL_GetDisplayBounds(f.displayindex, &displaybounds);
 		x += displaybounds.x;
 		y += displaybounds.y;
 	}
 	else
 	{
 		if (f.centered)
-			x = y = SDL_WINDOWPOS_CENTERED_DISPLAY(f.display);
+			x = y = SDL_WINDOWPOS_CENTERED_DISPLAY(f.displayindex);
 		else
-			x = y = SDL_WINDOWPOS_UNDEFINED_DISPLAY(f.display);
+			x = y = SDL_WINDOWPOS_UNDEFINED_DISPLAY(f.displayindex);
 	}
 
 	SDL_DisplayMode fsmode = {0, width, height, 0, nullptr};
@@ -480,12 +545,12 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 	if (f.fullscreen && f.fstype == FULLSCREEN_EXCLUSIVE)
 	{
 		// Fullscreen window creation will bug out if no mode can be used.
-		if (SDL_GetClosestDisplayMode(f.display, &fsmode, &fsmode) == nullptr)
+		if (SDL_GetClosestDisplayMode(f.displayindex, &fsmode, &fsmode) == nullptr)
 		{
 			// GetClosestDisplayMode will fail if we request a size larger
 			// than the largest available display mode, so we'll try to use
 			// the largest (first) mode in that case.
-			if (SDL_GetDisplayMode(f.display, 0, &fsmode) < 0)
+			if (SDL_GetDisplayMode(f.displayindex, 0, &fsmode) < 0)
 				return false;
 		}
 	}
@@ -494,22 +559,25 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 
 	Uint32 sdlflags = 0;
 
-	 if (f.fullscreen)
-	 {
-		 if (f.fstype == FULLSCREEN_DESKTOP)
-			 sdlflags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-		 else
-		 {
-			 sdlflags |= SDL_WINDOW_FULLSCREEN;
-			 width = fsmode.w;
-			 height = fsmode.h;
-		 }
-	 }
+	if (f.fullscreen)
+	{
+		if (f.fstype == FULLSCREEN_DESKTOP)
+			sdlflags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+		else
+		{
+			sdlflags |= SDL_WINDOW_FULLSCREEN;
+			width = fsmode.w;
+			height = fsmode.h;
+		}
+	}
+
+	if (renderer != windowRenderer && isOpen())
+		close();
 
 	if (isOpen())
 	{
-		if (SDL_SetWindowFullscreen(window, sdlflags) == 0)
-			SDL_GL_MakeCurrent(window, context);
+		if (SDL_SetWindowFullscreen(window, sdlflags) == 0 && renderer == graphics::RENDERER_OPENGL)
+			SDL_GL_MakeCurrent(window, glcontext);
 
 		if (!f.fullscreen)
 			SDL_SetWindowSize(window, width, height);
@@ -526,7 +594,13 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 	}
 	else
 	{
-		sdlflags |= SDL_WINDOW_OPENGL;
+		if (renderer == graphics::RENDERER_OPENGL)
+			sdlflags |= SDL_WINDOW_OPENGL;
+
+	#ifdef LOVE_GRAPHICS_METAL
+		if (renderer == graphics::RENDERER_METAL)
+			sdlflags |= SDL_WINDOW_METAL;
+	#endif
 
 		 if (f.resizable)
 			 sdlflags |= SDL_WINDOW_RESIZABLE;
@@ -534,10 +608,11 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 		 if (f.borderless)
 			 sdlflags |= SDL_WINDOW_BORDERLESS;
 
+		// Note: this flag is ignored on Windows.
 		 if (isHighDPIAllowed())
 			 sdlflags |= SDL_WINDOW_ALLOW_HIGHDPI;
 
-		if (!createWindowAndContext(x, y, width, height, sdlflags))
+		if (!createWindowAndContext(x, y, width, height, sdlflags, renderer))
 			return false;
 
 		needsetmode = true;
@@ -552,7 +627,7 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 	// Enforce minimum window dimensions.
 	SDL_SetWindowMinimumSize(window, f.minwidth, f.minheight);
 
-	if (this->settings.display != f.display || f.useposition || f.centered)
+	if (this->settings.displayindex != f.displayindex || f.useposition || f.centered)
 		SDL_SetWindowPosition(window, x, y);
 
 	SDL_RaiseWindow(window);
@@ -561,6 +636,8 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 
 	updateSettings(f, false);
 
+	windowRenderer = renderer;
+
 	if (graphics.get())
 	{
 		double scaledw, scaledh;
@@ -568,7 +645,15 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 
 		if (needsetmode)
 		{
-			graphics->setMode((int) scaledw, (int) scaledh, pixelWidth, pixelHeight, f.stencil, f.msaa);
+			void *context = nullptr;
+			if (renderer == graphics::RENDERER_OPENGL)
+				context = (void *) glcontext;
+#ifdef LOVE_GRAPHICS_METAL
+			if (renderer == graphics::RENDERER_METAL && metalView)
+				context = (void *) SDL_Metal_GetLayer(metalView);
+#endif
+
+			graphics->setMode(context, (int) scaledw, (int) scaledh, pixelWidth, pixelHeight, f.stencil, f.msaa);
 			this->settings.msaa = graphics->getBackbufferMSAA();
 		}
 		else
@@ -595,7 +680,17 @@ bool Window::onSizeChanged(int width, int height)
 	windowWidth = width;
 	windowHeight = height;
 
-	SDL_GL_GetDrawableSize(window, &pixelWidth, &pixelHeight);
+	if (glcontext != nullptr)
+		SDL_GL_GetDrawableSize(window, &pixelWidth, &pixelHeight);
+#ifdef LOVE_GRAPHICS_METAL
+	else if (metalView != nullptr)
+		SDL_Metal_GetDrawableSize(window, &pixelWidth, &pixelHeight);
+#endif
+	else
+	{
+		pixelWidth = width;
+		pixelHeight = height;
+	}
 
 	if (graphics.get())
 	{
@@ -613,7 +708,16 @@ void Window::updateSettings(const WindowSettings &newsettings, bool updateGraphi
 
 	// Set the new display mode as the current display mode.
 	SDL_GetWindowSize(window, &windowWidth, &windowHeight);
-	SDL_GL_GetDrawableSize(window, &pixelWidth, &pixelHeight);
+
+	pixelWidth = windowWidth;
+	pixelHeight = windowHeight;
+
+	if ((wflags & SDL_WINDOW_OPENGL) != 0)
+		SDL_GL_GetDrawableSize(window, &pixelWidth, &pixelHeight);
+#ifdef LOVE_GRAPHICS_METAL
+	else if ((wflags & SDL_WINDOW_METAL) != 0)
+		SDL_Metal_GetDrawableSize(window, &pixelWidth, &pixelHeight);
+#endif
 
 	if ((wflags & SDL_WINDOW_FULLSCREEN_DESKTOP) == SDL_WINDOW_FULLSCREEN_DESKTOP)
 	{
@@ -643,7 +747,7 @@ void Window::updateSettings(const WindowSettings &newsettings, bool updateGraphi
 	settings.borderless = (wflags & SDL_WINDOW_BORDERLESS) != 0;
 	settings.centered = newsettings.centered;
 
-	getPosition(settings.x, settings.y, settings.display);
+	getPosition(settings.x, settings.y, settings.displayindex);
 
 	setHighDPIAllowed((wflags & SDL_WINDOW_ALLOW_HIGHDPI) != 0);
 
@@ -661,7 +765,7 @@ void Window::updateSettings(const WindowSettings &newsettings, bool updateGraphi
 	settings.depth = newsettings.depth;
 
 	SDL_DisplayMode dmode = {};
-	SDL_GetCurrentDisplayMode(settings.display, &dmode);
+	SDL_GetCurrentDisplayMode(settings.displayindex, &dmode);
 
 	// May be 0 if the refresh rate can't be determined.
 	settings.refreshrate = (double) dmode.refresh_rate;
@@ -701,11 +805,19 @@ void Window::close(bool allowExceptions)
 		graphics->unSetMode();
 	}
 
-	if (context)
+	if (glcontext)
 	{
-		SDL_GL_DeleteContext(context);
-		context = nullptr;
+		SDL_GL_DeleteContext(glcontext);
+		glcontext = nullptr;
 	}
+
+#ifdef LOVE_GRAPHICS_METAL
+	if (metalView)
+	{
+		SDL_Metal_DestroyView(metalView);
+		metalView = nullptr;
+	}
+#endif
 
 	if (window)
 	{
@@ -757,14 +869,10 @@ bool Window::setFullscreen(bool fullscreen, FullscreenType fstype)
 
 	if (SDL_SetWindowFullscreen(window, sdlflags) == 0)
 	{
-		SDL_GL_MakeCurrent(window, context);
+		if (glcontext)
+			SDL_GL_MakeCurrent(window, glcontext);
 
 		updateSettings(newsettings, true);
-
-		// This gets un-set when we exit fullscreen (at least in macOS).
-		if (!fullscreen)
-			SDL_SetWindowMinimumSize(window, settings.minwidth, settings.minheight);
-
 		return true;
 	}
 
@@ -992,20 +1100,43 @@ love::image::ImageData *Window::getIcon()
 
 void Window::setVSync(int vsync)
 {
-	if (context == nullptr)
-		return;
+	if (glcontext != nullptr)
+	{
+		SDL_GL_SetSwapInterval(vsync);
 
-	SDL_GL_SetSwapInterval(vsync);
+		// Check if adaptive vsync was requested but not supported, and fall
+		// back to regular vsync if so.
+		if (vsync == -1 && SDL_GL_GetSwapInterval() != -1)
+			SDL_GL_SetSwapInterval(1);
+	}
 
-	// Check if adaptive vsync was requested but not supported, and fall back
-	// to regular vsync if so.
-	if (vsync == -1 && SDL_GL_GetSwapInterval() != -1)
-		SDL_GL_SetSwapInterval(1);
+#if defined(LOVE_GRAPHICS_METAL) && defined(LOVE_MACOS)
+	if (metalView != nullptr)
+	{
+		void *metallayer = SDL_Metal_GetLayer(metalView);
+		love::macos::setMetalLayerVSync(metallayer, vsync != 0);
+	}
+#endif
 }
 
 int Window::getVSync() const
 {
-	return context != nullptr ? SDL_GL_GetSwapInterval() : 0;
+	if (glcontext != nullptr)
+		return SDL_GL_GetSwapInterval();
+
+#if defined(LOVE_GRAPHICS_METAL)
+	if (metalView != nullptr)
+	{
+#ifdef LOVE_MACOS
+		void *metallayer = SDL_Metal_GetLayer(metalView);
+		return love::macos::getMetalLayerVSync(metallayer) ? 1 : 0;
+#else
+		return 1;
+#endif
+	}
+#endif
+
+	return 0;
 }
 
 void Window::setDisplaySleepEnabled(bool enable)
@@ -1057,7 +1188,60 @@ bool Window::isMinimized() const
 
 void Window::swapBuffers()
 {
-	SDL_GL_SwapWindow(window);
+	if (glcontext)
+	{
+#ifdef LOVE_WINDOWS
+		bool useDwmFlush = false;
+		int swapInterval = getVSync();
+
+		// https://github.com/love2d/love/issues/1628
+		// VSync can interact badly with Windows desktop composition (DWM) in windowed mode. DwmFlush can be used instead
+		// of vsync, but it's much less flexible so we're very conservative here with where it's used:
+		// - It won't work with exclusive or desktop fullscreen.
+		// - DWM refreshes don't always match the refresh rate of the monitor the window is in (or the requested swap
+		//   interval), so we only use it when they do match.
+		// - The user may force GL vsync, and DwmFlush shouldn't be used together with GL vsync.
+		if (!settings.fullscreen && swapInterval == 1)
+		{
+			// Desktop composition is always enabled in Windows 8+. But DwmIsCompositionEnabled won't always return true...
+			// (see DwmIsCompositionEnabled docs).
+			BOOL compositionEnabled = IsWindows8OrGreater();
+			if (compositionEnabled || (SUCCEEDED(DwmIsCompositionEnabled(&compositionEnabled)) && compositionEnabled))
+			{
+				DWM_TIMING_INFO info = {};
+				info.cbSize = sizeof(DWM_TIMING_INFO);
+				double dwmRefreshRate = 0;
+				if (SUCCEEDED(DwmGetCompositionTimingInfo(nullptr, &info)))
+					dwmRefreshRate = (double)info.rateRefresh.uiNumerator / (double)info.rateRefresh.uiDenominator;
+
+				SDL_DisplayMode dmode = {};
+				int displayindex = SDL_GetWindowDisplayIndex(window);
+
+				if (displayindex >= 0)
+					SDL_GetCurrentDisplayMode(displayindex, &dmode);
+
+				if (dmode.refresh_rate > 0 && dwmRefreshRate > 0 && (fabs(dmode.refresh_rate - dwmRefreshRate) < 2))
+				{
+					SDL_GL_SetSwapInterval(0);
+					if (SDL_GL_GetSwapInterval() == 0)
+						useDwmFlush = true;
+					else
+						SDL_GL_SetSwapInterval(swapInterval);
+				}
+			}
+		}
+#endif
+
+		SDL_GL_SwapWindow(window);
+
+#ifdef LOVE_WINDOWS
+		if (useDwmFlush)
+		{
+			DwmFlush();
+			SDL_GL_SetSwapInterval(swapInterval);
+		}
+#endif
+	}
 }
 
 bool Window::hasFocus() const

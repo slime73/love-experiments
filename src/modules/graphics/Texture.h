@@ -226,7 +226,7 @@ public:
 
 	static int64 totalGraphicsMemory;
 
-	Texture(const Settings &settings, const Slices *slices);
+	Texture(Graphics *gfx, const Settings &settings, const Slices *slices);
 	virtual ~Texture();
 
 	// Drawable.
@@ -245,12 +245,11 @@ public:
 
 	void generateMipmaps();
 
-	love::image::ImageData *newImageData(love::image::Image *module, int slice, int mipmap, const Rect &rect);
-
 	virtual void copyFromBuffer(Buffer *source, size_t sourceoffset, int sourcewidth, size_t size, int slice, int mipmap, const Rect &rect) = 0;
 	virtual void copyToBuffer(Buffer *dest, int slice, int mipmap, const Rect &rect, size_t destoffset, int destwidth, size_t size) = 0;
 
 	virtual ptrdiff_t getRenderTargetHandle() const = 0;
+	virtual ptrdiff_t getSamplerHandle() const = 0;
 
 	TextureType getTextureType() const;
 	PixelFormat getPixelFormat() const;
@@ -263,7 +262,10 @@ public:
 	bool isCompressed() const;
 	bool isFormatLinear() const;
 
-	bool isValidSlice(int slice) const;
+	bool isValidSlice(int slice, int mip) const;
+
+	// Number of array layers, cube faces, or volume layers for the given mip.
+	int getSliceCount(int mip) const;
 
 	int getWidth(int mip = 0) const;
 	int getHeight(int mip = 0) const;
@@ -307,8 +309,8 @@ protected:
 	void uploadImageData(love::image::ImageDataBase *d, int level, int slice, int x, int y);
 	virtual void uploadByteData(PixelFormat pixelformat, const void *data, size_t size, int level, int slice, const Rect &r) = 0;
 
+	bool supportsGenerateMipmaps(const char *&outReason) const;
 	virtual void generateMipmapsInternal() = 0;
-	virtual void readbackImageData(love::image::ImageData *imagedata, int slice, int mipmap, const Rect &rect) = 0;
 
 	bool validateDimensions(bool throwException) const;
 

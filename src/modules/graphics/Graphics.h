@@ -37,6 +37,7 @@
 #include "Shader.h"
 #include "Quad.h"
 #include "Mesh.h"
+#include "GraphicsReadback.h"
 #include "Deprecations.h"
 #include "renderstate.h"
 #include "math/Transform.h"
@@ -64,6 +65,14 @@ class Buffer;
 typedef Optional<ColorD> OptionalColorD;
 
 const int MAX_COLOR_RENDER_TARGETS = 8;
+
+enum Renderer
+{
+	RENDERER_NONE,
+	RENDERER_OPENGL,
+	RENDERER_METAL,
+	RENDERER_MAX_ENUM
+};
 
 /**
  * Globally sets whether gamma correction is enabled. Ideally this should be set
@@ -94,6 +103,10 @@ Colorf gammaCorrectColor(const Colorf &c);
 Colorf unGammaCorrectColor(const Colorf &c);
 
 bool isDebugEnabled();
+
+const std::vector<Renderer> &getDefaultRenderers();
+const std::vector<Renderer> &getRenderers();
+void setRenderers(const std::vector<Renderer> &renderers);
 
 class Graphics : public Module
 {
@@ -135,6 +148,7 @@ public:
 	{
 		FEATURE_MULTI_RENDER_TARGET_FORMATS,
 		FEATURE_CLAMP_ZERO,
+		FEATURE_CLAMP_ONE,
 		FEATURE_BLEND_MINMAX,
 		FEATURE_LIGHTEN, // Deprecated
 		FEATURE_FULL_NPOT,
@@ -150,13 +164,6 @@ public:
 		FEATURE_COPY_TEXTURE_TO_BUFFER,
 		FEATURE_COPY_RENDER_TARGET_TO_BUFFER,
 		FEATURE_MAX_ENUM
-	};
-
-	enum Renderer
-	{
-		RENDERER_OPENGL = 0,
-		RENDERER_OPENGLES,
-		RENDERER_MAX_ENUM
 	};
 
 	enum SystemLimit
@@ -442,8 +449,8 @@ public:
 	SpriteBatch *newSpriteBatch(Texture *texture, int size, BufferDataUsage usage);
 	ParticleSystem *newParticleSystem(Texture *texture, int size);
 
-	Shader *newShader(const std::vector<std::string> &stagessource);
-	Shader *newComputeShader(const std::string &source);
+	Shader *newShader(const std::vector<std::string> &stagessource, const Shader::CompileOptions &options);
+	Shader *newComputeShader(const std::string &source, const Shader::CompileOptions &options);
 
 	virtual Buffer *newBuffer(const Buffer::Settings &settings, const std::vector<Buffer::DataDeclaration> &format, const void *data, size_t size, size_t arraylength) = 0;
 	virtual Buffer *newBuffer(const Buffer::Settings &settings, DataFormat format, const void *data, size_t size, size_t arraylength);
@@ -454,7 +461,13 @@ public:
 
 	Text *newText(Font *font, const std::vector<Font::ColoredString> &text = {});
 
-	bool validateShader(bool gles, const std::vector<std::string> &stages, std::string &err);
+	data::ByteData *readbackBuffer(Buffer *buffer, size_t offset, size_t size, data::ByteData *dest, size_t destoffset);
+	GraphicsReadback *readbackBufferAsync(Buffer *buffer, size_t offset, size_t size, data::ByteData *dest, size_t destoffset);
+
+	image::ImageData *readbackTexture(Texture *texture, int slice, int mipmap, const Rect &rect, image::ImageData *dest, int destx, int desty);
+	GraphicsReadback *readbackTextureAsync(Texture *texture, int slice, int mipmap, const Rect &rect, image::ImageData *dest, int destx, int desty);
+
+	bool validateShader(bool gles, const std::vector<std::string> &stages, const Shader::CompileOptions &options, std::string &err);
 
 	/**
 	 * Resets the current color, background color, line style, and so forth.
@@ -481,7 +494,7 @@ public:
 	 * @param width The viewport width.
 	 * @param height The viewport height.
 	 **/
-	virtual bool setMode(int width, int height, int pixelwidth, int pixelheight, bool windowhasstencil, int msaa) = 0;
+	virtual bool setMode(void *context, int width, int height, int pixelwidth, int pixelheight, bool windowhasstencil, int msaa) = 0;
 
 	/**
 	 * Un-sets the current graphics display mode (uninitializing objects if
@@ -520,6 +533,7 @@ public:
 	virtual int getBackbufferMSAA() const = 0;
 
 	Buffer *getQuadIndexBuffer() const { return quadIndexBuffer; }
+	Buffer *getFanIndexBuffer() const { return fanIndexBuffer; }
 
 	/**
 	 * Sets the current constant color.
@@ -578,19 +592,9 @@ public:
 	 */
 	bool getScissor(Rect &rect) const;
 
-	/**
-	 * Enables or disables drawing to the stencil buffer. When enabled, the
-	 * color buffer is disabled.
-	 **/
-	virtual void drawToStencilBuffer(StencilAction action, int value) = 0;
-	virtual void stopDrawToStencilBuffer() = 0;
-
-	/**
-	 * Sets whether stencil testing is enabled.
-	 **/
-	virtual void setStencilTest(CompareMode compare, int value) = 0;
-	void setStencilTest();
-	void getStencilTest(CompareMode &compare, int &value) const;
+	virtual void setStencilMode(StencilAction action, CompareMode compare, int value, uint32 readmask, uint32 writemask) = 0;
+	void setStencilMode();
+	void getStencilMode(StencilAction &action, CompareMode &compare, int &value, uint32 &readmask, uint32 &writemask) const;
 
 	virtual void setDepthMode(CompareMode compare, bool write) = 0;
 	void setDepthMode();
@@ -800,12 +804,17 @@ public:
 	/**
 	 * Gets whether the specified pixel format usage is supported.
 	 **/
-	virtual bool isPixelFormatSupported(PixelFormat format, PixelFormatUsageFlags usage, bool sRGB = false) = 0;
+	virtual bool isPixelFormatSupported(PixelFormat format, uint32 usage, bool sRGB = false) = 0;
 
 	/**
 	 * Gets the renderer used by love.graphics.
 	 **/
 	virtual Renderer getRenderer() const = 0;
+
+	/**
+	 * Whether shaders will use GLSL ES or not (mobile shaders).
+	 **/
+	virtual bool usesGLSLES() const = 0;
 
 	/**
 	 * Returns system-dependent renderer information.
@@ -854,6 +863,12 @@ public:
 
 	static void flushBatchedDrawsGlobal();
 
+	Texture *getTemporaryTexture(PixelFormat format, int w, int h, int samples);
+	void releaseTemporaryTexture(Texture *texture);
+
+	Buffer *getTemporaryBuffer(size_t size, DataFormat format, uint32 usageflags, BufferDataUsage datausage);
+	void releaseTemporaryBuffer(Buffer *buffer);
+
 	void cleanupCachedShaderStage(ShaderStageType type, const std::string &cachekey);
 
 	template <typename T>
@@ -866,6 +881,8 @@ public:
 
 		return (T *) scratchBuffer.data();
 	}
+
+	static Graphics *createInstance();
 
 	STRINGMAP_CLASS_DECLARE(DrawMode);
 	STRINGMAP_CLASS_DECLARE(ArcMode);
@@ -903,8 +920,7 @@ protected:
 		bool scissor = false;
 		Rect scissorRect = Rect();
 
-		CompareMode stencilCompare = COMPARE_ALWAYS;
-		int stencilTestValue = 0;
+		StencilState stencil;
 
 		CompareMode depthTest = COMPARE_ALWAYS;
 		bool depthWrite = false;
@@ -951,6 +967,19 @@ protected:
 		}
 	};
 
+	struct TemporaryBuffer
+	{
+		Buffer *buffer;
+		size_t size;
+		int framesSinceUse;
+
+		TemporaryBuffer(Buffer *buf, size_t size)
+			: buffer(buf)
+			, size(size)
+			, framesSinceUse(-1)
+		{}
+	};
+
 	struct TemporaryTexture
 	{
 		Texture *texture;
@@ -958,25 +987,32 @@ protected:
 
 		TemporaryTexture(Texture *tex)
 			: texture(tex)
-			, framesSinceUse(0)
+			, framesSinceUse(-1)
 		{}
 	};
 
-	ShaderStage *newShaderStage(ShaderStageType stage, const std::string &source, const Shader::SourceInfo &info);
+	ShaderStage *newShaderStage(ShaderStageType stage, const std::string &source, const Shader::CompileOptions &options, const Shader::SourceInfo &info, bool cache);
 	virtual ShaderStage *newShaderStageInternal(ShaderStageType stage, const std::string &cachekey, const std::string &source, bool gles) = 0;
 	virtual Shader *newShaderInternal(StrongRef<ShaderStage> stages[SHADERSTAGE_MAX_ENUM]) = 0;
 	virtual StreamBuffer *newStreamBuffer(BufferUsage type, size_t size) = 0;
 
+	virtual GraphicsReadback *newReadbackInternal(ReadbackMethod method, Buffer *buffer, size_t offset, size_t size, data::ByteData *dest, size_t destoffset) = 0;
+	virtual GraphicsReadback *newReadbackInternal(ReadbackMethod method, Texture *texture, int slice, int mipmap, const Rect &rect, image::ImageData *dest, int destx, int desty) = 0;
+
 	virtual bool dispatch(int x, int y, int z) = 0;
 
-	virtual void setRenderTargetsInternal(const RenderTargets &rts, int w, int h, int pixelw, int pixelh, bool hasSRGBtexture) = 0;
+	virtual void setRenderTargetsInternal(const RenderTargets &rts, int pixelw, int pixelh, bool hasSRGBtexture) = 0;
 
 	virtual void initCapabilities() = 0;
 	virtual void getAPIStats(int &shaderswitches) const = 0;
 
 	void createQuadIndexBuffer();
+	void createFanIndexBuffer();
 
-	Texture *getTemporaryTexture(PixelFormat format, int w, int h, int samples);
+	void updateTemporaryResources();
+	void clearTemporaryResources();
+
+	void updatePendingReadbacks();
 
 	void restoreState(const DisplayState &s);
 	void restoreStateChecked(const DisplayState &s);
@@ -996,11 +1032,10 @@ protected:
 	bool created;
 	bool active;
 
-	bool writingToStencil;
-
 	StrongRef<love::graphics::Font> defaultFont;
 
 	std::vector<ScreenshotInfo> pendingScreenshotCallbacks;
+	std::vector<StrongRef<GraphicsReadback>> pendingReadbacks;
 
 	BatchedDrawState batchedDrawState;
 
@@ -1012,6 +1047,7 @@ protected:
 	std::vector<DisplayState> states;
 	std::vector<StackType> stackTypeStack;
 
+	std::vector<TemporaryBuffer> temporaryBuffers;
 	std::vector<TemporaryTexture> temporaryTextures;
 
 	int renderTargetSwitchCount;
@@ -1019,13 +1055,14 @@ protected:
 	int drawCallsBatched;
 
 	Buffer *quadIndexBuffer;
+	Buffer *fanIndexBuffer;
 
 	Capabilities capabilities;
 
 	Deprecations deprecations;
 
 	static const size_t MAX_USER_STACK_DEPTH = 128;
-	static const int MAX_TEMPORARY_TEXTURE_UNUSED_FRAMES = 16;
+	static const int MAX_TEMPORARY_RESOURCE_UNUSED_FRAMES = 16;
 
 private:
 
@@ -1037,6 +1074,8 @@ private:
 	std::unordered_map<std::string, ShaderStage *> cachedShaderStages[SHADERSTAGE_MAX_ENUM];
 
 }; // Graphics
+
+STRINGMAP_DECLARE(Renderer);
 
 } // graphics
 } // love
