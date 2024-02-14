@@ -46,7 +46,6 @@ static bool isBuffer(Shader::UniformType utype)
 Shader::Shader(StrongRef<love::graphics::ShaderStage> stages[SHADERSTAGE_MAX_ENUM], const CompileOptions &options)
 	: love::graphics::Shader(stages, options)
 	, program(0)
-	, splitUniformsPerDraw(false)
 	, builtinUniforms()
 	, builtinUniformInfo()
 {
@@ -168,7 +167,7 @@ void Shader::mapActiveUniforms()
 			else if ((u.access & ACCESS_READ) != 0)
 				binding.access = GL_READ_ONLY;
 
-			auto fmt = OpenGL::convertPixelFormat(u.storageTextureFormat, false);
+			auto fmt = OpenGL::convertPixelFormat(u.storageTextureFormat);
 			binding.internalFormat = fmt.internalformat;
 
 			for (int i = 0; i < u.count; i++)
@@ -476,11 +475,6 @@ void Shader::mapActiveUniforms()
 bool Shader::loadVolatile()
 {
 	OpenGL::TempDebugGroup debuggroup("Shader load");
-
-	// love::graphics::Shader sets up the shader code-side of this.
-	auto gfx = Module::getInstance<love::graphics::Graphics>(Module::M_GRAPHICS);
-	if (gfx != nullptr)
-		splitUniformsPerDraw = !gfx->getCapabilities().features[Graphics::FEATURE_PIXEL_SHADER_HIGHP];
 
 	// zero out active texture list
 	textureUnits.clear();
@@ -1020,27 +1014,9 @@ void Shader::updateBuiltinUniforms(love::graphics::Graphics *gfx, int viewportW,
 	data.constantColor = gfx->getColor();
 	gammaCorrectColor(data.constantColor);
 
-	// This branch is to avoid always declaring the whole array as highp in the
-	// vertex shader and mediump in the pixel shader for love's default shaders,
-	// on systems that don't support highp in pixel shaders. The default shaders
-	// use the transform matrices in vertex shaders and screen size params in
-	// pixel shaders. If there's a single array containing both and each shader
-	// stage declares a different precision, that's a compile error.
-	if (splitUniformsPerDraw)
-	{
-		GLint location = builtinUniforms[BUILTIN_UNIFORMS_PER_DRAW];
-		if (location >= 0)
-			glUniform4fv(location, 12, (const GLfloat *) &data);
-		GLint location2 = builtinUniforms[BUILTIN_UNIFORMS_PER_DRAW_2];
-		if (location2 >= 0)
-			glUniform4fv(location2, 1, (const GLfloat *) &data.screenSizeParams);
-	}
-	else
-	{
-		GLint location = builtinUniforms[BUILTIN_UNIFORMS_PER_DRAW];
-		if (location >= 0)
-			glUniform4fv(location, 13, (const GLfloat *) &data);
-	}
+	GLint location = builtinUniforms[BUILTIN_UNIFORMS_PER_DRAW];
+	if (location >= 0)
+		glUniform4fv(location, 13, (const GLfloat *) &data);
 }
 
 int Shader::getUniformTypeComponents(GLenum type) const
