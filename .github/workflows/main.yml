@@ -442,7 +442,7 @@ jobs:
     - name: Run Test Suite
       run: |
         ls
-        love-macos/love.app/Contents/MacOS/love --version
+        love-macos/love.app/Contents/MacOS/love testing --runSpecificModules timer --isRunner
     - name: Love Test Report
       id: report1
       uses: ellraiser/love-test-report@main

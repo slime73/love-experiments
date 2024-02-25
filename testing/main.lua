@@ -1,3 +1,6 @@
+print("hello world")
+os.exit()
+
 -- load test objs
 require('classes.TestSuite')
 require('classes.TestModule')
