@@ -1,4 +1,5 @@
 print("hello world")
+io.flush()
 os.exit()
 
 -- load test objs
