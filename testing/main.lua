@@ -33,6 +33,7 @@ if love.window ~= nil then require('tests.window') end
 -- love.load
 -- load given arguments and run the test suite
 love.load = function(args)
+  love.event.quit()
 
   -- setup basic img to display
   if love.window ~= nil then
