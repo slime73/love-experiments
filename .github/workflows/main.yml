@@ -408,7 +408,7 @@ jobs:
 #        name: test-output-windows-${{ steps.vars.outputs.arch }}${{ steps.vars.outputs.compatname }}-vulkan
 #        path: test-output-windows-${{ steps.vars.outputs.arch }}${{ steps.vars.outputs.compatname }}-vulkan.zip
   macOS:
-    runs-on: macos-latest
+    runs-on: macos-14
     permissions:
       checks: write
       pull-requests: write
