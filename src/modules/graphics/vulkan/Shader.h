@@ -76,15 +76,12 @@ public:
 
 	int getVertexAttributeIndex(const std::string &name) override;
 
-	const UniformInfo *getUniformInfo(const std::string &name) const override;
 	const UniformInfo *getUniformInfo(BuiltinUniform builtin) const override;
 
 	void updateUniform(const UniformInfo *info, int count) override;
 
 	void sendTextures(const UniformInfo *info, graphics::Texture **textures, int count) override;
 	void sendBuffers(const UniformInfo *info, love::graphics::Buffer **buffers, int count) override;
-
-	bool hasUniform(const std::string &name) const override;
 
 	void setVideoTextures(graphics::Texture *ytexture, graphics::Texture *cbtexture, graphics::Texture *crtexture) override;
 
@@ -105,10 +102,6 @@ private:
 
 	VkPipeline computePipeline;
 
-	uint32_t numTextures;
-	uint32_t numBuffers;
-	uint32_t numBufferViews;
-
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkPipelineLayout pipelineLayout;
 	std::vector<VkDescriptorPoolSize> descriptorPoolSizes;
@@ -118,6 +111,11 @@ private:
 	std::vector<StreamBuffer*> streamBuffers;
 	std::vector<std::vector<VkDescriptorPool>> descriptorPools;
 
+	std::vector<VkDescriptorBufferInfo> descriptorBuffers;
+	std::vector<VkDescriptorImageInfo> descriptorImages;
+	std::vector<VkBufferView> descriptorBufferViews;
+	std::vector<VkWriteDescriptorSet> descriptorWrites;
+
 	std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
 	std::vector<VkShaderModule> shaderModules;
 
@@ -126,7 +124,6 @@ private:
 
 	bool isCompute = false;
 
-	std::unordered_map<std::string, graphics::Shader::UniformInfo> uniformInfos;
 	UniformInfo *builtinUniformInfo[BUILTIN_MAX_ENUM];
 
 	std::unique_ptr<StreamBuffer> uniformBufferObjectBuffer;
