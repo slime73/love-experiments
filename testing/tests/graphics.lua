@@ -212,7 +212,7 @@ love.test.graphics.Canvas = function(test)
       // rounding during quantization from float to unorm8 doesn't seem to be
       // totally consistent across devices, lets do it ourselves.
       vec2 value = pc / love_ScreenSize.xy;
-      vec2 quantized = (floor(255.0 * value + 0.5) + 0.1) / 255.0;
+      vec2 quantized = (floor(255.0 * value + 0.5) + 0.25) / 255.0;
       return vec4(quantized, 0.0, 1.0);
     }
   ]]
