@@ -217,6 +217,7 @@ love.test.graphics.Canvas = function(test)
     }
   ]]
   local img = love.graphics.newImage(love.image.newImageData(1, 1))
+  local canvas2 = love.graphics.newCanvas(128, 128)
 
   love.graphics.push("all")
     love.graphics.setCanvas(canvas)
@@ -227,11 +228,11 @@ love.test.graphics.Canvas = function(test)
   test:compareImg(imgdata3)
 
   love.graphics.push("all")
-    love.graphics.setCanvas(canvas)
+    love.graphics.setCanvas(canvas2)
     love.graphics.setShader(shader2)
-    love.graphics.draw(img, 0, 0, 0, canvas:getDimensions())
+    love.graphics.draw(img, 0, 0, 0, canvas2:getDimensions())
   love.graphics.pop()
-  local imgdata4 = love.graphics.readbackTexture(canvas)
+  local imgdata4 = love.graphics.readbackTexture(canvas2)
   -- test:exportImg(imgdata4, 4)
   test:compareImg(imgdata4)
 
