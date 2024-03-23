@@ -211,7 +211,7 @@ love.test.graphics.Canvas = function(test)
     vec4 effect(vec4 c, Image tex, vec2 tc, vec2 pc) {
       // rounding during quantization from float to unorm8 doesn't seem to be
       // totally consistent across devices, lets do it ourselves.
-      vec2 value = pc / love_ScreenSize.xy;
+      vec2 value = floor(pc) / love_ScreenSize.xy;
       vec2 quantized = (floor(255.0 * value + 0.5) + 0.25) / 255.0;
       return vec4(quantized, 0.0, 1.0);
     }
@@ -232,6 +232,7 @@ love.test.graphics.Canvas = function(test)
     love.graphics.draw(img, 0, 0, 0, canvas:getDimensions())
   love.graphics.pop()
   local imgdata4 = love.graphics.readbackTexture(canvas)
+  -- test:exportImg(imgdata4, 4)
   test:compareImg(imgdata4)
 
 
