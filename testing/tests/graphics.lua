@@ -209,15 +209,10 @@ love.test.graphics.Canvas = function(test)
   ]]
   local shader2 = love.graphics.newShader[[
     vec4 effect(vec4 c, Image tex, vec2 tc, vec2 pc) {
-      // rounding during quantization from float to unorm8 doesn't seem to be
-      // totally consistent across devices, lets do it ourselves.
-      vec2 value = floor(pc) / love_ScreenSize.xy;
-      vec2 quantized = (floor(255.0 * value + 0.5) + 0.25) / 255.0;
-      return vec4(quantized, 0.0, 1.0);
+      return vec4(pc / love_ScreenSize.xy, 0.0, 1.0);
     }
   ]]
   local img = love.graphics.newImage(love.image.newImageData(1, 1))
-  local canvas2 = love.graphics.newCanvas(128, 128)
 
   love.graphics.push("all")
     love.graphics.setCanvas(canvas)
@@ -228,14 +223,15 @@ love.test.graphics.Canvas = function(test)
   test:compareImg(imgdata3)
 
   love.graphics.push("all")
-    love.graphics.setCanvas(canvas2)
+    love.graphics.setCanvas(canvas)
     love.graphics.setShader(shader2)
-    love.graphics.draw(img, 0, 0, 0, canvas2:getDimensions())
+    love.graphics.draw(img, 0, 0, 0, canvas:getDimensions())
   love.graphics.pop()
-  local imgdata4 = love.graphics.readbackTexture(canvas2)
+  local imgdata4 = love.graphics.readbackTexture(canvas)
   -- test:exportImg(imgdata4, 4)
+  test.rgba_tolerance = 1
   test:compareImg(imgdata4)
-
+  test.rgba_tolerance = 0
 
   -- check depth samples
   local dcanvas = love.graphics.newCanvas(100, 100, {
