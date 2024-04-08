@@ -100,7 +100,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: test-output-linux-opengles-${{ steps.report2.outputs.conclusion }}
-       path: test-output-linux-opengles.zip
+        path: test-output-linux-opengles.zip
     # linux vulkan tests
     - name: Run Test Suite (vulkan)
       env:
