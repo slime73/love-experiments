@@ -121,7 +121,7 @@ jobs:
       with:
         name: test-output-linux-vulkan
         path: test-output-linux-vulkan.zip
-   - name: Stop xvfb and openbox
+    - name: Stop xvfb and openbox
       # should always stop xvfb and openbox even if other steps failed
       if: always()
       run: |
