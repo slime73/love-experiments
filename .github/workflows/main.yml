@@ -453,7 +453,7 @@ jobs:
         LOVE_GRAPHICS_DEBUG: 1
       run: |
         ls
-        love-macos/love.app/Contents/MacOS/love ./testing/main.lua --all --isRunner --renderers opengl
+        love-macos/love.app/Contents/MacOS/love ./testing/main.lua --all --isRunner --renderers metal
     - name: Love Test Report
       id: report1
       uses: ellraiser/love-test-report@main
@@ -464,16 +464,16 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
     - name: Zip Test Output
       run: |
-        7z a -tzip test-output-macos-opengl.zip ./testing/output/
+        7z a -tzip test-output-macos-metal.zip ./testing/output/
     - name: Artifact Test Output
       uses: actions/upload-artifact@v4
       with:
-        name: test-output-macos-opengl-${{ steps.report1.outputs.conclusion }}
-        path: test-output-macos-opengl.zip
+        name: test-output-macos-metal-${{ steps.report1.outputs.conclusion }}
+        path: test-output-macos-metal.zip
     - name: Check Tests Passing
       if: steps.report1.outputs.conclusion == 'failure'
       run: |
-        echo "${{ steps.report1.outputs.failed }} opengl tests failed"
+        echo "${{ steps.report1.outputs.failed }} metal tests failed"
         exit 1
   iOS-Simulator:
     runs-on: macos-latest
