@@ -465,12 +465,6 @@ love::graphics::GraphicsReadback *Graphics::newReadbackInternal(ReadbackMethod m
 	return new GraphicsReadback(this, method, texture, slice, mipmap, rect, dest, destx, desty);
 }
 
-Matrix4 Graphics::computeDeviceProjection(const Matrix4 &projection, bool /*rendertotexture*/) const
-{
-	uint32 flags = DEVICE_PROJECTION_FLIP_Y;
-	return calculateDeviceProjection(projection, flags);
-}
-
 void Graphics::backbufferChanged(int width, int height, int pixelwidth, int pixelheight, bool backbufferstencil, bool backbufferdepth, int msaa)
 {
 	bool sizechanged = width != this->width || height != this->height
@@ -749,16 +743,22 @@ void Graphics::submitRenderEncoder(SubmitType type)
 		for (int i = 0; i < MAX_COLOR_RENDER_TARGETS; i++)
 		{
 			passDesc.colorAttachments[i].loadAction = MTLLoadActionLoad;
-			passDesc.colorAttachments[i].texture = nil;
-			passDesc.colorAttachments[i].resolveTexture = nil;
+			if (type == SUBMIT_DONE)
+			{
+				passDesc.colorAttachments[i].texture = nil;
+				passDesc.colorAttachments[i].resolveTexture = nil;
+			}
 		}
 
 		passDesc.depthAttachment.loadAction = MTLLoadActionLoad;
-		passDesc.depthAttachment.texture = nil;
-		passDesc.depthAttachment.resolveTexture = nil;
 		passDesc.stencilAttachment.loadAction = MTLLoadActionLoad;
-		passDesc.stencilAttachment.texture = nil;
-		passDesc.stencilAttachment.resolveTexture = nil;
+		if (type == SUBMIT_DONE)
+		{
+			passDesc.depthAttachment.texture = nil;
+			passDesc.depthAttachment.resolveTexture = nil;
+			passDesc.stencilAttachment.texture = nil;
+			passDesc.stencilAttachment.resolveTexture = nil;
+		}
 	}
 }
 
@@ -921,8 +921,8 @@ void Graphics::applyRenderState(id<MTLRenderCommandEncoder> encoder, const Verte
 		const auto &rt = state.renderTargets.getFirstTarget();
 		if (rt.texture.get())
 		{
-			rtw = rt.texture->getPixelWidth();
-			rth = rt.texture->getPixelHeight();
+			rtw = rt.texture->getPixelWidth(rt.mipmap);
+			rth = rt.texture->getPixelHeight(rt.mipmap);
 		}
 		else
 		{
@@ -1133,12 +1133,15 @@ void Graphics::applyShaderUniforms(id<MTLRenderCommandEncoder> renderEncoder, lo
 	// Same with point size.
 	builtins->normalMatrix[1].w = getPointSize();
 
+	uint32 flags = Shader::CLIP_TRANSFORM_Z_NEG1_1_TO_0_1;
+	builtins->clipSpaceParams = Shader::computeClipSpaceParams(flags);
+
 	builtins->screenSizeParams = Vector4(getPixelWidth(), getPixelHeight(), 1.0f, 0.0f);
-	auto rt = states.back().renderTargets.getFirstTarget().texture.get();
-	if (rt != nullptr)
+	auto rt = states.back().renderTargets.getFirstTarget();
+	if (rt.texture.get())
 	{
-		builtins->screenSizeParams.x = rt->getPixelWidth();
-		builtins->screenSizeParams.y = rt->getPixelHeight();
+		builtins->screenSizeParams.x = rt.texture->getPixelWidth(rt.mipmap);
+		builtins->screenSizeParams.y = rt.texture->getPixelHeight(rt.mipmap);
 	}
 
 	builtins->constantColor = getColor();
@@ -1462,10 +1465,15 @@ void Graphics::setRenderTargetsInternal(const RenderTargets &rts, int /*pixelw*/
 	}
 
 	for (size_t i = rts.colors.size(); i < MAX_COLOR_RENDER_TARGETS; i++)
+	{
 		passDesc.colorAttachments[i] = nil;
+		passDesc.colorAttachments[i].loadAction = MTLLoadActionLoad;
+	}
 
 	passDesc.depthAttachment = nil;
+	passDesc.depthAttachment.loadAction = MTLLoadActionLoad;
 	passDesc.stencilAttachment = nil;
+	passDesc.stencilAttachment.loadAction = MTLLoadActionLoad;
 
 	auto ds = rts.depthStencil.texture;
 	if (isbackbuffer && ds == nullptr)

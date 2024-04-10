@@ -3138,13 +3138,12 @@ int w_draw(lua_State *L)
 {
 	Drawable *drawable = nullptr;
 	Texture *texture = nullptr;
-	Quad *quad = nullptr;
+	Quad *quad = luax_totype<Quad>(L, 2);
 	int startidx = 2;
 
-	if (luax_istype(L, 2, Quad::type))
+	if (quad != nullptr)
 	{
 		texture = luax_checktexture(L, 1);
-		quad = luax_totype<Quad>(L, 2);
 		startidx = 3;
 	}
 	else if (lua_isnil(L, 2) && !lua_isnoneornil(L, 3))
@@ -3174,14 +3173,14 @@ int w_draw(lua_State *L)
 int w_drawLayer(lua_State *L)
 {
 	Texture *texture = luax_checktexture(L, 1);
-	Quad *quad = nullptr;
 	int layer = (int) luaL_checkinteger(L, 2) - 1;
-	int startidx = 3;
 
-	if (luax_istype(L, startidx, Quad::type))
+	int startidx = 3;
+	Quad *quad = luax_totype<Quad>(L, startidx);
+
+	if (quad != nullptr)
 	{
 		texture = luax_checktexture(L, 1);
-		quad = luax_totype<Quad>(L, startidx);
 		startidx++;
 	}
 	else if (lua_isnil(L, startidx) && !lua_isnoneornil(L, startidx + 1))
@@ -3901,25 +3900,31 @@ int w_inverseTransformPoint(lua_State *L)
 	return 2;
 }
 
-int w_setOrthoProjection(lua_State *L)
+int w_setProjection(lua_State *L)
 {
-	float w = (float) luaL_checknumber(L, 1);
-	float h = (float) luaL_checknumber(L, 2);
-	float near = (float) luaL_optnumber(L, 3, -10.0);
-	float far = (float) luaL_optnumber(L, 4, 10.0);
+	math::Transform *transform = luax_totype<math::Transform>(L, 1);
+	if (transform != nullptr)
+	{
+		instance()->setProjection(transform->getMatrix());
+		return 0;
+	}
 
-	luax_catchexcept(L, [&]() { instance()->setOrthoProjection(w, h, near, far); });
-	return 0;
-}
+	math::Transform::MatrixLayout layout = math::Transform::MATRIX_ROW_MAJOR;
 
-int w_setPerspectiveProjection(lua_State *L)
-{
-	float verticalfov = (float) luaL_checknumber(L, 1);
-	float aspect = (float) luaL_checknumber(L, 2);
-	float near = (float) luaL_checknumber(L, 3);
-	float far = (float) luaL_checknumber(L, 4);
+	int idx = 1;
+	if (lua_type(L, idx) == LUA_TSTRING)
+	{
+		const char* layoutstr = lua_tostring(L, idx);
+		if (!math::Transform::getConstant(layoutstr, layout))
+			return luax_enumerror(L, "matrix layout", math::Transform::getConstants(layout), layoutstr);
 
-	luax_catchexcept(L, [&]() { instance()->setPerspectiveProjection(verticalfov, aspect, near, far); });
+		idx++;
+	}
+
+	float elements[16];
+	love::math::luax_checkmatrix(L, idx, layout, elements);
+
+	instance()->setProjection(Matrix4(elements));
 	return 0;
 }
 
@@ -4075,8 +4080,7 @@ static const luaL_Reg functions[] =
 	{ "transformPoint", w_transformPoint },
 	{ "inverseTransformPoint", w_inverseTransformPoint },
 
-	{ "setOrthoProjection", w_setOrthoProjection },
-	{ "setPerspectiveProjection", w_setPerspectiveProjection },
+	{ "setProjection", w_setProjection },
 	{ "resetProjection", w_resetProjection },
 
 	// Deprecated

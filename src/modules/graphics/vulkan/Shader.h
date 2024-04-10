@@ -75,6 +75,7 @@ public:
 	std::string getWarnings() const override { return ""; }
 
 	int getVertexAttributeIndex(const std::string &name) override;
+	const std::unordered_map<std::string, int> getVertexAttributeIndices() const { return attributes; }
 
 	const UniformInfo *getUniformInfo(BuiltinUniform builtin) const override;
 
@@ -88,17 +89,13 @@ public:
 	void setMainTex(graphics::Texture *texture);
 
 private:
-	void calculateUniformBufferSizeAligned();
 	void compileShaders();
 	void createDescriptorSetLayout();
 	void createPipelineLayout();
 	void createDescriptorPoolSizes();
-	void createStreamBuffers();
 	void buildLocalUniforms(spirv_cross::Compiler &comp, const spirv_cross::SPIRType &type, size_t baseoff, const std::string &basename);
 	void createDescriptorPool();
 	VkDescriptorSet allocateDescriptorSet();
-
-	VkDeviceSize uniformBufferSizeAligned;
 
 	VkPipeline computePipeline;
 
@@ -106,9 +103,6 @@ private:
 	VkPipelineLayout pipelineLayout;
 	std::vector<VkDescriptorPoolSize> descriptorPoolSizes;
 
-	// we don't know how much memory we need per frame for the uniform buffer descriptors
-	// we keep a vector of stream buffers that gets dynamically increased if more memory is needed
-	std::vector<StreamBuffer*> streamBuffers;
 	std::vector<std::vector<VkDescriptorPool>> descriptorPools;
 
 	std::vector<VkDescriptorBufferInfo> descriptorBuffers;
@@ -135,7 +129,6 @@ private:
 	std::unordered_map<std::string, int> attributes;
 
 	uint32_t currentFrame;
-	uint32_t currentUsedUniformStreamBuffersCount;
 	uint32_t currentDescriptorPool;
 };
 

@@ -208,7 +208,7 @@ Shader::Shader(id<MTLDevice> device, StrongRef<love::graphics::ShaderStage> stag
 		forcedefault = true;
 #endif
 
-		if (!tshader->parse(GetDefaultResources(), defaultversion, defaultprofile, forcedefault, forwardcompat, EShMsgSuppressWarnings))
+		if (!tshader->parse(GetResources(), defaultversion, defaultprofile, forcedefault, forwardcompat, EShMsgSuppressWarnings))
 		{
 			const char *stagename = "unknown";
 			ShaderStage::getConstant(stage, stagename);
@@ -288,8 +288,19 @@ void Shader::buildLocalUniforms(const spirv_cross::CompilerMSL &msl, const spirv
 		switch (membertype.basetype)
 		{
 			case SPIRType::Struct:
-				name += ".";
-				buildLocalUniforms(msl, membertype, offset, name);
+				if (membertype.op == spv::OpTypeArray)
+				{
+					for (uint32 i = 0; i < membertype.array[0]; i++)
+					{
+						std::string structname = name + "[" + std::to_string(i) + "].";
+						buildLocalUniforms(msl, membertype, offset, structname);
+					}
+				}
+				else
+				{
+					std::string structname = name + ".";
+					buildLocalUniforms(msl, membertype, offset, structname);
+				}
 				continue;
 			case SPIRType::Int:
 			case SPIRType::UInt:
@@ -697,40 +708,10 @@ void Shader::updateUniform(const UniformInfo *info, int count)
 
 	count = std::min(count, info->count);
 
-	// TODO: store some of this in UniformInfo.
-	size_t elementsize = info->components * 4;
-	if (info->baseType == UNIFORM_MATRIX)
-		elementsize = info->matrix.columns * info->matrix.rows * 4;
-
 	size_t offset = (const uint8 *)info->data - localUniformStagingData;
+	uint8 *dst = localUniformBufferData + offset;
 
-	// Assuming std140 packing rules, the source data can only be direct-copied
-	// to the uniform buffer in certain cases because it's tightly packed whereas
-	// the buffer's data isn't.
-	if (elementsize * info->count == info->dataSize || (count == 1 && info->baseType != UNIFORM_MATRIX))
-	{
-		memcpy(localUniformBufferData + offset, info->data, elementsize * count);
-	}
-	else
-	{
-		int veccount = count;
-		int comp = info->components;
-
-		if (info->baseType == UNIFORM_MATRIX)
-		{
-			veccount *= info->matrix.rows;
-			comp = info->matrix.columns;
-		}
-
-		const int *src = info->ints;
-		int *dst = (int *) (localUniformBufferData + offset);
-
-		for (int i = 0; i < veccount; i++)
-		{
-			for (int c = 0; c < comp; c++)
-				dst[i * 4 + c] = src[i * comp + c];
-		}
-	}
+	copyToUniformBuffer(info, info->data, dst, count);
 }
 
 void Shader::sendTextures(const UniformInfo *info, love::graphics::Texture **textures, int count)
@@ -948,7 +929,7 @@ id<MTLRenderPipelineState> Shader::getCachedRenderPipeline(const RenderPipelineK
 			const auto &attrib = attributes.attribs[i];
 			int metalBufferIndex = firstVertexBufferBinding + attrib.bufferIndex;
 
-			vertdesc.attributes[i].format = getMTLVertexFormat(attrib.format);
+			vertdesc.attributes[i].format = getMTLVertexFormat(attrib.getFormat());
 			vertdesc.attributes[i].offset = attrib.offsetFromVertex;
 			vertdesc.attributes[i].bufferIndex = metalBufferIndex;
 

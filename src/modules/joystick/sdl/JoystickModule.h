@@ -45,7 +45,7 @@ public:
 	virtual ~JoystickModule();
 
 	// Implements JoystickModule.
-	love::joystick::Joystick *addJoystick(int deviceindex) override;
+	love::joystick::Joystick *addJoystick(int64 deviceid) override;
 	void removeJoystick(love::joystick::Joystick *joystick) override;
 	love::joystick::Joystick *getJoystickFromID(int instanceid) override;
 	love::joystick::Joystick *getJoystick(int joyindex) override;
@@ -66,7 +66,7 @@ private:
 	void checkGamepads(const std::string &guid) const;
 
 	// SDL2's GUIDs identify *classes* of devices, instead of unique devices.
-	std::string getDeviceGUID(int deviceindex) const;
+	std::string getDeviceGUID(int64 deviceid) const;
 
 	// Lists of currently connected Joysticks.
 	std::vector<Joystick *> activeSticks;

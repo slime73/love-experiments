@@ -61,14 +61,14 @@ jobs:
     - name: Run Test Suite (opengl)
       run: |
         chmod a+x love-${{ github.sha }}.AppImage
-        ./love-${{ github.sha }}.AppImage love2d-${{ github.sha }}/testing/main.lua --runAllTests --isRunner
+        ./love-${{ github.sha }}.AppImage love2d-${{ github.sha }}/testing/main.lua --all --isRunner --renderers opengl
     - name: Love Test Report (opengl)
       id: report1
       uses: ellraiser/love-test-report@main
       with:
         name: Love Testsuite Linux
         title: test-report-linux-opengl
-        path: love2d-${{ github.sha }}/testing/output/lovetest_runAllTests.md
+        path: love2d-${{ github.sha }}/testing/output/lovetest_all.md
         token: ${{ secrets.GITHUB_TOKEN }}
     - name: Zip Test Output (opengl)
       run: |
@@ -80,16 +80,18 @@ jobs:
         path: test-output-linux-opengl.zip
     # linux opengles tests
     - name: Run Test Suite (opengles)
+      env:
+        LOVE_GRAPHICS_DEBUG: 1
       run: |
         export LOVE_GRAPHICS_USE_OPENGLES=1
-        ./love-${{ github.sha }}.AppImage love2d-${{ github.sha }}/testing/main.lua --runAllTests --isRunner
+        ./love-${{ github.sha }}.AppImage love2d-${{ github.sha }}/testing/main.lua --all --isRunner --renderers opengl
     - name: Love Test Report (opengles)
       uses: ellraiser/love-test-report@main
       id: report2
       with:
         name: Love Testsuite Linux
         title: test-report-linux-opengles
-        path: love2d-${{ github.sha }}/testing/output/lovetest_runAllTests.md
+        path: love2d-${{ github.sha }}/testing/output/lovetest_all.md
         token: ${{ secrets.GITHUB_TOKEN }}
     - name: Zip Test Output (opengles)
       run: |
@@ -101,15 +103,16 @@ jobs:
         path: test-output-linux-opengles.zip
 #    # linux vulkan tests
 #    - name: Run Test Suite (vulkan)
+#      env:
+#        LOVE_GRAPHICS_DEBUG: 1
 #      run: |
-#        export LOVE_GRAPHICS_DEBUG=1
-#        ./love-${{ github.sha }}.AppImage love2d-${{ github.sha }}/testing/main.lua --runAllTests --isRunner --renderers vulkan
+#        ./love-${{ github.sha }}.AppImage love2d-${{ github.sha }}/testing/main.lua --all --isRunner --renderers vulkan
 #    - name: Love Test Report (vulkan)
 #      uses: ellraiser/love-test-report@main
 #      with:
 #        name: Love Testsuite Linux
 #        title: test-report-linux-vulkan
-#        path: love2d-${{ github.sha }}/testing/output/lovetest_runAllTests.md
+#        path: love2d-${{ github.sha }}/testing/output/lovetest_all.md
 #    - name: Zip Test Output (vulkan)
 #      run: |
 #        7z a -tzip test-output-linux-vulkan.zip love2d-${{ github.sha }}/testing/output/
@@ -318,10 +321,12 @@ jobs:
     # windows opengl tests
     - name: Run Tests (opengl)
       if: steps.vars.outputs.arch != 'ARM64' && steps.vars.outputs.compatname != '-compat'
+      env:
+        LOVE_GRAPHICS_DEBUG: 1
       run: |
         echo 'check dir'
         ls
-        powershell.exe ./install/lovec.exe ./megasource/libs/love/testing/main.lua --runAllTests --isRunner
+        powershell.exe ./install/lovec.exe ./megasource/libs/love/testing/main.lua --all --isRunner --renderers opengl
     - name: Love Test Report (opengl)
       id: report1
       if: steps.vars.outputs.arch != 'ARM64' && steps.vars.outputs.compatname != '-compat'
@@ -329,7 +334,7 @@ jobs:
       with:
         name: Love Testsuite Windows ${{ steps.vars.outputs.arch }} ${{ steps.vars.outputs.compatname }} (opengl)
         title: test-report-windows-${{ steps.vars.outputs.arch }}${{ steps.vars.outputs.compatname }}-opengl
-        path: megasource/libs/love/testing/output/lovetest_runAllTests.md
+        path: megasource/libs/love/testing/output/lovetest_all.md
         token: ${{ secrets.GITHUB_TOKEN }}
     - name: Zip Test Output (opengl)
       if: steps.vars.outputs.arch != 'ARM64' && steps.vars.outputs.compatname != '-compat'
@@ -345,9 +350,10 @@ jobs:
     - name: Run Tests (opengles)
       if: steps.vars.outputs.arch != 'ARM64' && steps.vars.outputs.compatname != '-compat'
       env:
+        LOVE_GRAPHICS_DEBUG: 1
         LOVE_GRAPHICS_USE_OPENGLES: 1
       run: |
-        powershell.exe ./install/lovec.exe ./megasource/libs/love/testing/main.lua --runAllTests --isRunner
+        powershell.exe ./install/lovec.exe ./megasource/libs/love/testing/main.lua --all --isRunner --renderers opengl
     - name: Love Test Report (opengles)
       id: report2
       if: steps.vars.outputs.arch != 'ARM64' && steps.vars.outputs.compatname != '-compat'
@@ -355,7 +361,7 @@ jobs:
       with:
         name: Love Testsuite Windows ${{ steps.vars.outputs.arch }} ${{ steps.vars.outputs.compatname }} (opengles)
         title: test-report-windows-${{ steps.vars.outputs.arch }}${{ steps.vars.outputs.compatname }}-opengles
-        path: megasource/libs/love/testing/output/lovetest_runAllTests.md
+        path: megasource/libs/love/testing/output/lovetest_all.md
         token: ${{ secrets.GITHUB_TOKEN }}
     - name: Zip Test Output (opengles)
       if: steps.vars.outputs.arch != 'ARM64' && steps.vars.outputs.compatname != '-compat'
@@ -389,16 +395,17 @@ jobs:
 #    # windows vulkan tests
 #    - name: Run Tests (vulkan)
 #      if: steps.vars.outputs.arch != 'ARM64'
+#      env:
+#        LOVE_GRAPHICS_DEBUG: 1
 #      run: |
-#        $ENV:LOVE_GRAPHICS_DEBUG=1
-#        powershell.exe ./install/lovec.exe ./megasource/libs/love/testing/main.lua --runAllTests --isRunner --renderers vulkan
+#        powershell.exe ./install/lovec.exe ./megasource/libs/love/testing/main.lua --all --isRunner --renderers vulkan
 #    - name: Love Test Report (vulkan)
 #      if: steps.vars.outputs.arch != 'ARM64'
 #      uses: ellraiser/love-test-report@main
 #      with:
 #        name: Love Testsuite Windows ${{ steps.vars.outputs.arch }} ${{ steps.vars.outputs.compatname }} (vulkan)
 #        title: test-report-windows-${{ steps.vars.outputs.arch }}${{ steps.vars.outputs.compatname }}-vulkan
-#        path: megasource/libs/love/testing/output/lovetest_runAllTests.md
+#        path: megasource/libs/love/testing/output/lovetest_all.md
 #    - name: Zip Test Output (vulkan)
 #      if: steps.vars.outputs.arch != 'ARM64'
 #      run: |
@@ -442,16 +449,18 @@ jobs:
         path: love-macos.zip
     # macos opengl tests (metal not supported on runners)
     - name: Run Test Suite
+      env:
+        LOVE_GRAPHICS_DEBUG: 1
       run: |
         ls
-        love-macos/love.app/Contents/MacOS/love ./testing/main.lua --runAllTests --isRunner
+        love-macos/love.app/Contents/MacOS/love ./testing/main.lua --all --isRunner --renderers opengl
     - name: Love Test Report
       id: report1
       uses: ellraiser/love-test-report@main
       with:
         name: Love Testsuite MacOS
         title: test-report-macos
-        path: testing/output/lovetest_runAllTests.md
+        path: testing/output/lovetest_all.md
         token: ${{ secrets.GITHUB_TOKEN }}
     - name: Zip Test Output
       run: |

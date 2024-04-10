@@ -188,18 +188,6 @@ love::graphics::GraphicsReadback *Graphics::newReadbackInternal(ReadbackMethod m
 	return new GraphicsReadback(this, method, texture, slice, mipmap, rect, dest, destx, desty);
 }
 
-Matrix4 Graphics::computeDeviceProjection(const Matrix4 &projection, bool rendertotexture) const
-{
-	uint32 flags = DEVICE_PROJECTION_DEFAULT;
-
-	// The projection matrix is flipped compared to rendering to a texture, due
-	// to OpenGL considering (0,0) bottom-left instead of top-left.
-	if (!rendertotexture)
-		flags |= DEVICE_PROJECTION_FLIP_Y;
-
-	return calculateDeviceProjection(projection, flags);
-}
-
 void Graphics::backbufferChanged(int width, int height, int pixelwidth, int pixelheight, bool backbufferstencil, bool backbufferdepth, int msaa)
 {
 	bool changed = width != this->width || height != this->height
@@ -708,24 +696,27 @@ void Graphics::drawQuads(int start, int count, const VertexAttributes &attribute
 
 static void APIENTRY debugCB(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei /*len*/, const GLchar *msg, const GLvoid* /*usr*/)
 {
+	if (severity == GL_DEBUG_SEVERITY_NOTIFICATION)
+		return;
+
 	// Human-readable strings for the debug info.
 	const char *sourceStr = OpenGL::debugSourceString(source);
 	const char *typeStr = OpenGL::debugTypeString(type);
 	const char *severityStr = OpenGL::debugSeverityString(severity);
 
-	const char *fmt = "OpenGL: %s [source=%s, type=%s, severity=%s, id=%d]\n";
-	printf(fmt, msg, sourceStr, typeStr, severityStr, id);
+	const char *fmt = "OpenGL: [source=%s, type=%s, severity=%s, id=%d]: %s\n";
+	printf(fmt, sourceStr, typeStr, severityStr, id, msg);
 }
 
 void Graphics::setDebug(bool enable)
 {
 	// Make sure debug output is supported. The AMD ext. is a bit different
 	// so we don't make use of it, since AMD drivers now support KHR_debug.
-	if (!(GLAD_VERSION_4_3 || GLAD_KHR_debug || GLAD_ARB_debug_output))
+	if (!(GLAD_VERSION_4_3 || GLAD_ES_VERSION_3_2 || GLAD_KHR_debug || GLAD_ARB_debug_output))
 		return;
 
 	// TODO: We don't support GL_KHR_debug in GLES yet.
-	if (GLAD_ES_VERSION_2_0)
+	if (GLAD_ES_VERSION_2_0 && !GLAD_ES_VERSION_3_2)
 		return;
 
 	// Ugly hack to reduce code duplication.
@@ -741,7 +732,7 @@ void Graphics::setDebug(bool enable)
 		glDebugMessageCallback(nullptr, nullptr);
 
 		// We can disable debug output entirely with KHR_debug.
-		if (GLAD_VERSION_4_3 || GLAD_KHR_debug)
+		if (GLAD_VERSION_4_3 || GLAD_ES_VERSION_3_2 || GLAD_KHR_debug)
 			glDisable(GL_DEBUG_OUTPUT);
 
 		return;
@@ -759,7 +750,7 @@ void Graphics::setDebug(bool enable)
 	glDebugMessageControl(GL_DEBUG_SOURCE_API, GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR, GL_DONT_CARE, 0, 0, GL_FALSE);
 	glDebugMessageControl(GL_DEBUG_SOURCE_SHADER_COMPILER, GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR, GL_DONT_CARE, 0, 0, GL_FALSE);
 
-	if (GLAD_VERSION_4_3 || GLAD_KHR_debug)
+	if (GLAD_VERSION_4_3 || GLAD_ES_VERSION_3_2 || GLAD_KHR_debug)
 		glEnable(GL_DEBUG_OUTPUT);
 
 	::printf("OpenGL debug output enabled (LOVE_GRAPHICS_DEBUG=1)\n");
@@ -1072,7 +1063,7 @@ void Graphics::discard(OpenGL::FramebufferTarget target, const std::vector<bool>
 	attachments.reserve(colorbuffers.size());
 
 	// glDiscardFramebuffer uses different attachment enums for the default FBO.
-	if (!isRenderTargetActive() && getInternalBackbufferFBO() == 0)
+	if (gl.getFramebuffer(target) == 0)
 	{
 		if (colorbuffers.size() > 0 && colorbuffers[0])
 			attachments.push_back(GL_COLOR);
@@ -1690,6 +1681,17 @@ void Graphics::initCapabilities()
 		pixelFormatUsage[i][0] = computePixelFormatUsage(format, false);
 		pixelFormatUsage[i][1] = computePixelFormatUsage(format, true);
 	}
+
+#ifdef LOVE_ANDROID
+	// This can't be done in initContext with the rest of the bug checks because
+	// isPixelFormatSupported relies on state initialized here / after init.
+	if (GLAD_ES_VERSION_3_0 && !isPixelFormatSupported(PIXELFORMAT_R8_UNORM, PIXELFORMATUSAGEFLAGS_SAMPLE | PIXELFORMATUSAGEFLAGS_RENDERTARGET))
+	{
+		gl.bugs.brokenR8PixelFormat = true;
+		pixelFormatUsage[PIXELFORMAT_R8_UNORM][0] = computePixelFormatUsage(PIXELFORMAT_R8_UNORM, false);
+		pixelFormatUsage[PIXELFORMAT_R8_UNORM][1] = computePixelFormatUsage(PIXELFORMAT_R8_UNORM, true);
+	}
+#endif
 }
 
 uint32 Graphics::computePixelFormatUsage(PixelFormat format, bool readable)

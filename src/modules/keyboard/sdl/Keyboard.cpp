@@ -87,6 +87,16 @@ bool Keyboard::isModifierActive(ModifierKey key) const
 
 	switch (key)
 	{
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	case MODKEY_NUMLOCK:
+		return (modstate & SDL_KMOD_NUM) != 0;
+	case MODKEY_CAPSLOCK:
+		return (modstate & SDL_KMOD_CAPS) != 0;
+	case MODKEY_SCROLLLOCK:
+		return (modstate & SDL_KMOD_SCROLL) != 0;
+	case MODKEY_MODE:
+		return (modstate & SDL_KMOD_MODE) != 0;
+#else
 	case MODKEY_NUMLOCK:
 		return (modstate & KMOD_NUM) != 0;
 	case MODKEY_CAPSLOCK:
@@ -95,6 +105,7 @@ bool Keyboard::isModifierActive(ModifierKey key) const
 		return (modstate & KMOD_SCROLL) != 0;
 	case MODKEY_MODE:
 		return (modstate & KMOD_MODE) != 0;
+#endif
 	default:
 		break;
 	}
@@ -160,7 +171,11 @@ void Keyboard::setTextInput(bool enable, double x, double y, double w, double h)
 
 bool Keyboard::hasTextInput() const
 {
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	return SDL_TextInputActive();
+#else
 	return SDL_IsTextInputActive() != SDL_FALSE;
+#endif
 }
 
 bool Keyboard::hasScreenKeyboard() const

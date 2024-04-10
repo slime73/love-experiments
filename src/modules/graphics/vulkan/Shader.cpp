@@ -36,12 +36,16 @@ namespace graphics
 namespace vulkan
 {
 
-static const uint32_t STREAMBUFFER_DEFAULT_SIZE = 16;
 static const uint32_t DESCRIPTOR_POOL_SIZE = 1000;
 
 class BindingMapper
 {
 public:
+
+	BindingMapper(spv::Decoration decoration)
+		: decoration(decoration)
+	{}
+
 	uint32_t operator()(spirv_cross::CompilerGLSL &comp, std::vector<uint32_t> &spirv, const std::string &name, int count, const spirv_cross::ID &id)
 	{
 		auto it = bindingMappings.find(name);
@@ -59,7 +63,7 @@ public:
 				uint32_t freeBinding = getFreeBinding(count);
 
 				uint32_t binaryBindingOffset;
-				if (!comp.get_binary_offset_for_decoration(id, spv::DecorationBinding, binaryBindingOffset))
+				if (!comp.get_binary_offset_for_decoration(id, decoration, binaryBindingOffset))
 					throw love::Exception("could not get binary offset for uniform %s binding", name.c_str());
 
 				spirv[binaryBindingOffset] = freeBinding;
@@ -70,7 +74,17 @@ public:
 			}
 		}
 		else
-			return (uint32_t)it->second.getOffset();
+		{
+			auto binding = (uint32_t)it->second.getOffset();
+
+			uint32_t binaryBindingOffset;
+			if (!comp.get_binary_offset_for_decoration(id, decoration, binaryBindingOffset))
+				throw love::Exception("could not get binary offset for uniform %s binding", name.c_str());
+
+			spirv[binaryBindingOffset] = binding;
+
+			return binding;
+		}
 	};
 
 
@@ -95,6 +109,7 @@ private:
 		return true;
 	}
 
+	spv::Decoration decoration;
 	std::map<std::string, Range> bindingMappings;
 
 };
@@ -112,6 +127,18 @@ static VkShaderStageFlagBits getStageBit(ShaderStageType type)
 	default:
 		throw love::Exception("invalid type");
 	}
+}
+
+static VkShaderStageFlags getStageFlags(ShaderStageMask mask)
+{
+	VkShaderStageFlags flags = 0;
+	if (mask & SHADERSTAGEMASK_VERTEX)
+		flags |= VK_SHADER_STAGE_VERTEX_BIT;
+	if (mask & SHADERSTAGEMASK_PIXEL)
+		flags |= VK_SHADER_STAGE_FRAGMENT_BIT;
+	if (mask & SHADERSTAGEMASK_COMPUTE)
+		flags |= VK_SHADER_STAGE_COMPUTE_BIT;
+	return flags;
 }
 
 static EShLanguage getGlslShaderType(ShaderStageType stage)
@@ -157,14 +184,11 @@ bool Shader::loadVolatile()
 		builtinUniformInfo[i] = nullptr;
 
 	compileShaders();
-	calculateUniformBufferSizeAligned();
 	createDescriptorSetLayout();
 	createPipelineLayout();
 	createDescriptorPoolSizes();
-	createStreamBuffers();
 	descriptorPools.resize(MAX_FRAMES_IN_FLIGHT);
 	currentFrame = 0;
-	currentUsedUniformStreamBuffersCount = 0;
 	newFrame();
 
 	return true;
@@ -189,12 +213,8 @@ void Shader::unloadVolatile()
 			vkDestroyPipeline(device, computePipeline, nullptr);
 	});
 
-	for (const auto streamBuffer : streamBuffers)
-		streamBuffer->release();
-
 	shaderModules.clear();
 	shaderStages.clear();
-	streamBuffers.clear();
 	descriptorPools.clear();
 }
 
@@ -217,22 +237,7 @@ void Shader::newFrame()
 {
 	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 
-	currentUsedUniformStreamBuffersCount = 0;
 	currentDescriptorPool = 0;
-
-	if (streamBuffers.size() > 1)
-	{
-		size_t newSize = 0;
-		for (auto streamBuffer : streamBuffers)
-		{
-			newSize += streamBuffer->getSize();
-			streamBuffer->release();
-		}
-		streamBuffers.clear();
-		streamBuffers.push_back(new StreamBuffer(vgfx, BUFFERUSAGE_UNIFORM, newSize));
-	}
-	else if (streamBuffers.size() == 1)
-		streamBuffers.at(0)->nextFrame();
 
 	for (VkDescriptorPool pool : descriptorPools[currentFrame])
 		vkResetDescriptorPool(device, pool, 0);
@@ -246,13 +251,6 @@ void Shader::cmdPushDescriptorSets(VkCommandBuffer commandBuffer, VkPipelineBind
 
 	if (!localUniformData.empty())
 	{
-		auto usedStreamBufferMemory = currentUsedUniformStreamBuffersCount * uniformBufferSizeAligned;
-		if (usedStreamBufferMemory >= streamBuffers.back()->getSize())
-		{
-			streamBuffers.push_back(new StreamBuffer(vgfx, BUFFERUSAGE_UNIFORM, STREAMBUFFER_DEFAULT_SIZE * uniformBufferSizeAligned));
-			currentUsedUniformStreamBuffersCount = 0;
-		}
-
 		if (builtinUniformDataOffset.hasValue)
 		{
 			auto builtinData = vgfx->getCurrentBuiltinUniformData();
@@ -260,19 +258,7 @@ void Shader::cmdPushDescriptorSets(VkCommandBuffer commandBuffer, VkPipelineBind
 			memcpy(dst, &builtinData, sizeof(builtinData));
 		}
 
-		auto currentStreamBuffer = streamBuffers.back();
-
-		auto mapInfo = currentStreamBuffer->map(uniformBufferSizeAligned);
-		memcpy(mapInfo.data, localUniformData.data(), localUniformData.size());
-		auto offset = currentStreamBuffer->unmap(uniformBufferSizeAligned);
-		currentStreamBuffer->markUsed(uniformBufferSizeAligned);
-
-		VkDescriptorBufferInfo &bufferInfo = descriptorBuffers[bufferIndex++];
-		bufferInfo.buffer = (VkBuffer)currentStreamBuffer->getHandle();
-		bufferInfo.offset = offset;
-		bufferInfo.range = localUniformData.size();
-
-		currentUsedUniformStreamBuffersCount++;
+		vgfx->mapLocalUniformData(localUniformData.data(), localUniformData.size(), descriptorBuffers[bufferIndex++]);
 	}
 
 	// TODO: iteration order must match the order at the end of compileShaders right now.
@@ -400,8 +386,14 @@ void Shader::updateUniform(const UniformInfo *info, int count)
 	if (current == this)
 		Graphics::flushBatchedDrawsGlobal();
 
-	if (usesLocalUniformData(info))
-		memcpy(localUniformData.data(), localUniformStagingData.data(), localUniformStagingData.size());
+	count = std::min(count, info->count);
+
+	if (info->data != nullptr)
+	{
+		size_t offset = (const uint8*)info->data - localUniformStagingData.data();
+		uint8 *dst = localUniformData.data() + offset;
+		copyToUniformBuffer(info, info->data, dst, count);
+	}
 }
 
 void Shader::sendTextures(const UniformInfo *info, graphics::Texture **textures, int count)
@@ -436,14 +428,6 @@ void Shader::sendBuffers(const UniformInfo *info, love::graphics::Buffer **buffe
 	}
 }
 
-void Shader::calculateUniformBufferSizeAligned()
-{
-	auto minAlignment = vgfx->getMinUniformBufferOffsetAlignment();
-	size_t size = localUniformStagingData.size();
-	auto factor = static_cast<VkDeviceSize>(std::ceil(static_cast<float>(size) / static_cast<float>(minAlignment)));
-	uniformBufferSizeAligned = factor * minAlignment;
-}
-
 void Shader::buildLocalUniforms(spirv_cross::Compiler &comp, const spirv_cross::SPIRType &type, size_t baseoff, const std::string &basename)
 {
 	using namespace spirv_cross;
@@ -461,8 +445,19 @@ void Shader::buildLocalUniforms(spirv_cross::Compiler &comp, const spirv_cross::
 		switch (memberType.basetype)
 		{
 		case SPIRType::Struct:
-			name += ".";
-			buildLocalUniforms(comp, memberType, offset, name);
+			if (memberType.op == spv::OpTypeArray)
+			{
+				for (uint32 i = 0; i < memberType.array[0]; i++)
+				{
+					std::string structname = name + "[" + std::to_string(i) + "].";
+					buildLocalUniforms(comp, memberType, offset, structname);
+				}
+			}
+			else
+			{
+				std::string structname = name + ".";
+				buildLocalUniforms(comp, memberType, offset, structname);
+			}
 			continue;
 		case SPIRType::Int:
 		case SPIRType::UInt:
@@ -492,10 +487,15 @@ void Shader::buildLocalUniforms(spirv_cross::Compiler &comp, const spirv_cross::
 		{
 			const auto &values = valuesit->second;
 			if (!values.empty())
+			{
 				memcpy(
 					u.data,
 					values.data(),
 					std::min(u.dataSize, values.size() * sizeof(LocalUniformValue)));
+
+				uint8 *dst = localUniformData.data() + offset;
+				copyToUniformBuffer(&u, u.data, dst, u.count);
+			}
 		}
 
 		BuiltinUniform builtin = BUILTIN_MAX_ENUM;
@@ -554,7 +554,7 @@ void Shader::compileShaders()
 		bool forceDefault = false;
 		bool forwardCompat = true;
 
-		if (!tshader->parse(GetDefaultResources(), defaultVersion, defaultProfile, forceDefault, forwardCompat, EShMsgSuppressWarnings))
+		if (!tshader->parse(GetResources(), defaultVersion, defaultProfile, forceDefault, forwardCompat, EShMsgSuppressWarnings))
 		{
 			const char *stageName = "unknown";
 			ShaderStage::getConstant(stage, stageName);
@@ -576,7 +576,8 @@ void Shader::compileShaders()
 	if (!program->mapIO())
 		throw love::Exception("mapIO failed");
 
-	BindingMapper bindingMapper;
+	BindingMapper bindingMapper(spv::DecorationBinding);
+	BindingMapper ioLocationMapper(spv::DecorationLocation);
 
 	for (int i = 0; i < SHADERSTAGE_MAX_ENUM; i++)
 	{
@@ -591,18 +592,28 @@ void Shader::compileShaders()
 		glslang::SpvOptions opt;
 		opt.validate = true;
 
-		std::vector<uint32_t> spirv;
+		std::vector<uint32> spirv;
+
 		GlslangToSpv(*intermediate, spirv, &logger, &opt);
 
-		spirv_cross::CompilerGLSL comp(spirv);
+		auto compiler = std::make_unique<spirv_cross::CompilerGLSL>(spirv);
+		auto &comp = *compiler;
 
-		// we only care about variables that are actually getting used.
-		auto active = comp.get_active_interface_variables();
-		auto shaderResources = comp.get_shader_resources(active);
-		comp.set_enabled_interface_variables(std::move(active));
+		// We aren't recompiling the SPIR-V to something else, so
+		// set_enabled_interface_variables wouldn't do much.
+		// Vulkan has various rules about making sure bindings to inputs and
+		// resources are valid, so we can't skip inactive ones here.
+		// Unfortunately GlslangToSpv doesn't strip unused resources even
+		// though it knows about them...
+		auto active = compiler->get_active_interface_variables();
+		auto shaderResources = comp.get_shader_resources();
 
 		for (const auto &resource : shaderResources.uniform_buffers)
 		{
+			// TODO: Do something smarter here.
+			if (active.find(resource.id) == active.end())
+				continue;
+
 			if (resource.name == "gl_DefaultUniformBlock")
 			{
 				const auto &type = comp.get_type(resource.base_type_id);
@@ -617,8 +628,6 @@ void Shader::compileShaders()
 
 				std::string basename("");
 				buildLocalUniforms(comp, type, 0, basename);
-
-				memcpy(localUniformData.data(), localUniformStagingData.data(), localUniformStagingData.size());
 			}
 			else
 				throw love::Exception("unimplemented: non default uniform blocks.");
@@ -626,6 +635,10 @@ void Shader::compileShaders()
 
 		for (const auto &r : shaderResources.sampled_images)
 		{
+			// TODO: Do something smarter here.
+			if (active.find(r.id) == active.end())
+				continue;
+
 			std::string name = canonicaliizeUniformName(r.name);
 			auto uniformit = reflection.allUniforms.find(name);
 			if (uniformit == reflection.allUniforms.end())
@@ -645,6 +658,10 @@ void Shader::compileShaders()
 
 		for (const auto &r : shaderResources.storage_buffers)
 		{
+			// TODO: Do something smarter here.
+			if (active.find(r.id) == active.end())
+				continue;
+
 			std::string name = canonicaliizeUniformName(r.name);
 			const auto &uniformit = reflection.storageBuffers.find(name);
 			if (uniformit == reflection.storageBuffers.end())
@@ -660,6 +677,10 @@ void Shader::compileShaders()
 
 		for (const auto &r : shaderResources.storage_images)
 		{
+			// TODO: Do something smarter here.
+			if (active.find(r.id) == active.end())
+				continue;
+
 			std::string name = canonicaliizeUniformName(r.name);
 			const auto &uniformit = reflection.storageTextures.find(name);
 			if (uniformit == reflection.storageTextures.end())
@@ -677,6 +698,8 @@ void Shader::compileShaders()
 		{
 			int nextAttributeIndex = ATTRIB_MAX_ENUM;
 
+			// Don't skip unused inputs, vulkan still needs to have valid
+			// bindings for them.
 			for (const auto &r : shaderResources.stage_inputs)
 			{
 				int index;
@@ -694,6 +717,24 @@ void Shader::compileShaders()
 				spirv[locationOffset] = (uint32_t)index;
 
 				attributes[r.name] = index;
+			}
+
+			for (const auto &r : shaderResources.stage_outputs)
+			{
+				const auto &type = comp.get_type(r.type_id);
+				int count = type.array.empty() ? 1 : type.array[0];
+
+				ioLocationMapper(comp, spirv, r.name, count, r.id);
+			}
+		}
+		else if (shaderStage == SHADERSTAGE_PIXEL)
+		{
+			for (const auto &r : shaderResources.stage_inputs)
+			{
+				const auto &type = comp.get_type(r.type_id);
+				int count = type.array.empty() ? 1 : type.array[0];
+
+				ioLocationMapper(comp, spirv, r.name, count, r.id);
 			}
 		}
 
@@ -738,7 +779,7 @@ void Shader::compileShaders()
 	if (localUniformData.size() > 0)
 		numBuffers++;
 
-	for (const auto kvp : reflection.allUniforms)
+	for (const auto &kvp : reflection.allUniforms)
 	{
 		if (!kvp.second->active)
 			continue;
@@ -882,12 +923,6 @@ void Shader::createDescriptorSetLayout()
 {
 	std::vector<VkDescriptorSetLayoutBinding> bindings;
 
-	VkShaderStageFlags stageFlags;
-	if (isCompute)
-		stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-	else
-		stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-
 	for (auto const &entry : reflection.allUniforms)
 	{
 		if (!entry.second->active)
@@ -901,7 +936,7 @@ void Shader::createDescriptorSetLayout()
 			layoutBinding.binding = entry.second->location;
 			layoutBinding.descriptorType = type;
 			layoutBinding.descriptorCount = entry.second->count;
-			layoutBinding.stageFlags = stageFlags;
+			layoutBinding.stageFlags = getStageFlags((ShaderStageMask)entry.second->stageMask);
 
 			bindings.push_back(layoutBinding);
 		}
@@ -913,7 +948,10 @@ void Shader::createDescriptorSetLayout()
 		uniformBinding.binding = localUniformLocation;
 		uniformBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		uniformBinding.descriptorCount = 1;
-		uniformBinding.stageFlags = stageFlags;
+		if (isCompute)
+			uniformBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+		else
+			uniformBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 		bindings.push_back(uniformBinding);
 	}
 
@@ -964,7 +1002,7 @@ void Shader::createDescriptorPoolSizes()
 
 	for (const auto &entry : reflection.allUniforms)
 	{
-		if (entry.second->location < 0)
+		if (!entry.second->active)
 			continue;
 
 		VkDescriptorPoolSize size{};
@@ -976,13 +1014,6 @@ void Shader::createDescriptorPoolSizes()
 		size.descriptorCount = 1;
 		descriptorPoolSizes.push_back(size);
 	}
-}
-
-void Shader::createStreamBuffers()
-{
-	size_t size = STREAMBUFFER_DEFAULT_SIZE * uniformBufferSizeAligned;
-	if (size > 0)
-		streamBuffers.push_back(new StreamBuffer(vgfx, BUFFERUSAGE_UNIFORM, size));
 }
 
 void Shader::setVideoTextures(graphics::Texture *ytexture, graphics::Texture *cbtexture, graphics::Texture *crtexture)
