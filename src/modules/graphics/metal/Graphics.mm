@@ -328,6 +328,17 @@ Graphics::Graphics()
 
 	initCapabilities();
 
+	for (int i = 0; i < 7; i++)
+		::printf("supports family apple %d: %d\n", i + 1, families.apple[i + 1]);
+
+	for (int i = 0; i < 2; i++)
+		::printf("supports family mac %d: %d\n", i + 1, families.apple[i + 1]);
+
+	for (int i = 0; i < 3; i++)
+		::printf("supports family common %d: %d\n", i + 1, families.apple[i + 1]);
+
+	::printf("supports LA8: %d\n", isPixelFormatSupported(PIXELFORMAT_LA8_UNORM, PIXELFORMATUSAGEFLAGS_SAMPLE));
+
 	uniformBuffer = CreateStreamBuffer(device, BUFFERUSAGE_UNIFORM, 1024 * 512 * 1);
 
 	{
