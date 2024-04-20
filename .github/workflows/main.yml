@@ -466,7 +466,7 @@ jobs:
         exit 1
 
   iOS-Simulator:
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
     - name: Checkout
       uses: actions/checkout@v4
