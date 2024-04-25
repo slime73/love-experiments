@@ -27,6 +27,8 @@
 #endif
 #include "Window.h"
 
+#include "modules/timer/Timer.h"
+
 #ifdef LOVE_ANDROID
 #include "common/android.h"
 #endif
@@ -521,6 +523,8 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 
 	auto renderer = graphics != nullptr ? graphics->getRenderer() : graphics::RENDERER_NONE;
 
+	printf("setWindow started at %.3fs\n", love::timer::Timer::getTime());
+
 	if (isOpen())
 		updateSettings(this->settings, false);
 
@@ -765,6 +769,8 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 #if SDL_VERSION_ATLEAST(3, 0, 0)
 	SDL_SyncWindow(window);
 #endif
+
+	printf("setWindow finished at %.3fs\n", love::timer::Timer::getTime());
 
 	return true;
 }

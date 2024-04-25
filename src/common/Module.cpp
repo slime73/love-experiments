@@ -22,6 +22,7 @@
 #include "Module.h"
 #include "Exception.h"
 #include "deprecation.h"
+#include "modules/timer/Timer.h"
 
 // std
 #include <map>
@@ -68,6 +69,8 @@ Module::Module(Module::ModuleType moduleType, const char *name)
 {
 	initDeprecation();
 	registerInstance(this);
+
+	printf("module %s initialization started at %.3fs\n", name, love::timer::Timer::getTime());
 }
 
 Module::~Module()
