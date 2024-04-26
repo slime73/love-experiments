@@ -411,7 +411,7 @@ jobs:
       checks: write
       pull-requests: write
     env:
-      ALSOFT_CONF: love2d-${{ github.sha }}/testing/resources/alsoft.conf
+      ALSOFT_CONF: testing/resources/alsoft.conf
     steps:
     - name: Checkout
       uses: actions/checkout@v4
