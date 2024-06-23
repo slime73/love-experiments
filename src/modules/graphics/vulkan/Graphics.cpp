@@ -739,7 +739,6 @@ void Graphics::initCapabilities()
 	capabilities.features[FEATURE_MULTI_RENDER_TARGET_FORMATS] = true;
 	capabilities.features[FEATURE_CLAMP_ZERO] = true;
 	capabilities.features[FEATURE_CLAMP_ONE] = true;
-	capabilities.features[FEATURE_BLEND_MINMAX] = true;
 	capabilities.features[FEATURE_LIGHTEN] = true;
 	capabilities.features[FEATURE_FULL_NPOT] = true;
 	capabilities.features[FEATURE_PIXEL_SHADER_HIGHP] = true;
@@ -748,14 +747,9 @@ void Graphics::initCapabilities()
 	capabilities.features[FEATURE_GLSL4] = true;
 	capabilities.features[FEATURE_INSTANCING] = true;
 	capabilities.features[FEATURE_TEXEL_BUFFER] = true;
-	capabilities.features[FEATURE_INDEX_BUFFER_32BIT] = true;
-	capabilities.features[FEATURE_COPY_BUFFER] = true;
-	capabilities.features[FEATURE_COPY_BUFFER_TO_TEXTURE] = true;
 	capabilities.features[FEATURE_COPY_TEXTURE_TO_BUFFER] = true;
-	capabilities.features[FEATURE_COPY_RENDER_TARGET_TO_BUFFER] = true;
-	capabilities.features[FEATURE_MIPMAP_RANGE] = true;
 	capabilities.features[FEATURE_INDIRECT_DRAW] = true;
-	static_assert(FEATURE_MAX_ENUM == 19, "Graphics::initCapabilities must be updated when adding a new graphics feature!");
+	static_assert(FEATURE_MAX_ENUM == 13, "Graphics::initCapabilities must be updated when adding a new graphics feature!");
 
 	VkPhysicalDeviceProperties properties;
 	vkGetPhysicalDeviceProperties(physicalDevice, &properties);
@@ -935,7 +929,7 @@ void Graphics::drawQuads(int start, int count, const VertexAttributes &attribute
 	const int MAX_VERTICES_PER_DRAW = LOVE_UINT16_MAX;
 	const int MAX_QUADS_PER_DRAW = MAX_VERTICES_PER_DRAW / 4;
 
-	prepareDraw(attributes, buffers, texture, PRIMITIVE_TRIANGLES, CULL_BACK);
+	prepareDraw(attributes, buffers, texture, PRIMITIVE_TRIANGLES, CULL_NONE);
 
 	vkCmdBindIndexBuffer(
 		commandBuffers.at(currentFrame),
@@ -972,6 +966,33 @@ void Graphics::setColor(Colorf c)
 	states.back().color = c;
 }
 
+void Graphics::applyScissor()
+{
+	VkRect2D scissor{};
+
+	if (renderPassState.isWindow)
+		scissor.extent = swapChainExtent;
+	else
+	{
+		scissor.extent.width = renderPassState.width;
+		scissor.extent.height = renderPassState.height;
+	}
+
+	if (states.back().scissor)
+	{
+		const Rect &rect = states.back().scissorRect;
+		double dpiScale = getCurrentDPIScale();
+
+		// TODO: clamp this to the above viewport size.
+		scissor.offset.x = (int)(rect.x * dpiScale);
+		scissor.offset.y = (int)(rect.y * dpiScale);
+		scissor.extent.width = (uint32)(rect.w * dpiScale);
+		scissor.extent.height = (uint32)(rect.h * dpiScale);
+	}
+
+	vkCmdSetScissor(commandBuffers.at(currentFrame), 0, 1, &scissor);
+}
+
 void Graphics::setScissor(const Rect &rect)
 {
 	flushBatchedDraws();
@@ -980,21 +1001,7 @@ void Graphics::setScissor(const Rect &rect)
 	states.back().scissorRect = rect;
 
 	if (renderPassState.active)
-	{
-		double dpiScale = getCurrentDPIScale();
-
-		double x = static_cast<double>(rect.x) * dpiScale;
-		double y = static_cast<double>(rect.y) * dpiScale;
-		double w = static_cast<double>(rect.w) * dpiScale;
-		double h = static_cast<double>(rect.h) * dpiScale;
-
-		VkRect2D scissor = {
-			{static_cast<int32_t>(x), static_cast<int32_t>(y)},
-			{static_cast<uint32_t>(w), static_cast<uint32_t>(h)}
-		};
-
-		vkCmdSetScissor(commandBuffers.at(currentFrame), 0, 1, &scissor);
-	}
+		applyScissor();
 }
 
 void Graphics::setScissor()
@@ -1004,19 +1011,7 @@ void Graphics::setScissor()
 	states.back().scissor = false;
 
 	if (renderPassState.active)
-	{
-		VkRect2D scissor{};
-		scissor.offset = { 0, 0 };
-		if (renderPassState.isWindow)
-			scissor.extent = swapChainExtent;
-		else
-		{
-			scissor.extent.width = renderPassState.width;
-			scissor.extent.height = renderPassState.height;
-		}
-
-		vkCmdSetScissor(commandBuffers.at(currentFrame), 0, 1, &scissor);
-	}
+		applyScissor();
 }
 
 void Graphics::setStencilState(const StencilState &s)
@@ -1104,7 +1099,7 @@ bool Graphics::isPixelFormatSupported(PixelFormat format, uint32 usage)
 			return false;
 	}
 
-	if (usage & PIXELFORMATUSAGE_LINEAR)
+	if (usage & PIXELFORMATUSAGEFLAGS_LINEAR)
 	{
 		if (!(featureFlags & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT))
 			return false;
@@ -1375,7 +1370,8 @@ void Graphics::startRecordingGraphicsCommands()
 	}
 }
 
-void Graphics::endRecordingGraphicsCommands() {
+void Graphics::endRecordingGraphicsCommands()
+{
 	if (renderPassState.active)
 		endRenderPass();
 
@@ -1408,25 +1404,8 @@ graphics::Shader::BuiltinUniformData Graphics::getCurrentBuiltinUniformData()
 	data.transformMatrix = getTransform();
 	data.projectionMatrix = getDeviceProjection();
 
-	// The normal matrix is the transpose of the inverse of the rotation portion
-	// (top-left 3x3) of the transform matrix.
-	{
-		Matrix3 normalmatrix = Matrix3(data.transformMatrix).transposedInverse();
-		const float *e = normalmatrix.getElements();
-		for (int i = 0; i < 3; i++)
-		{
-			data.normalMatrix[i].x = e[i * 3 + 0];
-			data.normalMatrix[i].y = e[i * 3 + 1];
-			data.normalMatrix[i].z = e[i * 3 + 2];
-			data.normalMatrix[i].w = 0.0f;
-		}
-	}
-
-	// Store DPI scale in an unused component of another vector.
-	data.normalMatrix[0].w = (float)getCurrentDPIScale();
-
-	// Same with point size.
-	data.normalMatrix[1].w = getPointSize();
+	data.scaleParams.x = (float) getCurrentDPIScale();
+	data.scaleParams.y = getPointSize();
 
 	// Flip y to convert input y-up [-1, 1] to vulkan's y-down [-1, 1].
 	// Convert input z [-1, 1] to vulkan [0, 1].
@@ -2260,7 +2239,7 @@ void Graphics::createVulkanVertexFormat(
 
 	for (const auto &pair : shader->getVertexAttributeIndices())
 	{
-		int i = pair.second;
+		int i = pair.second.index;
 		uint32 bit = 1u << i;
 
 		VkVertexInputAttributeDescription attribdesc{};
@@ -2295,13 +2274,25 @@ void Graphics::createVulkanVertexFormat(
 			attribdesc.binding = DEFAULT_VERTEX_BUFFER_BINDING;
 
 			// Indices should match the creation parameters for defaultVertexBuffer.
-			// TODO: handle int/uint attributes?
-			if (i == ATTRIB_COLOR)
-				attribdesc.offset = defaultVertexBuffer->getDataMember(2).offset;
-			else
-				attribdesc.offset = defaultVertexBuffer->getDataMember(0).offset;
-
-			attribdesc.format = Vulkan::getVulkanVertexFormat(DATAFORMAT_FLOAT_VEC4);
+			switch (pair.second.baseType)
+			{
+			case DATA_BASETYPE_INT:
+				attribdesc.offset = defaultVertexBuffer->getDataMember(1).offset;
+				attribdesc.format = Vulkan::getVulkanVertexFormat(DATAFORMAT_INT32_VEC4);
+				break;
+			case DATA_BASETYPE_UINT:
+				attribdesc.offset = defaultVertexBuffer->getDataMember(1).offset;
+				attribdesc.format = Vulkan::getVulkanVertexFormat(DATAFORMAT_UINT32_VEC4);
+				break;
+			case DATA_BASETYPE_FLOAT:
+			default:
+				if (i == ATTRIB_COLOR)
+					attribdesc.offset = defaultVertexBuffer->getDataMember(2).offset;
+				else
+					attribdesc.offset = defaultVertexBuffer->getDataMember(0).offset;
+				attribdesc.format = Vulkan::getVulkanVertexFormat(DATAFORMAT_FLOAT_VEC4);
+				break;
+			}
 
 			if (usedBuffers.find(DEFAULT_VERTEX_BUFFER_BINDING) == usedBuffers.end())
 			{
@@ -2436,8 +2427,28 @@ void Graphics::setDefaultRenderPass()
 	renderPassState.renderPassConfiguration = std::move(renderPassConfiguration);
 	renderPassState.framebufferConfiguration = std::move(framebufferConfiguration);
 
+	// Can't call clear() here because it depends on current RT state, which might not be
+	// set yet when this is called from within setRenderTargetsInternal.
 	if (renderPassState.windowClearRequested)
-		clear(renderPassState.mainWindowClearColorValue, renderPassState.mainWindowClearStencilValue, renderPassState.mainWindowClearDepthValue);
+	{
+		if (renderPassState.mainWindowClearColorValue.hasValue)
+		{
+			renderPassState.renderPassConfiguration.colorAttachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			renderPassState.clearColors[0].color = Texture::getClearColor(nullptr, renderPassState.mainWindowClearColorValue.value);
+		}
+
+		if (renderPassState.mainWindowClearDepthValue.hasValue && backbufferHasDepth)
+		{
+			renderPassState.renderPassConfiguration.staticData.depthStencilAttachment.depthLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			renderPassState.clearColors[1].depthStencil.depth = static_cast<float>(renderPassState.mainWindowClearDepthValue.value);
+		}
+
+		if (renderPassState.mainWindowClearStencilValue.hasValue && backbufferHasStencil)
+		{
+			renderPassState.renderPassConfiguration.staticData.depthStencilAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			renderPassState.clearColors[1].depthStencil.stencil = static_cast<uint32_t>(renderPassState.mainWindowClearStencilValue.value);
+		}
+	}
 }
 
 void Graphics::setRenderPass(const RenderTargets &rts, int pixelw, int pixelh, bool hasSRGBtexture)
@@ -2518,11 +2529,6 @@ void Graphics::startRenderPass()
 	if (renderPassState.isWindow && renderPassState.windowClearRequested)
 		renderPassState.windowClearRequested = false;
 
-	if (states.back().scissor)
-		setScissor(states.back().scissorRect);
-	else
-		setScissor();
-
 	VkViewport viewport{};
 	viewport.x = 0.0f;
 	viewport.y = 0.0f;
@@ -2542,6 +2548,8 @@ void Graphics::startRenderPass()
 		Vulkan::cmdTransitionImageLayout(commandBuffers.at(currentFrame), image, format, imageLayout, renderLayout, rootmip, 1, rootlayer, 1);
 
 	vkCmdBeginRenderPass(commandBuffers.at(currentFrame), &renderPassState.beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	applyScissor();
 }
 
 void Graphics::endRenderPass()
@@ -2816,7 +2824,8 @@ VkPipeline Graphics::createGraphicsPipeline(GraphicsPipelineConfiguration &confi
 	return graphicsPipeline;
 }
 
-void Graphics::ensureGraphicsPipelineConfiguration(GraphicsPipelineConfiguration &configuration) {
+void Graphics::ensureGraphicsPipelineConfiguration(GraphicsPipelineConfiguration &configuration)
+{
 	auto it = graphicsPipelines.find(configuration);
 	if (it != graphicsPipelines.end())
 	{

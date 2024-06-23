@@ -253,9 +253,6 @@ Texture::Texture(Graphics *gfx, const Settings &settings, const Slices *slices)
 			mipmapCount = std::min(totalMipmapCount, requestedMipmapCount);
 		else
 			mipmapCount = totalMipmapCount;
-
-		if (mipmapCount != totalMipmapCount && !caps.features[Graphics::FEATURE_MIPMAP_RANGE])
-			throw love::Exception("Custom mipmap ranges for a texture are not supported on this system (%d mipmap levels are required but only %d levels were provided.)", totalMipmapCount, mipmapCount);
 	}
 
 	const char *miperr = nullptr;
@@ -700,6 +697,10 @@ void Texture::generateMipmaps()
 	const char *err = nullptr;
 	if (!supportsGenerateMipmaps(err))
 		throw love::Exception("%s", err);
+
+	auto gfx = Module::getInstance<Graphics>(Module::M_GRAPHICS);
+	if (gfx != nullptr && gfx->isRenderTargetActive(this))
+		throw love::Exception("generateMipmaps cannot be called on this Texture while it's an active render target.");
 
 	generateMipmapsInternal();
 }

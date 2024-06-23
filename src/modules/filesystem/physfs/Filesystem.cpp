@@ -190,6 +190,11 @@ bool Filesystem::setIdentity(const char *ident, bool appendToPath)
 	// These will be re-populated by getFullCommonPath.
 	for (CommonPath p : appCommonPaths)
 		fullPaths[p].clear();
+#ifdef LOVE_ANDROID
+	// Ensure COMMONPATH_USER_APPDATA is also cleared in Android to ensure
+	// `t.externalstorage` works as expected.
+	fullPaths[COMMONPATH_USER_APPDATA].clear();
+#endif
 
 	// Store the save directory. getFullCommonPath(COMMONPATH_APP_*) uses this.
 	saveIdentity = std::string(ident);
@@ -796,6 +801,16 @@ bool Filesystem::createDirectory(const char *dir)
 	if (!PHYSFS_mkdir(dir))
 		return false;
 
+#ifdef LOVE_ANDROID
+	// In Android with t.externalstorage = true, make sure the directory
+    // created in the save directory has permissions of ugo+rwx (0777) so that
+    // it's accessible through MTP.
+	if (isAndroidSaveExternal())
+		love::android::fixupExternalStoragePermission(
+			getFullCommonPath(CommonPath::COMMONPATH_APP_SAVEDIR),
+			dir
+		);
+#endif
 	return true;
 }
 

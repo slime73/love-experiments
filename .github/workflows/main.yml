@@ -61,7 +61,7 @@ jobs:
     - name: Run Test Suite (opengl)
       run: |
         chmod a+x love-${{ github.sha }}.AppImage
-        ./love-${{ github.sha }}.AppImage love2d-${{ github.sha }}/testing/main.lua --all --isRunner
+        ./love-${{ github.sha }}.AppImage love2d-${{ github.sha }}/testing/main.lua --all --isRunner --renderers opengl
     - name: Love Test Report (opengl)
       id: report1
       uses: ellraiser/love-test-report@main
@@ -84,7 +84,7 @@ jobs:
         LOVE_GRAPHICS_DEBUG: 1
       run: |
         export LOVE_GRAPHICS_USE_OPENGLES=1
-        ./love-${{ github.sha }}.AppImage love2d-${{ github.sha }}/testing/main.lua --all --isRunner
+        ./love-${{ github.sha }}.AppImage love2d-${{ github.sha }}/testing/main.lua --all --isRunner --renderers opengl
     - name: Love Test Report (opengles)
       uses: ellraiser/love-test-report@main
       id: report2
@@ -143,6 +143,7 @@ jobs:
         echo "${{ steps.report1.outputs.failed }} opengl tests failed"
         echo "${{ steps.report2.outputs.failed }} opengles tests failed"
         exit 1
+
   Windows:
     runs-on: windows-latest
     permissions:
@@ -154,11 +155,7 @@ jobs:
       VULKAN_SDK: C:/VulkanSDK/1.3.231.1
     strategy:
       matrix:
-        platform: [Win32, x64, ARM64]
-        install: [modern]
-        exclude:
-        - platform: ARM64
-          install: compat
+        platform: [x64, ARM64]
     defaults:
       run:
         shell: cmd
@@ -167,17 +164,8 @@ jobs:
     - name: Define Variables
       id: vars
       run: |
-        rem Compat/Modern switch
-        if "${{ matrix.install }}" == "compat" (
-          echo moredef=-DLOVE_INSTALL_UCRT=ON>> "%GITHUB_OUTPUT%"
-          echo compatname=-compat>> "%GITHUB_OUTPUT%"
-        ) else (
-          echo moredef=>> "%GITHUB_OUTPUT%"
-          echo compatname=>> "%GITHUB_OUTPUT%"
-        )
-        
         rem JIT Modules
-        if "${{ matrix.platform }}-${{ matrix.install }}" == "x64-modern" (
+        if "${{ matrix.platform }}" == "x64" (
           (echo jitmodules=1)>> "%GITHUB_OUTPUT%"
         ) else (
           (echo jitmodules=0)>> "%GITHUB_OUTPUT%"
@@ -291,7 +279,7 @@ jobs:
     - name: Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: love-windows-${{ steps.vars.outputs.arch }}${{ steps.vars.outputs.compatname }}
+        name: love-windows-${{ steps.vars.outputs.arch }}
         path: |
           build/*.zip
           build/*.exe
@@ -305,70 +293,70 @@ jobs:
     - name: Artifact PDB
       uses: actions/upload-artifact@v4
       with:
-        name: love-windows-${{ steps.vars.outputs.arch }}${{ steps.vars.outputs.compatname }}-dbg
+        name: love-windows-${{ steps.vars.outputs.arch }}-dbg
         path: pdb/Release/*.pdb
     # install mesa for graphic tests
     - name: Install Mesa 
-      if: steps.vars.outputs.arch != 'ARM64' && steps.vars.outputs.compatname != '-compat'
+      if: steps.vars.outputs.arch != 'ARM64'
       run: |
         curl -L --output mesa.7z --url https://github.com/pal1000/mesa-dist-win/releases/download/23.2.1/mesa3d-23.2.1-release-msvc.7z
         7z x mesa.7z -o*
         powershell.exe mesa\systemwidedeploy.cmd 1
     # build love to use for the tests
     - name: Build Test Exe
-      if: steps.vars.outputs.arch != 'ARM64' && steps.vars.outputs.compatname != '-compat'
+      if: steps.vars.outputs.arch != 'ARM64'
       run: cmake --build build --config Release --target install
     # windows opengl tests
     - name: Run Tests (opengl)
-      if: steps.vars.outputs.arch != 'ARM64' && steps.vars.outputs.compatname != '-compat'
+      if: steps.vars.outputs.arch != 'ARM64'
       env:
         LOVE_GRAPHICS_DEBUG: 1
       run: |
         echo 'check dir'
         ls
-        powershell.exe ./install/lovec.exe ./megasource/libs/love/testing/main.lua --all --isRunner
+        powershell.exe ./install/lovec.exe ./megasource/libs/love/testing/main.lua --all --isRunner --renderers opengl
     - name: Love Test Report (opengl)
       id: report1
-      if: steps.vars.outputs.arch != 'ARM64' && steps.vars.outputs.compatname != '-compat'
+      if: steps.vars.outputs.arch != 'ARM64'
       uses: ellraiser/love-test-report@main
       with:
-        name: Love Testsuite Windows ${{ steps.vars.outputs.arch }} ${{ steps.vars.outputs.compatname }} (opengl)
-        title: test-report-windows-${{ steps.vars.outputs.arch }}${{ steps.vars.outputs.compatname }}-opengl
+        name: Love Testsuite Windows ${{ steps.vars.outputs.arch }} (opengl)
+        title: test-report-windows-${{ steps.vars.outputs.arch }}-opengl
         path: megasource/libs/love/testing/output/lovetest_all.md
         token: ${{ secrets.GITHUB_TOKEN }}
     - name: Zip Test Output (opengl)
-      if: steps.vars.outputs.arch != 'ARM64' && steps.vars.outputs.compatname != '-compat'
+      if: steps.vars.outputs.arch != 'ARM64'
       run: |
-        7z a -tzip test-output-windows-${{ steps.vars.outputs.arch }}${{ steps.vars.outputs.compatname }}-opengl.zip megasource/libs/love/testing/output/
+        7z a -tzip test-output-windows-${{ steps.vars.outputs.arch }}-opengl.zip megasource/libs/love/testing/output/
     - name: Artifact Test Output (opengl)
-      if: steps.vars.outputs.arch != 'ARM64' && steps.vars.outputs.compatname != '-compat'
+      if: steps.vars.outputs.arch != 'ARM64'
       uses: actions/upload-artifact@v4
       with:
         name: test-output-windows-${{ steps.vars.outputs.arch }}-opengl-${{ steps.report1.outputs.conclusion }}
         path: test-output-windows-${{ steps.vars.outputs.arch }}-opengl.zip
     # windows opengles tests
     - name: Run Tests (opengles)
-      if: steps.vars.outputs.arch != 'ARM64' && steps.vars.outputs.compatname != '-compat'
+      if: steps.vars.outputs.arch != 'ARM64'
       env:
         LOVE_GRAPHICS_DEBUG: 1
         LOVE_GRAPHICS_USE_OPENGLES: 1
       run: |
-        powershell.exe ./install/lovec.exe ./megasource/libs/love/testing/main.lua --all --isRunner
+        powershell.exe ./install/lovec.exe ./megasource/libs/love/testing/main.lua --all --isRunner --renderers opengl
     - name: Love Test Report (opengles)
       id: report2
-      if: steps.vars.outputs.arch != 'ARM64' && steps.vars.outputs.compatname != '-compat'
+      if: steps.vars.outputs.arch != 'ARM64'
       uses: ellraiser/love-test-report@main
       with:
-        name: Love Testsuite Windows ${{ steps.vars.outputs.arch }} ${{ steps.vars.outputs.compatname }} (opengles)
-        title: test-report-windows-${{ steps.vars.outputs.arch }}${{ steps.vars.outputs.compatname }}-opengles
+        name: Love Testsuite Windows ${{ steps.vars.outputs.arch }} (opengles)
+        title: test-report-windows-${{ steps.vars.outputs.arch }}-opengles
         path: megasource/libs/love/testing/output/lovetest_all.md
         token: ${{ secrets.GITHUB_TOKEN }}
     - name: Zip Test Output (opengles)
-      if: steps.vars.outputs.arch != 'ARM64' && steps.vars.outputs.compatname != '-compat'
+      if: steps.vars.outputs.arch != 'ARM64'
       run: |
-        7z a -tzip test-output-windows-${{ steps.vars.outputs.arch }}${{ steps.vars.outputs.compatname }}-opengles.zip megasource/libs/love/testing/output/
+        7z a -tzip test-output-windows-${{ steps.vars.outputs.arch }}-opengles.zip megasource/libs/love/testing/output/
     - name: Artifact Test Output (opengles)
-      if: steps.vars.outputs.arch != 'ARM64' && steps.vars.outputs.compatname != '-compat'
+      if: steps.vars.outputs.arch != 'ARM64'
       uses: actions/upload-artifact@v4
       with:
         name: test-output-windows-${{ steps.vars.outputs.arch }}-opengles-${{ steps.report2.outputs.conclusion }}
@@ -403,24 +391,26 @@ jobs:
       if: steps.vars.outputs.arch != 'ARM64'
       uses: ellraiser/love-test-report@main
       with:
-        name: Love Testsuite Windows ${{ steps.vars.outputs.arch }} ${{ steps.vars.outputs.compatname }} (vulkan)
-        title: test-report-windows-${{ steps.vars.outputs.arch }}${{ steps.vars.outputs.compatname }}-vulkan
+        name: Love Testsuite Windows ${{ steps.vars.outputs.arch }} (vulkan)
+        title: test-report-windows-${{ steps.vars.outputs.arch }}-vulkan
         path: megasource/libs/love/testing/output/lovetest_all.md
     - name: Zip Test Output (vulkan)
       if: steps.vars.outputs.arch != 'ARM64'
       run: |
-        7z a -tzip test-output-windows-${{ steps.vars.outputs.arch }}${{ steps.vars.outputs.compatname }}-vulkan.zip megasource/libs/love/testing/output/
+        7z a -tzip test-output-windows-${{ steps.vars.outputs.arch }}-vulkan.zip megasource/libs/love/testing/output/
     - name: Artifact Test Output (vulkan)
       if: steps.vars.outputs.arch != 'ARM64'
       uses: actions/upload-artifact@v4
       with:
-        name: test-output-windows-${{ steps.vars.outputs.arch }}${{ steps.vars.outputs.compatname }}-vulkan
-        path: test-output-windows-${{ steps.vars.outputs.arch }}${{ steps.vars.outputs.compatname }}-vulkan.zip
+        name: test-output-windows-${{ steps.vars.outputs.arch }}-vulkan
+        path: test-output-windows-${{ steps.vars.outputs.arch }}-vulkan.zip
   macOS:
     runs-on: macos-latest
     permissions:
       checks: write
       pull-requests: write
+    env:
+      ALSOFT_CONF: testing/resources/alsoft.conf
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -429,7 +419,7 @@ jobs:
       with:
         path: apple-dependencies
         repository: love2d/love-apple-dependencies
-        ref: 12.x
+        ref: main
     - name: Move Dependencies
       run:
         mv apple-dependencies/macOS/Frameworks platform/xcode/macosx
@@ -447,36 +437,65 @@ jobs:
       with:
         name: love-macos
         path: love-macos.zip
-    # macos opengl tests (metal not supported on runners)
-    - name: Run Test Suite
+    # macos opengl tests
+    - name: Run Test Suite (OpenGL)
       env:
         LOVE_GRAPHICS_DEBUG: 1
       run: |
         ls
-        love-macos/love.app/Contents/MacOS/love ./testing/main.lua --all --isRunner
-    - name: Love Test Report
+        love-macos/love.app/Contents/MacOS/love ./testing/main.lua --all --isRunner --renderers opengl
+    - name: Love Test Report (OpenGL)
       id: report1
       uses: ellraiser/love-test-report@main
       with:
         name: Love Testsuite MacOS
-        title: test-report-macos
+        title: test-report-macos-opengl
         path: testing/output/lovetest_all.md
         token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Zip Test Output
+    - name: Zip Test Output (OpenGL)
       run: |
         7z a -tzip test-output-macos-opengl.zip ./testing/output/
-    - name: Artifact Test Output
+    - name: Artifact Test Output (OpenGL)
       uses: actions/upload-artifact@v4
       with:
         name: test-output-macos-opengl-${{ steps.report1.outputs.conclusion }}
         path: test-output-macos-opengl.zip
-    - name: Check Tests Passing
+    - name: Check Tests Passing (OpenGL)
       if: steps.report1.outputs.conclusion == 'failure'
       run: |
         echo "${{ steps.report1.outputs.failed }} opengl tests failed"
         exit 1
+    # macos metal tests
+    - name: Run Test Suite (Metal)
+      env:
+        LOVE_GRAPHICS_DEBUG: 1
+      run: |
+        ls
+        love-macos/love.app/Contents/MacOS/love ./testing/main.lua --all --isRunner --renderers metal
+    - name: Love Test Report (Metal)
+      id: report2
+      uses: ellraiser/love-test-report@main
+      with:
+        name: Love Testsuite MacOS (Metal)
+        title: test-report-macos-metal
+        path: testing/output/lovetest_all.md
+        token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Zip Test Output (Metal)
+      run: |
+        7z a -tzip test-output-macos-metal.zip ./testing/output/
+    - name: Artifact Test Output (Metal)
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-output-macos-metal-${{ steps.report2.outputs.conclusion }}
+        path: test-output-macos-metal.zip
+    - name: Check Tests Passing (Metal)
+      if: steps.report2.outputs.conclusion == 'failure'
+      run: |
+        echo "${{ steps.report2.outputs.failed }} metal tests failed"
+        exit 1
+
   iOS-Simulator:
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -485,13 +504,14 @@ jobs:
       with:
         path: apple-dependencies
         repository: love2d/love-apple-dependencies
-        ref: 12.x
+        ref: main
     - name: Move Dependencies
       run: |
         mv apple-dependencies/iOS/libraries platform/xcode/ios
     - name: Build
       run:
-        xcodebuild -project platform/xcode/love.xcodeproj -scheme love-ios -configuration Release -destination 'platform=iOS Simulator,name=iPhone 11'
+        xcodebuild -project platform/xcode/love.xcodeproj -scheme love-ios -configuration Release -destination 'platform=iOS Simulator,name=iPhone 15'
+
   Android:
     runs-on: ubuntu-latest
     strategy:

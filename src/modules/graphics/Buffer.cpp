@@ -50,7 +50,6 @@ Buffer::Buffer(Graphics *gfx, const Settings &settings, const std::vector<DataDe
 		throw love::Exception("Data format must contain values.");
 
 	const auto &caps = gfx->getCapabilities();
-	bool supportsGLSL3 = caps.features[Graphics::FEATURE_GLSL3];
 
 	bool indexbuffer = usageFlags & BUFFERUSAGEFLAG_INDEX;
 	bool vertexbuffer = usageFlags & BUFFERUSAGEFLAG_VERTEX;
@@ -86,9 +85,6 @@ Buffer::Buffer(Graphics *gfx, const Settings &settings, const std::vector<DataDe
 
 		if (indexbuffer)
 		{
-			if (!caps.features[Graphics::FEATURE_INDEX_BUFFER_32BIT] && format == DATAFORMAT_UINT32)
-				throw love::Exception("32 bit index buffer formats are not supported on this system.");
-
 			if (format != DATAFORMAT_UINT16 && format != DATAFORMAT_UINT32)
 				throw love::Exception("Index buffers only support uint16 and uint32 data types.");
 
@@ -109,9 +105,6 @@ Buffer::Buffer(Graphics *gfx, const Settings &settings, const std::vector<DataDe
 
 			if (info.baseType == DATA_BASETYPE_BOOL)
 				throw love::Exception("Bool types are not supported in vertex buffers.");
-
-			if ((info.baseType == DATA_BASETYPE_INT || info.baseType == DATA_BASETYPE_UINT) && !supportsGLSL3)
-				throw love::Exception("Integer vertex attribute data types require GLSL 3 support.");
 
 			if (decl.name.empty())
 				throw love::Exception("Vertex buffer attributes must have a name.");

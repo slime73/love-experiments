@@ -147,24 +147,18 @@ public:
 
 	enum Feature
 	{
-		FEATURE_MULTI_RENDER_TARGET_FORMATS,
+		FEATURE_MULTI_RENDER_TARGET_FORMATS, // Deprecated
 		FEATURE_CLAMP_ZERO,
 		FEATURE_CLAMP_ONE,
-		FEATURE_BLEND_MINMAX,
 		FEATURE_LIGHTEN, // Deprecated
-		FEATURE_FULL_NPOT,
-		FEATURE_PIXEL_SHADER_HIGHP,
-		FEATURE_SHADER_DERIVATIVES,
-		FEATURE_GLSL3,
+		FEATURE_FULL_NPOT, // Deprecated
+		FEATURE_PIXEL_SHADER_HIGHP, // Deprecated
+		FEATURE_SHADER_DERIVATIVES, // Deprecated
+		FEATURE_GLSL3, // Deprecated
 		FEATURE_GLSL4,
-		FEATURE_INSTANCING,
+		FEATURE_INSTANCING, // Deprecated
 		FEATURE_TEXEL_BUFFER,
-		FEATURE_INDEX_BUFFER_32BIT,
-		FEATURE_COPY_BUFFER,
-		FEATURE_COPY_BUFFER_TO_TEXTURE,
 		FEATURE_COPY_TEXTURE_TO_BUFFER,
-		FEATURE_COPY_RENDER_TARGET_TO_BUFFER,
-		FEATURE_MIPMAP_RANGE,
 		FEATURE_INDIRECT_DRAW,
 		FEATURE_MAX_ENUM
 	};
@@ -485,7 +479,7 @@ public:
 
 	bool validateShader(bool gles, const std::vector<std::string> &stages, const Shader::CompileOptions &options, std::string &err);
 
-	Texture *getDefaultTexture(TextureType type, DataBaseType dataType);
+	Texture *getDefaultTexture(TextureType type, DataBaseType dataType, bool depthSample);
 	Buffer *getDefaultTexelBuffer(DataBaseType dataType);
 	Buffer *getDefaultStorageBuffer();
 	Texture *getTextureOrDefaultForActiveShader(Texture *tex);
@@ -1100,7 +1094,7 @@ private:
 	void checkSetDefaultFont();
 	int calculateEllipsePoints(float rx, float ry) const;
 
-	Texture *defaultTextures[TEXTURE_MAX_ENUM][DATA_BASETYPE_MAX_ENUM];
+	Texture *defaultTextures[TEXTURE_MAX_ENUM][DATA_BASETYPE_MAX_ENUM][2];
 	Buffer *defaultTexelBuffers[DATA_BASETYPE_MAX_ENUM];
 	Buffer *defaultStorageBuffer;
 

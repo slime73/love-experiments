@@ -950,6 +950,59 @@ love.test.graphics.Shader = function(test)
   local imgdata2 = love.graphics.readbackTexture(canvas3)
   test:compareImg(imgdata2)
 
+  if love.graphics.getSupported().glsl3 then
+    local shader8 = love.graphics.newShader[[
+      #pragma language glsl3
+      #ifdef GL_ES
+        precision highp float;
+      #endif
+
+      varying vec4 VaryingUnused1;
+      varying mat3 VaryingMatrix;
+      flat varying ivec4 VaryingInt;
+
+      #ifdef VERTEX
+      in vec4 VertexPosition;
+      in ivec4 IntAttributeUnused;
+
+      void vertexmain()
+      {
+        VaryingMatrix = mat3(vec3(1, 0, 0), vec3(0, 1, 0), vec3(0, 0, 1));
+        VaryingInt = ivec4(1, 1, 1, 1);
+        love_Position = TransformProjectionMatrix * VertexPosition;
+      }
+      #endif
+
+      #ifdef PIXEL
+      out ivec4 outData;
+
+      void pixelmain()
+      {
+        outData = ivec4(VaryingMatrix[1][1] > 0.0 ? 1 : 0, 1, VaryingInt.x, 1);
+      }
+      #endif
+    ]]
+
+    local canvas4 = love.graphics.newCanvas(16, 16, {format="rgba8i"})
+      love.graphics.push("all")
+      love.graphics.setBlendMode("none")
+      love.graphics.setCanvas(canvas4)
+      love.graphics.setShader(shader8)
+      love.graphics.rectangle("fill", 0, 0, 16, 16)
+    love.graphics.pop()
+
+    local intimagedata = love.graphics.readbackTexture(canvas4)
+    local imgdata3 = love.image.newImageData(16, 16, "rgba8")
+    for y=0, 15 do
+      for x=0, 15 do
+        local ir, ig, ib, ia = intimagedata:getInt8(4 * (y * 16 + x), 4)
+        imgdata3:setPixel(x, y, ir, ig, ib, ia)
+      end
+    end
+    test:compareImg(imgdata3)
+  else
+    test:assertTrue(true, "skip shader IO test")
+  end
 end
 
 
@@ -2062,7 +2115,7 @@ end
 love.test.graphics.setCanvas = function(test)
   -- make 2 canvas, set to each, draw one to the other, check output
   local canvas1 = love.graphics.newCanvas(16, 16)
-  local canvas2 = love.graphics.newCanvas(16, 16)
+  local canvas2 = love.graphics.newCanvas(16, 16, {mipmaps = "auto"})
   love.graphics.setCanvas(canvas1)
     test:assertEquals(canvas1, love.graphics.getCanvas(), 'check canvas 1 set')
     love.graphics.clear(1, 0, 0, 1)
@@ -2074,6 +2127,8 @@ love.test.graphics.setCanvas = function(test)
   test:assertEquals(nil, love.graphics.getCanvas(), 'check no canvas set')
   local imgdata = love.graphics.readbackTexture(canvas2)
   test:compareImg(imgdata)
+  local imgdata2 = love.graphics.readbackTexture(canvas2, 1, 2) -- readback mipmap
+  test:compareImg(imgdata2)
 end
 
 
@@ -2708,7 +2763,8 @@ love.test.graphics.getTextureFormats = function(test)
     'rg11b10f', 'ASTC10x8', 'ASTC10x10', 'ASTC12x10', 'ASTC12x12', 'normal',
     'srgba8', 'la8', 'ASTC10x6', 'ASTC8x8', 'ASTC6x6', 'ASTC5x5', 'EACrgs',
     'EACrs', 'ETC2rgba1', 'ETC2rgb', 'PVR1rgba4', 'PVR1rgb4', 'BC6h',
-    'BC5', 'BC4', 'DXT3', 'stencil8', 'rgba16ui', 'bgra8srgb'
+    'BC5', 'BC4', 'DXT3', 'rgba16ui', 'bgra8srgb',
+    'depth16', 'depth24', 'depth32f', 'depth24stencil8', 'depth32fstencil8', 'stencil8'
   }
   local supported = love.graphics.getTextureFormats({ canvas = true })
   test:assertNotNil(supported)
@@ -2749,10 +2805,9 @@ love.test.graphics.getSupported = function(test)
   -- table match what the documentation lists
   local gfs = {
     'clampzero', 'lighten', 'glsl3', 'instancing', 'fullnpot', 
-    'pixelshaderhighp', 'shaderderivatives', 'indirectdraw', 'mipmaprange',
-    'copyrendertargettobuffer', 'copytexturetobuffer', 'copybuffer',
-    'copybuffertotexture', 'indexbuffer32bit', 'multirendertargetformats', 
-    'clampone', 'blendminmax', 'glsl4'
+    'pixelshaderhighp', 'shaderderivatives', 'indirectdraw',
+    'copytexturetobuffer', 'multirendertargetformats', 
+    'clampone', 'glsl4'
   }
   local features = love.graphics.getSupported()
   for g=1,#gfs do

@@ -538,9 +538,10 @@ bool Graphics::validateShader(bool gles, const std::vector<std::string> &stagess
 	return Shader::validate(stages, err);
 }
 
-Texture *Graphics::getDefaultTexture(TextureType type, DataBaseType dataType)
+Texture *Graphics::getDefaultTexture(TextureType type, DataBaseType dataType, bool depthSample)
 {
-	Texture *tex = defaultTextures[type][dataType];
+	uint32 depthsampleindex = depthSample ? 1 : 0;
+	Texture *tex = defaultTextures[type][dataType][depthsampleindex];
 	if (tex != nullptr)
 		return tex;
 
@@ -561,6 +562,18 @@ Texture *Graphics::getDefaultTexture(TextureType type, DataBaseType dataType)
 		break;
 	}
 
+	if (depthSample)
+	{
+		if (isPixelFormatSupported(PIXELFORMAT_DEPTH16_UNORM, PIXELFORMATUSAGE_SAMPLE))
+			settings.format = PIXELFORMAT_DEPTH16_UNORM;
+		else if (isPixelFormatSupported(PIXELFORMAT_DEPTH24_UNORM, PIXELFORMATUSAGE_SAMPLE))
+			settings.format = PIXELFORMAT_DEPTH24_UNORM;
+		else if (isPixelFormatSupported(PIXELFORMAT_DEPTH32_FLOAT, PIXELFORMATUSAGE_SAMPLE))
+			settings.format = PIXELFORMAT_DEPTH32_FLOAT;
+		else // TODO?
+			settings.format = PIXELFORMAT_DEPTH24_UNORM;
+	}
+
 	std::string name = "default_";
 
 	const char *tname = "unknown";
@@ -578,6 +591,10 @@ Texture *Graphics::getDefaultTexture(TextureType type, DataBaseType dataType)
 	SamplerState s;
 	s.minFilter = s.magFilter = SamplerState::FILTER_NEAREST;
 	s.wrapU = s.wrapV = s.wrapW = SamplerState::WRAP_CLAMP;
+
+	if (depthSample)
+		s.depthSampleMode.set(COMPARE_ALWAYS);
+
 	tex->setSamplerState(s);
 
 	uint8 pixel[] = {255, 255, 255, 255};
@@ -587,7 +604,7 @@ Texture *Graphics::getDefaultTexture(TextureType type, DataBaseType dataType)
 	for (int slice = 0; slice < (type == TEXTURE_CUBE ? 6 : 1); slice++)
 		tex->replacePixels(pixel, sizeof(pixel), slice, 0, {0, 0, 1, 1}, false);
 
-	defaultTextures[type][dataType] = tex;
+	defaultTextures[type][dataType][depthsampleindex] = tex;
 
 	return tex;
 }
@@ -647,9 +664,12 @@ void Graphics::releaseDefaultResources()
 	{
 		for (int dataType = 0; dataType < DATA_BASETYPE_MAX_ENUM; dataType++)
 		{
-			if (defaultTextures[type][dataType])
-				defaultTextures[type][dataType]->release();
-			defaultTextures[type][dataType] = nullptr;
+			for (int depthsample = 0; depthsample < 2; depthsample++)
+			{
+				if (defaultTextures[type][dataType][depthsample])
+					defaultTextures[type][dataType][depthsample]->release();
+				defaultTextures[type][dataType][depthsample] = nullptr;
+			}
 		}
 	}
 
@@ -676,10 +696,10 @@ Texture *Graphics::getTextureOrDefaultForActiveShader(Texture *tex)
 	{
 		auto texinfo = shader->getMainTextureInfo();
 		if (texinfo != nullptr && texinfo->textureType != TEXTURE_MAX_ENUM)
-			return getDefaultTexture(texinfo->textureType, texinfo->dataBaseType);
+			return getDefaultTexture(texinfo->textureType, texinfo->dataBaseType, texinfo->isDepthSampler);
 	}
 
-	return getDefaultTexture(TEXTURE_2D, DATA_BASETYPE_FLOAT);
+	return getDefaultTexture(TEXTURE_2D, DATA_BASETYPE_FLOAT, false);
 }
 
 void Graphics::validateStencilState(const StencilState &s) const
@@ -995,35 +1015,35 @@ void Graphics::setRenderTargets(const RenderTargets &rts)
 	if (firsttex == nullptr)
 		return setRenderTarget();
 
-	const auto &prevRTs = state.renderTargets;
+	const auto &prevRTsRef = state.renderTargets;
 
-	if (rtcount == (int) prevRTs.colors.size())
+	if (rtcount == (int) prevRTsRef.colors.size())
 	{
 		bool modified = false;
 
 		for (int i = 0; i < rtcount; i++)
 		{
-			if (rts.colors[i] != prevRTs.colors[i])
+			if (rts.colors[i] != prevRTsRef.colors[i])
 			{
 				modified = true;
 				break;
 			}
 		}
 
-		if (!modified && rts.depthStencil != prevRTs.depthStencil)
+		if (!modified && rts.depthStencil != prevRTsRef.depthStencil)
 			modified = true;
 
-		if (rts.temporaryRTFlags != prevRTs.temporaryRTFlags)
+		if (rts.temporaryRTFlags != prevRTsRef.temporaryRTFlags)
 			modified = true;
 
 		if (!modified)
 			return;
 	}
 
+	const RenderTargetsStrongRef prevRTs = prevRTsRef;
+
 	if (rtcount > capabilities.limits[LIMIT_RENDER_TARGETS])
 		throw love::Exception("This system can't simultaneously render to %d textures.", rtcount);
-
-	bool multiformatsupported = capabilities.features[FEATURE_MULTI_RENDER_TARGET_FORMATS];
 
 	PixelFormat firstcolorformat = PIXELFORMAT_UNKNOWN;
 	if (!rts.colors.empty())
@@ -1064,9 +1084,6 @@ void Graphics::setRenderTargets(const RenderTargets &rts)
 
 		if (c->getPixelWidth(mip) != pixelw || c->getPixelHeight(mip) != pixelh)
 			throw love::Exception("All textures must have the same pixel dimensions.");
-
-		if (!multiformatsupported && format != firstcolorformat)
-			throw love::Exception("This system doesn't support multi-render-target rendering with different texture formats.");
 
 		if (c->getRequestedMSAA() != reqmsaa)
 			throw love::Exception("All textures must have the same MSAA value.");
@@ -1151,6 +1168,13 @@ void Graphics::setRenderTargets(const RenderTargets &rts)
 
 	resetProjection();
 
+	// generateMipmaps can't be used for depth/stencil textures.
+	for (const auto &rt : prevRTs.colors)
+	{
+		if (rt.texture && rt.texture->getMipmapsMode() == Texture::MIPMAPS_AUTO && rt.mipmap == 0)
+			rt.texture->generateMipmaps();
+	}
+
 	// Clear/reset the temporary depth/stencil buffers.
 	// TODO: make this deferred somehow to avoid double clearing if the user
 	// also calls love.graphics.clear after setCanvas.
@@ -1170,6 +1194,8 @@ void Graphics::setRenderTarget()
 	if (state.renderTargets.colors.empty() && state.renderTargets.depthStencil.texture == nullptr)
 		return;
 
+	const RenderTargetsStrongRef prevRTs = state.renderTargets;
+
 	flushBatchedDraws();
 	setRenderTargetsInternal(RenderTargets(), pixelWidth, pixelHeight, isGammaCorrect());
 
@@ -1177,6 +1203,13 @@ void Graphics::setRenderTarget()
 	renderTargetSwitchCount++;
 
 	resetProjection();
+
+	// generateMipmaps can't be used for depth/stencil textures.
+	for (const auto& rt : prevRTs.colors)
+	{
+		if (rt.texture && rt.texture->getMipmapsMode() == Texture::MIPMAPS_AUTO && rt.mipmap == 0)
+			rt.texture->generateMipmaps();
+	}
 }
 
 Graphics::RenderTargets Graphics::getRenderTargets() const
@@ -1566,9 +1599,6 @@ void Graphics::captureScreenshot(const ScreenshotInfo &info)
 
 void Graphics::copyBuffer(Buffer *source, Buffer *dest, size_t sourceoffset, size_t destoffset, size_t size)
 {
-	if (!capabilities.features[FEATURE_COPY_BUFFER])
-		throw love::Exception("Buffer copying is not supported on this system.");
-
 	Range sourcerange(sourceoffset, size);
 	Range destrange(destoffset, size);
 
@@ -1602,9 +1632,6 @@ void Graphics::copyTextureToBuffer(Texture *source, Buffer *dest, int slice, int
 	{
 		if (!source->isRenderTarget())
 			throw love::Exception("Copying a non-render target Texture to a Buffer is not supported on this system.");
-
-		if (!capabilities.features[FEATURE_COPY_RENDER_TARGET_TO_BUFFER])
-			throw love::Exception("Copying a render target Texture to a Buffer is not supported on this system.");
 	}
 
 	PixelFormat format = source->getPixelFormat();
@@ -1690,9 +1717,6 @@ void Graphics::copyTextureToBuffer(Texture *source, Buffer *dest, int slice, int
 
 void Graphics::copyBufferToTexture(Buffer *source, Texture *dest, size_t sourceoffset, int sourcewidth, int slice, int mipmap, const Rect &rect)
 {
-	if (!capabilities.features[FEATURE_COPY_BUFFER_TO_TEXTURE])
-		throw love::Exception("Copying a Buffer to a Texture is not supported on this system.");
-
 	if (source->getDataUsage() == BUFFERDATAUSAGE_READBACK)
 		throw love::Exception("Buffers created with 'readback' data usage cannot be used as a copy source.");
 
@@ -2134,9 +2158,6 @@ void Graphics::drawFromShader(PrimitiveType primtype, int vertexcount, int insta
 
 	flushBatchedDraws();
 
-	if (!capabilities.features[FEATURE_GLSL3])
-		throw love::Exception("drawFromShader is not supported on this system (GLSL3 support is required.)");
-
 	if (Shader::isDefaultActive() || !Shader::current)
 		throw love::Exception("drawFromShader can only be used with a custom shader.");
 
@@ -2161,9 +2182,6 @@ void Graphics::drawFromShader(PrimitiveType primtype, int vertexcount, int insta
 void Graphics::drawFromShader(Buffer *indexbuffer, int indexcount, int instancecount, int startindex, Texture *maintexture)
 {
 	flushBatchedDraws();
-
-	if (!capabilities.features[FEATURE_GLSL3])
-		throw love::Exception("drawFromShader is not supported on this system (GLSL3 support is required.)");
 
 	if (!(indexbuffer->getUsageFlags() & BUFFERUSAGEFLAG_INDEX))
 		throw love::Exception("The buffer passed to drawFromShader must be an index buffer.");
@@ -2876,7 +2894,6 @@ STRINGMAP_CLASS_BEGIN(Graphics, Graphics::Feature, Graphics::FEATURE_MAX_ENUM, f
 	{ "multirendertargetformats", Graphics::FEATURE_MULTI_RENDER_TARGET_FORMATS },
 	{ "clampzero",                Graphics::FEATURE_CLAMP_ZERO           },
 	{ "clampone",                 Graphics::FEATURE_CLAMP_ONE            },
-	{ "blendminmax",              Graphics::FEATURE_BLEND_MINMAX         },
 	{ "lighten",                  Graphics::FEATURE_LIGHTEN              },
 	{ "fullnpot",                 Graphics::FEATURE_FULL_NPOT            },
 	{ "pixelshaderhighp",         Graphics::FEATURE_PIXEL_SHADER_HIGHP   },
@@ -2885,12 +2902,7 @@ STRINGMAP_CLASS_BEGIN(Graphics, Graphics::Feature, Graphics::FEATURE_MAX_ENUM, f
 	{ "glsl4",                    Graphics::FEATURE_GLSL4                },
 	{ "instancing",               Graphics::FEATURE_INSTANCING           },
 	{ "texelbuffer",              Graphics::FEATURE_TEXEL_BUFFER         },
-	{ "indexbuffer32bit",         Graphics::FEATURE_INDEX_BUFFER_32BIT   },
-	{ "copybuffer",               Graphics::FEATURE_COPY_BUFFER          },
-	{ "copybuffertotexture",      Graphics::FEATURE_COPY_BUFFER_TO_TEXTURE },
 	{ "copytexturetobuffer",      Graphics::FEATURE_COPY_TEXTURE_TO_BUFFER },
-	{ "copyrendertargettobuffer", Graphics::FEATURE_COPY_RENDER_TARGET_TO_BUFFER },
-	{ "mipmaprange",              Graphics::FEATURE_MIPMAP_RANGE         },
 	{ "indirectdraw",             Graphics::FEATURE_INDIRECT_DRAW        },
 }
 STRINGMAP_CLASS_END(Graphics, Graphics::Feature, Graphics::FEATURE_MAX_ENUM, feature)

@@ -41,7 +41,6 @@ namespace opengl
 Shader::Shader(StrongRef<love::graphics::ShaderStage> stages[SHADERSTAGE_MAX_ENUM], const CompileOptions &options)
 	: love::graphics::Shader(stages, options)
 	, program(0)
-	, splitUniformsPerDraw(false)
 	, builtinUniforms()
 	, builtinUniformInfo()
 {
@@ -158,7 +157,7 @@ void Shader::mapActiveUniforms()
 			else if ((u.access & ACCESS_READ) != 0)
 				binding.access = GL_READ_ONLY;
 
-			auto fmt = OpenGL::convertPixelFormat(u.storageTextureFormat, false);
+			auto fmt = OpenGL::convertPixelFormat(u.storageTextureFormat);
 			binding.internalFormat = fmt.internalformat;
 
 			for (int i = 0; i < u.count; i++)
@@ -282,11 +281,6 @@ void Shader::mapActiveUniforms()
 bool Shader::loadVolatile()
 {
 	OpenGL::TempDebugGroup debuggroup("Shader load");
-
-	// love::graphics::Shader sets up the shader code-side of this.
-	auto gfx = Module::getInstance<love::graphics::Graphics>(Module::M_GRAPHICS);
-	if (gfx != nullptr)
-		splitUniformsPerDraw = !gfx->getCapabilities().features[Graphics::FEATURE_PIXEL_SHADER_HIGHP];
 
 	// zero out active texture list
 	textureUnits.clear();
@@ -593,7 +587,7 @@ void Shader::sendTextures(const UniformInfo *info, love::graphics::Texture **tex
 		else
 		{
 			auto gfx = Module::getInstance<love::graphics::Graphics>(Module::M_GRAPHICS);
-			tex = gfx->getDefaultTexture(info->textureType, info->dataBaseType);
+			tex = gfx->getDefaultTexture(info->textureType, info->dataBaseType, info->isDepthSampler);
 		}
 
 		tex->retain();
@@ -661,7 +655,6 @@ void Shader::sendBuffers(const UniformInfo *info, love::graphics::Buffer **buffe
 
 	count = std::min(count, info->count);
 
-	// Bind the textures to the texture units.
 	for (int i = 0; i < count; i++)
 	{
 		love::graphics::Buffer *buffer = buffers[i];
@@ -774,25 +767,8 @@ void Shader::updateBuiltinUniforms(love::graphics::Graphics *gfx, int viewportW,
 	data.transformMatrix = gfx->getTransform();
 	data.projectionMatrix = gfx->getDeviceProjection();
 
-	// The normal matrix is the transpose of the inverse of the rotation portion
-	// (top-left 3x3) of the transform matrix.
-	{
-		Matrix3 normalmatrix = Matrix3(data.transformMatrix).transposedInverse();
-		const float *e = normalmatrix.getElements();
-		for (int i = 0; i < 3; i++)
-		{
-			data.normalMatrix[i].x = e[i * 3 + 0];
-			data.normalMatrix[i].y = e[i * 3 + 1];
-			data.normalMatrix[i].z = e[i * 3 + 2];
-			data.normalMatrix[i].w = 0.0f;
-		}
-	}
-
-	// Store DPI scale in an unused component of another vector.
-	data.normalMatrix[0].w = (float) gfx->getCurrentDPIScale();
-
-	// Same with point size.
-	data.normalMatrix[1].w = gfx->getPointSize();
+	data.scaleParams.x = (float) gfx->getCurrentDPIScale();
+	data.scaleParams.y = gfx->getPointSize();
 
 	// Users expect to work with y-up NDC, y-down pixel coordinates and textures
 	// (see graphics/Shader.h).
@@ -830,27 +806,9 @@ void Shader::updateBuiltinUniforms(love::graphics::Graphics *gfx, int viewportW,
 	data.constantColor = gfx->getColor();
 	gammaCorrectColor(data.constantColor);
 
-	// This branch is to avoid always declaring the whole array as highp in the
-	// vertex shader and mediump in the pixel shader for love's default shaders,
-	// on systems that don't support highp in pixel shaders. The default shaders
-	// use the transform matrices in vertex shaders and screen size params in
-	// pixel shaders. If there's a single array containing both and each shader
-	// stage declares a different precision, that's a compile error.
-	if (splitUniformsPerDraw)
-	{
-		GLint location = builtinUniforms[BUILTIN_UNIFORMS_PER_DRAW];
-		if (location >= 0)
-			glUniform4fv(location, 13, (const GLfloat *) &data);
-		GLint location2 = builtinUniforms[BUILTIN_UNIFORMS_PER_DRAW_2];
-		if (location2 >= 0)
-			glUniform4fv(location2, 1, (const GLfloat *) &data.screenSizeParams);
-	}
-	else
-	{
-		GLint location = builtinUniforms[BUILTIN_UNIFORMS_PER_DRAW];
-		if (location >= 0)
-			glUniform4fv(location, 14, (const GLfloat *) &data);
-	}
+	GLint location = builtinUniforms[BUILTIN_UNIFORMS_PER_DRAW];
+	if (location >= 0)
+		glUniform4fv(location, 12, (const GLfloat *) &data);
 }
 
 } // opengl

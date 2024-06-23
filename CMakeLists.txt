@@ -30,6 +30,7 @@ project(love)
 set(CMAKE_MODULE_PATH "${love_SOURCE_DIR}/extra/cmake" ${CMAKE_MODULE_PATH})
 set(CMAKE_POSITION_INDEPENDENT_CODE TRUE) # Needed for shared libs on Linux. (-fPIC).
 set(CMAKE_CXX_STANDARD 17)
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)	# Allow grouping projects in Visual Studio
 
 if(APPLE)
 	message(WARNING "CMake is not an officially supported build system for love on Apple platforms.")
@@ -41,6 +42,8 @@ if(MINGW)
 	message(WARNING "Use megasource with Visual Studio instead.")
 	message(WARNING "Please see https://github.com/love2d/megasource")
 endif()
+
+include(LoveMacros)
 
 # Extract version.h contents.
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/src/common/version.h LOVE_VERSION_FILE_CONTENTS)
@@ -98,7 +101,7 @@ endif()
 
 message(STATUS "Target platform: ${LOVE_TARGET_PLATFORM}")
 
-add_library(lovedep::SDL2 INTERFACE IMPORTED)
+add_library(lovedep::SDL INTERFACE IMPORTED)
 add_library(lovedep::Freetype INTERFACE IMPORTED)
 add_library(lovedep::Harfbuzz INTERFACE IMPORTED)
 add_library(lovedep::OpenAL INTERFACE IMPORTED)
@@ -133,6 +136,7 @@ if(MEGA)
 	# action.
 	set(LOVE_MOVE_DLLS
 		${MEGA_SDL2}
+		${MEGA_SDL3}
 		${MEGA_OPENAL}
 	)
 
@@ -143,7 +147,7 @@ if(MEGA)
 		set(LOVE_EXTRA_DLLS)
 	endif()
 
-	target_link_libraries(lovedep::SDL2 INTERFACE ${MEGA_SDL2} ${MEGA_SDL2MAIN})
+	target_link_libraries(lovedep::SDL INTERFACE ${MEGA_SDL2} ${MEGA_SDL2MAIN} ${MEGA_SDL3})
 	target_link_libraries(lovedep::Freetype INTERFACE ${MEGA_FREETYPE})
 	target_link_libraries(lovedep::Harfbuzz INTERFACE ${MEGA_HARFBUZZ})
 	target_link_libraries(lovedep::OpenAL INTERFACE ${MEGA_OPENAL})
@@ -183,8 +187,8 @@ Please see https://github.com/love2d/megasource
 	add_definitions(-D HAS_SOCKLEN_T)
 
 	find_package(SDL2 2.0.9 REQUIRED CONFIG COMPONENTS SDL2main)
-	target_include_directories(lovedep::SDL2 INTERFACE ${SDL2_INCLUDE_DIRS})
-	target_link_libraries(lovedep::SDL2 INTERFACE ${SDL2_LIBRARIES})
+	target_include_directories(lovedep::SDL INTERFACE ${SDL2_INCLUDE_DIRS})
+	target_link_libraries(lovedep::SDL INTERFACE ${SDL2_LIBRARIES})
 
 	find_package(Freetype REQUIRED)
 	target_include_directories(lovedep::Freetype INTERFACE ${FREETYPE_INCLUDE_DIRS})
@@ -299,18 +303,32 @@ add_library(love_common STATIC
 )
 target_link_libraries(love_common PUBLIC
 	lovedep::Lua
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 if (APPLE)
 	target_sources(love_common PRIVATE
-		src/common/macos.mm
+		src/common/apple.mm
 	)
 	target_link_libraries(love_common PUBLIC
 		objc
 		"-framework CoreFoundation"
-		"-framework AppKit"
 	)
+	if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+		target_sources(love_common PRIVATE
+			src/common/macos.mm
+		)
+		target_link_libraries(love_common PUBLIC
+			"-framework AppKit"
+		)
+	else()
+		target_sources(love_common PRIVATE
+			src/common/ios.mm
+		)
+		target_link_libraries(love_common PUBLIC
+			"-framework UIKit"
+		)
+	endif()
 endif()
 
 #
@@ -423,7 +441,7 @@ add_library(love_event_root STATIC
 )
 target_link_libraries(love_event_root PUBLIC
 	lovedep::Lua
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 add_library(love_event_sdl STATIC
@@ -431,7 +449,7 @@ add_library(love_event_sdl STATIC
 	src/modules/event/sdl/Event.h
 )
 target_link_libraries(love_event_sdl PUBLIC
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 add_library(love_event INTERFACE)
@@ -464,7 +482,7 @@ add_library(love_filesystem_root STATIC
 )
 target_link_libraries(love_filesystem_root PUBLIC
 	lovedep::Lua
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 add_library(love_filesystem_physfs STATIC
@@ -477,7 +495,7 @@ add_library(love_filesystem_physfs STATIC
 )
 if(ANDROID)
 	target_link_libraries(love_filesystem_physfs PUBLIC
-		lovedep::SDL2
+		lovedep::SDL
 	)
 endif()
 
@@ -637,38 +655,69 @@ add_library(love_graphics_opengl STATIC
 	src/modules/graphics/opengl/Texture.h
 )
 target_link_libraries(love_graphics_opengl PUBLIC
-	lovedep::SDL2
-)
-
-add_library(love_graphics_vulkan STATIC
-	src/modules/graphics/vulkan/Graphics.h
-	src/modules/graphics/vulkan/Graphics.cpp
-	src/modules/graphics/vulkan/GraphicsReadback.h
-	src/modules/graphics/vulkan/GraphicsReadback.cpp
-	src/modules/graphics/vulkan/Shader.h
-	src/modules/graphics/vulkan/Shader.cpp
-	src/modules/graphics/vulkan/ShaderStage.h
-	src/modules/graphics/vulkan/ShaderStage.cpp
-	src/modules/graphics/vulkan/StreamBuffer.h
-	src/modules/graphics/vulkan/StreamBuffer.cpp
-	src/modules/graphics/vulkan/Buffer.h
-	src/modules/graphics/vulkan/Buffer.cpp
-	src/modules/graphics/vulkan/Texture.h
-	src/modules/graphics/vulkan/Texture.cpp
-	src/modules/graphics/vulkan/Vulkan.h
-	src/modules/graphics/vulkan/Vulkan.cpp
-	src/modules/graphics/vulkan/VulkanWrapper.h
-)
-target_link_libraries(love_graphics_vulkan PUBLIC
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 add_library(love_graphics INTERFACE)
 target_link_libraries(love_graphics INTERFACE
 	love_graphics_root
 	love_graphics_opengl
-	love_graphics_vulkan
 )
+
+if(APPLE)
+	add_library(love_graphics_metal STATIC
+		src/modules/graphics/metal/Buffer.h
+		src/modules/graphics/metal/Buffer.mm
+		src/modules/graphics/metal/Graphics.h
+		src/modules/graphics/metal/Graphics.mm
+		src/modules/graphics/metal/GraphicsReadback.h
+		src/modules/graphics/metal/GraphicsReadback.mm
+		src/modules/graphics/metal/Metal.h
+		src/modules/graphics/metal/Metal.mm
+		src/modules/graphics/metal/Shader.h
+		src/modules/graphics/metal/Shader.mm
+		src/modules/graphics/metal/ShaderStage.h
+		src/modules/graphics/metal/ShaderStage.mm
+		src/modules/graphics/metal/StreamBuffer.h
+		src/modules/graphics/metal/StreamBuffer.mm
+		src/modules/graphics/metal/Texture.h
+		src/modules/graphics/metal/Texture.mm
+	)
+	target_link_libraries(love_graphics_metal PUBLIC
+		objc
+		"-framework Metal"
+		"-framework QuartzCore"
+	)
+	target_link_libraries(love_graphics INTERFACE
+		love_graphics_metal
+	)
+else()
+	add_library(love_graphics_vulkan STATIC
+		src/modules/graphics/vulkan/Graphics.h
+		src/modules/graphics/vulkan/Graphics.cpp
+		src/modules/graphics/vulkan/GraphicsReadback.h
+		src/modules/graphics/vulkan/GraphicsReadback.cpp
+		src/modules/graphics/vulkan/Shader.h
+		src/modules/graphics/vulkan/Shader.cpp
+		src/modules/graphics/vulkan/ShaderStage.h
+		src/modules/graphics/vulkan/ShaderStage.cpp
+		src/modules/graphics/vulkan/StreamBuffer.h
+		src/modules/graphics/vulkan/StreamBuffer.cpp
+		src/modules/graphics/vulkan/Buffer.h
+		src/modules/graphics/vulkan/Buffer.cpp
+		src/modules/graphics/vulkan/Texture.h
+		src/modules/graphics/vulkan/Texture.cpp
+		src/modules/graphics/vulkan/Vulkan.h
+		src/modules/graphics/vulkan/Vulkan.cpp
+		src/modules/graphics/vulkan/VulkanWrapper.h
+	)
+	target_link_libraries(love_graphics_vulkan PUBLIC
+		lovedep::SDL
+	)
+	target_link_libraries(love_graphics INTERFACE
+		love_graphics_vulkan
+	)
+endif()
 
 #
 # love.image
@@ -753,7 +802,7 @@ add_library(love_joystick_sdl STATIC
 	src/modules/joystick/sdl/JoystickModule.h
 )
 target_link_libraries(love_joystick_sdl PUBLIC
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 add_library(love_joystick INTERFACE)
@@ -774,7 +823,7 @@ add_library(love_keyboard_root STATIC
 )
 target_link_libraries(love_keyboard_root PUBLIC
 	lovedep::Lua
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 add_library(love_keyboard_sdl STATIC
@@ -782,7 +831,7 @@ add_library(love_keyboard_sdl STATIC
 	src/modules/keyboard/sdl/Keyboard.h
 )
 target_link_libraries(love_keyboard_sdl PUBLIC
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 add_library(love_keyboard INTERFACE)
@@ -834,7 +883,7 @@ add_library(love_mouse_root STATIC
 )
 target_link_libraries(love_mouse_root PUBLIC
 	lovedep::Lua
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 add_library(love_mouse_sdl STATIC
@@ -844,7 +893,7 @@ add_library(love_mouse_sdl STATIC
 	src/modules/mouse/sdl/Mouse.h
 )
 target_link_libraries(love_mouse_sdl PUBLIC
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 add_library(love_mouse INTERFACE)
@@ -974,7 +1023,7 @@ add_library(love_sensor_root STATIC
 )
 target_link_libraries(love_sensor_root PUBLIC
 	lovedep::Lua
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 add_library(love_sensor_sdl STATIC
@@ -982,7 +1031,7 @@ add_library(love_sensor_sdl STATIC
 	src/modules/sensor/sdl/Sensor.h
 )
 target_link_libraries(love_sensor_sdl PUBLIC
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 add_library(love_sensor INTERFACE)
@@ -1052,7 +1101,7 @@ add_library(love_system_root STATIC
 )
 target_link_libraries(love_system_root PUBLIC
 	lovedep::Lua
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 add_library(love_system_sdl STATIC
@@ -1060,7 +1109,7 @@ add_library(love_system_sdl STATIC
 	src/modules/system/sdl/System.h
 )
 target_link_libraries(love_system_sdl PUBLIC
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 add_library(love_system INTERFACE)
@@ -1101,7 +1150,7 @@ add_library(love_thread_sdl STATIC
 	src/modules/thread/sdl/threads.h
 )
 target_link_libraries(love_thread_sdl PUBLIC
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 add_library(love_thread INTERFACE)
@@ -1135,7 +1184,7 @@ add_library(love_touch_root STATIC
 )
 target_link_libraries(love_touch_root PUBLIC
 	lovedep::Lua
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 add_library(love_touch_sdl STATIC
@@ -1143,7 +1192,7 @@ add_library(love_touch_sdl STATIC
 	src/modules/touch/sdl/Touch.h
 )
 target_link_libraries(love_touch_sdl PUBLIC
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 add_library(love_touch INTERFACE)
@@ -1201,7 +1250,7 @@ add_library(love_window_root STATIC
 )
 target_link_libraries(love_window_root PUBLIC
 	lovedep::Lua
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 add_library(love_window_sdl STATIC
@@ -1209,7 +1258,7 @@ add_library(love_window_sdl STATIC
 	src/modules/window/sdl/Window.h
 )
 target_link_libraries(love_window_sdl PUBLIC
-	lovedep::SDL2
+	lovedep::SDL
 )
 
 add_library(love_window INTERFACE)
@@ -1605,6 +1654,7 @@ if (APPLE)
 		src/libraries/luahttps/src/apple/NSURLClient.mm
 		src/libraries/luahttps/src/apple/NSURLClient.h
 	)
+	target_compile_options(love_3p_luahttps PRIVATE -fobjc-arc)
 endif()
 
 if(MSVC)
@@ -1868,7 +1918,7 @@ set_target_properties(liblove PROPERTIES
 	CXX_VISIBILITY_PRESET hidden
 	VISIBILITY_INLINES_HIDDEN ON
 	LIBRARY_OUTPUT_NAME "${LOVE_LIB_NAME}")
-target_link_libraries(liblove
+set(LIBLOVE_DEPENDENCIES
 	love_common
 	love_audio
 	love_data
@@ -1890,6 +1940,8 @@ target_link_libraries(liblove
 	love_touch
 	love_video
 	love_window
+)
+set(LIBLOVE_LIBRARIES
 	love_3p_box2d
 	love_3p_ddsparse
 	love_3p_enet
@@ -1906,10 +1958,23 @@ target_link_libraries(liblove
 	love_3p_wuff
 	love_3p_xxhash
 )
+target_link_libraries(liblove ${LIBLOVE_DEPENDENCIES} ${LIBLOVE_LIBRARIES})
 
 if(LOVE_EXTRA_DEPENDECIES)
 	add_dependencies(liblove ${LOVE_EXTRA_DEPENDECIES})
 endif()
+
+#
+# Group projects in Visual Studio
+#
+
+love_group_projects(NAME "liblove" NESTED TARGETS ${LIBLOVE_DEPENDENCIES})
+love_group_projects(NAME "liblove/libraries" NESTED TARGETS ${LIBLOVE_LIBRARIES})
+love_group_projects(NAME "liblove" TARGETS liblove ${LOVE_EXTRA_DEPENDECIES})
+
+love_group_projects(NAME "lovedep" TARGETS lovedep::SDL2 lovedep::Freetype lovedep::Harfbuzz lovedep::OpenAL lovedep::Modplug lovedep::Theora lovedep::Vorbis lovedep::Ogg lovedep::Zlib lovedep::Lua)
+love_group_projects(NAME "lovedep" TARGETS lua51 alcommon al-excommon harfbuzz-subset zlib)
+
 
 if(MSVC)
 	set_target_properties(liblove PROPERTIES RELEASE_OUTPUT_NAME "love" PDB_NAME "liblove" IMPORT_PREFIX "lib")
