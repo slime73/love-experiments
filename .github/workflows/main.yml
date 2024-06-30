@@ -384,6 +384,7 @@ jobs:
     - name: Run Tests (vulkan)
       if: steps.vars.outputs.arch != 'ARM64'
       env:
+        VK_LAYER_PATH: "C:/VulkanSDK/1.3.231.1/Bin/VkLayer_khronos_validation.json"
         LOVE_GRAPHICS_DEBUG: 1
       run: |
         powershell.exe ./install/lovec.exe ./megasource/libs/love/testing/main.lua --all --isRunner --renderers vulkan
