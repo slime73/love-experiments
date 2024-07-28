@@ -48,7 +48,7 @@ NAVDecoder::NAVDecoder(Stream *stream, int bufsize)
 	{
 		std::string err = nav_error();
 		input.closef();
-		throw love::Exception("NAV Error: %s", err);
+		throw love::Exception("NAV Error: %s", err.c_str());
 	}
 
 	// Only activate first audio stream
