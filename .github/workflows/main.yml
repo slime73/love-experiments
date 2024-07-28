@@ -34,6 +34,31 @@ jobs:
       with:
         repository: love2d/love-appimage-source
         ref: 12.x
+    - name: Restore FFmpeg
+      id: ffmpeg
+      uses: actions/cache@v4
+      with:
+        path: ffmpeg-install
+        key: ffmpeg
+    - name: Checkout FFmpeg
+      if: steps.ffmpeg.outputs.cache-hit != 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: FFmpeg/FFmpeg
+        path: ffmpeg
+        ref: n6.0
+    - name: Configure FFmpeg
+      if: steps.ffmpeg.outputs.cache-hit != 'true'
+      working-directory: ffmpeg
+      run: |
+        set -e
+        mkdir build
+        cd build
+        ../configure --prefix $PWD/../../ffmpeg-install --disable-avfilter --disable-muxers --disable-encoders --disable-programs --disable-doc --disable-asm --disable-static --enable-shared
+    - name: Build FFmpeg
+      if: steps.ffmpeg.outputs.cache-hit != 'true'
+      working-directory: ffmpeg/build
+      run: make install -j$(nproc)
     - name: Checkout LÖVE
       uses: actions/checkout@v4
       with:
@@ -49,7 +74,7 @@ jobs:
                 raise SystemExit(0)
         raise Exception("make getdeps failed")
     - name: Build AppImage
-      run: make LOVE_BRANCH=${{ github.sha }}
+      run: FFMPEG_DIR=$PWD/ffmpeg-install make LOVE_BRANCH=${{ github.sha }}
     - name: Print LuaJIT branch
       run: git -C LuaJIT-v2.1 branch -v
     # start xvfb for test running
@@ -259,12 +284,22 @@ jobs:
       run: |
         move /y C:\Strawberry C:\Strawberry_not_in_PATH
         exit /b 0
+    - name: Get FFmpeg
+      uses: robinraju/release-downloader@v1
+      with:
+        repository: GyanD/codexffmpeg
+        tag: "6.0"
+        fileName: ffmpeg-6.0-full_build-shared.7z
+        tarBall: false
+        zipBall: false
+    - name: Extract FFmpeg
+      run: 7z x ffmpeg-6.0-full_build-shared.7z
     - name: Configure
       env:
         CFLAGS: /Zi
         CXXFLAGS: /Zi
         LDFLAGS: /DEBUG:FULL /OPT:REF /OPT:ICF
-      run: cmake -Bbuild -Smegasource -T v143 -A ${{ matrix.platform }} --install-prefix %CD%\install -DCMAKE_PDB_OUTPUT_DIRECTORY=%CD%\pdb ${{ steps.vars.outputs.moredef }}
+      run: cmake -Bbuild -Smegasource -T v143 -A ${{ matrix.platform }} --install-prefix %CD%\install -DCMAKE_PDB_OUTPUT_DIRECTORY=%CD%\pdb -DFFMPEG_DIR=%CD%\ffmpeg-6.0-full_build-shared ${{ steps.vars.outputs.moredef }}
     - name: Install
       run: cmake --build build --target PACKAGE --config Release -j2
     - name: Copy LuaJIT lua51.pdb

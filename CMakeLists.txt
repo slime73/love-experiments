@@ -1724,6 +1724,9 @@ add_library(love_3p_nav
 	src/libraries/nav/src/nav_internal.hpp
 )
 target_include_directories(love_3p_nav PUBLIC src/libraries/nav/include)
+if(DEFINED ENV{FFMPEG_DIR})
+	set(FFMPEG_DIR $ENV{FFMPEG_DIR})
+endif()
 if(FFMPEG_DIR)
 	target_include_directories(love_3p_nav PRIVATE ${FFMPEG_DIR})
 endif()
