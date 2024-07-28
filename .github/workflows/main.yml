@@ -54,7 +54,7 @@ jobs:
         set -e
         mkdir build
         cd build
-        ../configure --prefix $PWD/../../ffmpeg-install --disable-avfilter --disable-muxers --disable-encoders --disable-programs --disable-doc --disable-asm --disable-static --enable-shared
+        ../configure --prefix=$PWD/../../ffmpeg-install --disable-avfilter --disable-muxers --disable-encoders --disable-programs --disable-doc --disable-asm --disable-static --enable-shared
     - name: Build FFmpeg
       if: steps.ffmpeg.outputs.cache-hit != 'true'
       working-directory: ffmpeg/build
@@ -301,7 +301,7 @@ jobs:
         LDFLAGS: /DEBUG:FULL /OPT:REF /OPT:ICF
       run: cmake -Bbuild -Smegasource -T v143 -A ${{ matrix.platform }} --install-prefix %CD%\install -DCMAKE_PDB_OUTPUT_DIRECTORY=%CD%\pdb -DFFMPEG_DIR=%CD%\ffmpeg-6.0-full_build-shared ${{ steps.vars.outputs.moredef }}
     - name: Install
-      run: cmake --build build --target PACKAGE --config Release -j2
+      run: cmake --build build --target PACKAGE --config Release -j%NUMBER_OF_PROCESSORS%
     - name: Copy LuaJIT lua51.pdb
       run: |
         copy /Y build\libs\LuaJIT\src\lua51.pdb pdb\Release\lua51.pdb
