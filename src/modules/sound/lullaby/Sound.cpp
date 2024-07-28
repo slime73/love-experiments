@@ -21,6 +21,7 @@
 #include "common/config.h"
 
 #include <algorithm>
+#include <functional>
 #include <sstream>
 
 #include "Sound.h"
@@ -30,25 +31,21 @@
 #include "WaveDecoder.h"
 #include "FLACDecoder.h"
 #include "MP3Decoder.h"
+#include "NAVDecoder.h"
 
 #ifdef LOVE_SUPPORT_COREAUDIO
 #	include "CoreAudioDecoder.h"
 #endif
 
-struct DecoderImpl
-{
-	love::sound::Decoder *(*create)(love::Stream *stream, int bufferSize);
-};
+typedef std::function<love::sound::Decoder*(love::Stream*,int)> DecoderImpl;
 
 template<typename DecoderType>
 DecoderImpl DecoderImplFor()
 {
-	DecoderImpl decoderImpl;
-	decoderImpl.create = [](love::Stream *stream, int bufferSize) -> love::sound::Decoder*
+	return [](love::Stream *stream, int bufferSize)
 	{
 		return new DecoderType(stream, bufferSize);
 	};
-	return decoderImpl;
 }
 
 namespace love
@@ -77,6 +74,7 @@ sound::Decoder *Sound::newDecoder(Stream *stream, int bufferSize)
 		DecoderImplFor<CoreAudioDecoder>(),
 #endif
 		DecoderImplFor<MP3Decoder>(),
+		DecoderImplFor<NAVDecoder>(),
 #ifndef LOVE_NO_MODPLUG
 		DecoderImplFor<ModPlugDecoder>(), // Last because it doesn't work well with Streams.
 #endif
@@ -89,8 +87,7 @@ sound::Decoder *Sound::newDecoder(Stream *stream, int bufferSize)
 		try
 		{
 			stream->seek(0);
-			sound::Decoder *decoder = possibleDecoder.create(stream, bufferSize);
-			return decoder;
+			return possibleDecoder(stream, bufferSize);
 		}
 		catch (love::Exception &e)
 		{
