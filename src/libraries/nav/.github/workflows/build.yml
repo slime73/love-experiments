@@ -1,0 +1,54 @@
+name: Build
+on: [push, pull_request]
+
+jobs:
+  Windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        PLATFORM: [x64, ARM64]
+    defaults:
+      run:
+        shell: cmd
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Get FFmpeg
+      uses: robinraju/release-downloader@v1
+      with:
+        repository: GyanD/codexffmpeg
+        tag: "6.0"
+        fileName: ffmpeg-6.0-full_build-shared.7z
+        tarBall: false
+        zipBall: false
+    # A note to myself and other: FFmpeg build is for x64, but it doesn't matter. Only the include files are
+    # necessary for NAV to work as it will use runtime loading.
+    - name: Extract FFmpeg
+      run: 7z x ffmpeg-6.0-full_build-shared.7z
+    - name: Configure
+      run: cmake -Bbuild -S. -A ${{ matrix.PLATFORM }} --install-prefix %CD%\install -DBUILD_SHARED_LIBS=1 -DFFMPEG_DIR=%CD%\ffmpeg-6.0-full_build-shared
+    - name: Install
+      run: cmake --build build --config RelWithDebInfo --target install -j%NUMBER_OF_PROCESSORS%
+    - name: Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: nav-dll-${{ matrix.PLATFORM }}
+        path: install/
+        compression-level: 9
+  Ubuntu:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Install FFmpeg Development Libraries
+      run: sudo apt-get install libavcodec-dev libavformat-dev libavutil-dev libswresample-dev libswscale-dev
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Configure
+      run: cmake -Bbuild -S. -DCMAKE_BUILD_TYPE=RelWithDebInfo --install-prefix $PWD/install -DBUILD_SHARED_LIBS=1
+    - name: Install
+      run: cmake --build build --target install -j$(nproc)
+    - name: Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: nav-so-x86_64
+        path: install/
+        compression-level: 9
