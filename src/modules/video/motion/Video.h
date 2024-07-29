@@ -29,7 +29,6 @@
 #include "video/Video.h"
 #include "thread/threads.h"
 #include "video/VideoStream.h"
-#include "TheoraVideoStream.h"
 
 namespace love
 {

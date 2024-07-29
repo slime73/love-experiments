@@ -19,12 +19,15 @@
  **/
 
 // STL
+#include <sstream>
 #include <vector>
 
 // LOVE
-#include "Video.h"
 #include "common/delay.h"
 #include "timer/Timer.h"
+#include "NAVVideoStream.h"
+#include "TheoraVideoStream.h"
+#include "Video.h"
 
 namespace love
 {
@@ -32,6 +35,17 @@ namespace video
 {
 namespace motion
 {
+
+typedef VideoStream*(*DecoderFactoryFunc)(filesystem::File*);
+
+template<typename T>
+DecoderFactoryFunc decoderFactory()
+{
+	return [](filesystem::File *file) -> VideoStream*
+	{
+		return new T(file);
+	};
+}
 
 Video::Video()
 : love::video::Video("love.video.motion")
@@ -47,9 +61,34 @@ Video::~Video()
 
 VideoStream *Video::newVideoStream(love::filesystem::File *file)
 {
-	TheoraVideoStream *stream = new TheoraVideoStream(file);
-	workerThread->addStream(stream);
-	return stream;
+	std::vector<DecoderFactoryFunc> decoders = {
+		decoderFactory<NAVVideoStream>(),
+		decoderFactory<TheoraVideoStream>(),
+	};
+	std::stringstream decodingErrors;
+
+	decodingErrors << "Failed to determine file type:\n";
+
+	for (DecoderFactoryFunc &decoder : decoders)
+	{
+		try
+		{
+			file->seek(0);
+			VideoStream *stream = decoder(file);
+			workerThread->addStream(stream);
+			return stream;
+		}
+		catch (love::Exception &e)
+		{
+			decodingErrors << e.what() << '\n';
+		}
+	}
+
+	std::string errors = decodingErrors.str();
+	throw love::Exception("No suitable video decoders found.\n%s", errors.c_str());
+
+	// Unreachable, but here to prevent (possible) warnings
+	return nullptr;
 }
 
 Worker::Worker()
