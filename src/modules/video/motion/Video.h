@@ -35,7 +35,7 @@ namespace love
 {
 namespace video
 {
-namespace theora
+namespace motion
 {
 
 class Worker;
@@ -75,7 +75,7 @@ private:
 	bool stopping;
 }; // Worker
 
-} // theora
+} // motion
 } // video
 } // love
 

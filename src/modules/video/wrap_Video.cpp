@@ -21,7 +21,7 @@
 // LOVE
 #include "filesystem/wrap_Filesystem.h"
 
-#include "theora/Video.h"
+#include "motion/Video.h"
 #include "wrap_Video.h"
 #include "wrap_VideoStream.h"
 
@@ -68,7 +68,7 @@ extern "C" int luaopen_love_video(lua_State *L)
 	Video *instance = instance();
 	if (instance == nullptr)
 	{
-		luax_catchexcept(L, [&](){ instance = new love::video::theora::Video(); });
+		luax_catchexcept(L, [&](){ instance = new love::video::motion::Video(); });
 	}
 	else
 		instance->retain();

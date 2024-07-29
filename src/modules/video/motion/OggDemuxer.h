@@ -34,7 +34,7 @@ namespace love
 {
 namespace video
 {
-namespace theora
+namespace motion
 {
 
 class OggDemuxer
@@ -71,7 +71,7 @@ private:
 	StreamType determineType();
 }; // OggDemuxer
 
-} // theora
+} // motion
 } // video
 } // love
 

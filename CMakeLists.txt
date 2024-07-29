@@ -1223,15 +1223,15 @@ target_link_libraries(love_video_root PUBLIC
 	lovedep::Ogg
 )
 
-add_library(love_video_theora STATIC
-	src/modules/video/theora/Video.cpp
-	src/modules/video/theora/Video.h
-	src/modules/video/theora/OggDemuxer.cpp
-	src/modules/video/theora/OggDemuxer.h
-	src/modules/video/theora/TheoraVideoStream.cpp
-	src/modules/video/theora/TheoraVideoStream.h
+add_library(love_video_motion STATIC
+	src/modules/video/motion/Video.cpp
+	src/modules/video/motion/Video.h
+	src/modules/video/motion/OggDemuxer.cpp
+	src/modules/video/motion/OggDemuxer.h
+	src/modules/video/motion/TheoraVideoStream.cpp
+	src/modules/video/motion/TheoraVideoStream.h
 )
-target_link_libraries(love_video_theora PUBLIC
+target_link_libraries(love_video_motion PUBLIC
 	lovedep::Theora
 	lovedep::Ogg
 )
@@ -1239,7 +1239,7 @@ target_link_libraries(love_video_theora PUBLIC
 add_library(love_video INTERFACE)
 target_link_libraries(love_video INTERFACE
 	love_video_root
-	love_video_theora
+	love_video_motion
 )
 
 #

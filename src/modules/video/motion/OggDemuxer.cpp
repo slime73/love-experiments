@@ -24,14 +24,14 @@ namespace love
 {
 namespace video
 {
-namespace theora
+namespace motion
 {
 
 OggDemuxer::OggDemuxer(love::filesystem::File *file)
-	: file(file)
-	, streamInited(false)
-	, videoSerial(0)
-	, eos(false)
+: file(file)
+, streamInited(false)
+, videoSerial(0)
+, eos(false)
 {
 	ogg_sync_init(&sync);
 }
@@ -264,6 +264,6 @@ bool OggDemuxer::seek(ogg_packet &packet, double target, std::function<double(in
 	return true;
 }
 
-} // theora
+} // motion
 } // video
 } // love

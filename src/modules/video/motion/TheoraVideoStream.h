@@ -38,7 +38,7 @@ namespace love
 {
 namespace video
 {
-namespace theora
+namespace motion
 {
 
 class TheoraVideoStream : public love::video::VideoStream
@@ -88,7 +88,7 @@ private:
 	void seekDecoder(double target);
 }; // TheoraVideoStream
 
-} // theora
+} // motion
 } // video
 } // love
 

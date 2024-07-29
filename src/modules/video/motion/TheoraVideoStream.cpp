@@ -30,16 +30,16 @@ namespace love
 {
 namespace video
 {
-namespace theora
+namespace motion
 {
 
 TheoraVideoStream::TheoraVideoStream(love::filesystem::File *file)
-	: demuxer(file)
-	, headerParsed(false)
-	, decoder(nullptr)
-	, frameReady(false)
-	, lastFrame(0)
-	, nextFrame(0)
+: demuxer(file)
+, headerParsed(false)
+, decoder(nullptr)
+, frameReady(false)
+, lastFrame(0)
+, nextFrame(0)
 {
 	if (demuxer.findStream() != OggDemuxer::TYPE_THEORA)
 		throw love::Exception("Invalid video file, video is not theora");
@@ -312,6 +312,6 @@ bool TheoraVideoStream::swapBuffers()
 	return true;
 }
 
-} // theora
+} // motion
 } // video
 } // love

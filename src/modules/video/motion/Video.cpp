@@ -30,11 +30,11 @@ namespace love
 {
 namespace video
 {
-namespace theora
+namespace motion
 {
 
 Video::Video()
-	: love::video::Video("love.video.theora")
+: love::video::Video("love.video.motion")
 {
 	workerThread = new Worker();
 	workerThread->start();
@@ -53,7 +53,7 @@ VideoStream *Video::newVideoStream(love::filesystem::File *file)
 }
 
 Worker::Worker()
-	: stopping(false)
+: stopping(false)
 {
 	threadName = "VideoWorker";
 }
@@ -119,6 +119,6 @@ void Worker::threadFunction()
 	}
 }
 
-} // theora
+} // motion
 } // video
 } // love
