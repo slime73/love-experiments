@@ -1,15 +1,15 @@
-#include "nav_backend_androidndk.hpp"
-
-#ifdef NAV_BACKEND_ANDROIDNDK
-
-#include <stdexcept>
-
 // Note: We're using certain API 28 NdkMedia functions. This means NAV requires Android API 28 for Android NDK
 // backend. However we can't tell users to compile using API 28 as they may require supporting older Android.
 // We're using function pointers anyway so the Android NDK backend will be unavailable at runtime on Android < API 28.
 #ifndef __ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__
 #define __ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__ 1
 #endif
+
+#include "nav_backend_androidndk.hpp"
+
+#ifdef NAV_BACKEND_ANDROIDNDK
+
+#include <stdexcept>
 
 #include "nav_error.hpp"
 #include "nav_backend_androidndk_internal.hpp"
