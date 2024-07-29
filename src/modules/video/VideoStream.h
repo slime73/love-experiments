@@ -23,8 +23,7 @@
 
 // LOVE
 #include "common/Object.h"
-#include "audio/Source.h"
-#include "thread/threads.h"
+#include "FrameSync.h"
 
 namespace love
 {
@@ -73,9 +72,6 @@ public:
 	virtual double tell() const;
 	virtual bool isPlaying() const;
 
-	class FrameSync;
-	class DeltaSync;
-
 	// The stream now owns the sync, do not reuse or free
 	virtual void setSync(FrameSync *frameSync);
 	virtual FrameSync *getSync() const;
@@ -92,59 +88,6 @@ public:
 		int cw, ch;
 		unsigned char *cbplane;
 		unsigned char *crplane;
-	};
-
-	class FrameSync : public Object
-	{
-	public:
-		virtual double getPosition() const = 0;
-		virtual void update(double /*dt*/) {}
-		virtual ~FrameSync() {}
-
-		void copyState(const FrameSync *other);
-
-		// Playback api
-		virtual void play() = 0;
-		virtual void pause() = 0;
-		virtual void seek(double offset) = 0;
-		virtual double tell() const;
-		virtual bool isPlaying() const = 0;
-	};
-
-	class DeltaSync : public FrameSync
-	{
-	public:
-		DeltaSync();
-		~DeltaSync();
-
-		virtual double getPosition() const override;
-		virtual void update(double dt) override;
-
-		virtual void play() override;
-		virtual void pause() override;
-		virtual void seek(double time) override;
-		virtual bool isPlaying() const override;
-
-	private:
-		bool playing;
-		double position;
-		double speed;
-		love::thread::MutexRef mutex;
-	};
-
-	class SourceSync : public FrameSync
-	{
-	public:
-		SourceSync(love::audio::Source *source);
-
-		virtual double getPosition() const override;
-		virtual void play() override;
-		virtual void pause() override;
-		virtual void seek(double time) override;
-		virtual bool isPlaying() const override;
-
-	private:
-		StrongRef<love::audio::Source> source;
 	};
 
 protected:

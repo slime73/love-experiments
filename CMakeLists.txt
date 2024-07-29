@@ -1209,9 +1209,22 @@ target_link_libraries(love_touch INTERFACE
 #
 
 add_library(love_video_root STATIC
+	src/modules/video/DeltaSync.cpp
+	src/modules/video/DeltaSync.h
+	src/modules/video/FrameSync.cpp
+	src/modules/video/FrameSync.h
+	src/modules/video/SourceSync.cpp
+	src/modules/video/SourceSync.h
+	src/modules/video/Video.cpp
 	src/modules/video/Video.h
 	src/modules/video/VideoStream.cpp
 	src/modules/video/VideoStream.h
+	src/modules/video/wrap_DeltaSync.cpp
+	src/modules/video/wrap_DeltaSync.h
+	src/modules/video/wrap_FrameSync.cpp
+	src/modules/video/wrap_FrameSync.h
+	src/modules/video/wrap_SourceSync.cpp
+	src/modules/video/wrap_SourceSync.h
 	src/modules/video/wrap_Video.cpp
 	src/modules/video/wrap_Video.h
 	src/modules/video/wrap_VideoStream.cpp

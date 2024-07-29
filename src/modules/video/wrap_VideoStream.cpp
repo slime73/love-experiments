@@ -18,6 +18,9 @@
  * 3. This notice may not be removed or altered from any source distribution.
  **/
 
+#include "audio/Source.h"
+#include "DeltaSync.h"
+#include "SourceSync.h"
 #include "wrap_VideoStream.h"
 
 namespace love
@@ -30,14 +33,26 @@ VideoStream *luax_checkvideostream(lua_State *L, int idx)
 	return luax_checktype<VideoStream>(L, idx);
 }
 
+int w_VideoStream_getSync(lua_State *L)
+{
+	auto stream = luax_checkvideostream(L, 1);
+	luax_pushtype(L, stream->getSync());
+	return 1;
+}
+
 int w_VideoStream_setSync(lua_State *L)
 {
 	auto stream = luax_checkvideostream(L, 1);
 
-	if (luax_istype(L, 2, love::audio::Source::type))
+	if (luax_istype(L, 2, FrameSync::type))
+	{
+		auto sync = luax_totype<FrameSync>(L, 2);
+		stream->setSync(sync);
+	}
+	else if (luax_istype(L, 2, love::audio::Source::type))
 	{
 		auto src = luax_totype<love::audio::Source>(L, 2);
-		auto sync = new VideoStream::SourceSync(src);
+		auto sync = new SourceSync(src);
 		stream->setSync(sync);
 		sync->release();
 	}
@@ -48,13 +63,13 @@ int w_VideoStream_setSync(lua_State *L)
 	}
 	else if (lua_isnoneornil(L, 2))
 	{
-		auto newSync = new VideoStream::DeltaSync();
+		auto newSync = new DeltaSync(false);
 		newSync->copyState(stream->getSync());
 		stream->setSync(newSync);
 		newSync->release();
 	}
 	else
-		return luax_typerror(L, 2, "Source or VideoStream or nil");
+		return luax_typerror(L, 2, "FrameSync, Source, VideoStream, or nil");
 
 	return 0;
 }
@@ -118,6 +133,7 @@ int w_VideoStream_isPlaying(lua_State *L)
 
 static const luaL_Reg videostream_functions[] =
 {
+	{ "getSync", w_VideoStream_getSync },
 	{ "setSync", w_VideoStream_setSync },
 	{ "getDuration", w_VideoStream_getDuration },
 	{ "getFilename", w_VideoStream_getFilename },

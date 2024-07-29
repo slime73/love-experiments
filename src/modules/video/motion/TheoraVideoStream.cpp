@@ -22,6 +22,7 @@
 #include <iostream>
 
 // LOVE
+#include "video/DeltaSync.h"
 #include "TheoraVideoStream.h"
 
 using love::filesystem::File;
@@ -61,7 +62,7 @@ TheoraVideoStream::TheoraVideoStream(love::filesystem::File *file)
 		throw ex;
 	}
 
-	frameSync.set(new DeltaSync(), Acquire::NORETAIN);
+	frameSync.set(new DeltaSync(false), Acquire::NORETAIN);
 }
 
 TheoraVideoStream::~TheoraVideoStream()

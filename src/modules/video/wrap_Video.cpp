@@ -19,9 +19,16 @@
  **/
 
 // LOVE
+#include "audio/Audio.h"
+#include "audio/Source.h"
 #include "filesystem/wrap_Filesystem.h"
 
 #include "motion/Video.h"
+#include "DeltaSync.h"
+#include "SourceSync.h"
+#include "wrap_DeltaSync.h"
+#include "wrap_FrameSync.h"
+#include "wrap_SourceSync.h"
 #include "wrap_Video.h"
 #include "wrap_VideoStream.h"
 
@@ -51,14 +58,41 @@ int w_newVideoStream(lua_State *L)
 	return 1;
 }
 
+static int w_newSourceSync(lua_State *L)
+{
+	audio::Source *source = luax_checktype<audio::Source>(L, 1);
+	SourceSync *sync = nullptr;
+	luax_catchexcept(L, [&]() { sync = new SourceSync(source); });
+
+	luax_pushtype(L, sync);
+	sync->release();
+	return 1;
+}
+
+static int w_newDeltaSync(lua_State *L)
+{
+	bool manual = luax_optboolean(L, 1, false);
+	DeltaSync *sync = nullptr;
+	luax_catchexcept(L, [&]() { sync = new DeltaSync(manual); });
+
+	luax_pushtype(L, sync);
+	sync->release();
+	return 1;
+}
+
 static const lua_CFunction types[] =
 {
 	luaopen_videostream,
-	0
+	luaopen_framesync,
+	luaopen_sourcesync,
+	luaopen_deltasync,
+	nullptr
 };
 
 static const luaL_Reg functions[] =
 {
+	{ "newDeltaSync", w_newDeltaSync },
+	{ "newSourceSync", w_newSourceSync },
 	{ "newVideoStream", w_newVideoStream },
 	{ 0, 0 }
 };
