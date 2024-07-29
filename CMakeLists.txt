@@ -1237,12 +1237,14 @@ target_link_libraries(love_video_root PUBLIC
 )
 
 add_library(love_video_motion STATIC
-	src/modules/video/motion/Video.cpp
-	src/modules/video/motion/Video.h
+	src/modules/video/motion/NAVVideoStream.cpp
+	src/modules/video/motion/NAVVideoStream.h
 	src/modules/video/motion/OggDemuxer.cpp
 	src/modules/video/motion/OggDemuxer.h
 	src/modules/video/motion/TheoraVideoStream.cpp
 	src/modules/video/motion/TheoraVideoStream.h
+	src/modules/video/motion/Video.cpp
+	src/modules/video/motion/Video.h
 )
 target_link_libraries(love_video_motion PUBLIC
 	lovedep::Theora
@@ -1745,6 +1747,7 @@ if(FFMPEG_DIR)
 endif()
 target_link_libraries(love_common PUBLIC love_3p_nav)
 target_link_libraries(love_sound_lullaby PUBLIC love_3p_nav)
+target_link_libraries(love_video_motion PUBLIC love_3p_nav)
 
 #
 # noise1234
