@@ -55,6 +55,7 @@ public:
 	int getWidth() const;
 	int getHeight() const;
 	const std::string &getFilename() const;
+	double getDuration() const override;
 	void setSync(FrameSync *frameSync);
 
 	bool isPlaying() const;

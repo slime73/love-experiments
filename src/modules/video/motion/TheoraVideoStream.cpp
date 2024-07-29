@@ -96,6 +96,12 @@ const std::string &TheoraVideoStream::getFilename() const
 	return demuxer.getFilename();
 }
 
+double TheoraVideoStream::getDuration() const
+{
+	// Unavailable
+	return -1;
+}
+
 void TheoraVideoStream::setSync(FrameSync *frameSync)
 {
 	love::thread::Lock l(bufferMutex);

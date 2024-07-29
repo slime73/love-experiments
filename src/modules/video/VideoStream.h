@@ -64,6 +64,7 @@ public:
 	virtual int getWidth() const = 0;
 	virtual int getHeight() const = 0;
 	virtual const std::string &getFilename() const = 0;
+	virtual double getDuration() const = 0;
 
 	// Playback api
 	virtual void play();

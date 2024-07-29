@@ -59,6 +59,13 @@ int w_VideoStream_setSync(lua_State *L)
 	return 0;
 }
 
+int w_VideoStream_getDuration(lua_State *L)
+{
+	auto stream = luax_checkvideostream(L, 1);
+	lua_pushnumber(L, stream->getDuration());
+	return 1;
+}
+
 int w_VideoStream_getFilename(lua_State *L)
 {
 	auto stream = luax_checkvideostream(L, 1);
@@ -112,6 +119,7 @@ int w_VideoStream_isPlaying(lua_State *L)
 static const luaL_Reg videostream_functions[] =
 {
 	{ "setSync", w_VideoStream_setSync },
+	{ "getDuration", w_VideoStream_getDuration },
 	{ "getFilename", w_VideoStream_getFilename },
 	{ "play", w_VideoStream_play },
 	{ "pause", w_VideoStream_pause },
