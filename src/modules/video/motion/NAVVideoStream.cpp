@@ -15,6 +15,7 @@ NAVVideoStream::NAVVideoStream(filesystem::File *file)
 , nav(nullptr)
 , streamInfo(nullptr)
 , streamIndex(0)
+, position(0)
 , hasNewFrame(false)
 , filename(file->getFilename())
 , frontBuffer(new NAVFrame())
@@ -68,6 +69,12 @@ NAVVideoStream::NAVVideoStream(filesystem::File *file)
 			break;
 	}
 
+	// Let's fill the frames
+	if (!stepToBackbuffer())
+		throw love::Exception("Cannot get first frame");
+	frontBuffer.swap(backBuffer);
+	stepToBackbuffer();
+
 	frameSync.set(new DeltaSync(false), Acquire::NORETAIN);
 }
 
@@ -91,28 +98,29 @@ size_t NAVVideoStream::getSize() const
 
 void NAVVideoStream::fillBackBuffer()
 {
-	std::lock_guard<std::mutex> _lock(decodeMutex);
+}
 
-	double position = frameSync->tell();
-	if (frontBuffer && position < frontBuffer->pts)
+void NAVVideoStream::threadedFillBackBuffer(double dt)
+{
+	std::lock_guard<std::mutex> _lock(decodeMutex);
+	frameSync->update(dt);
+
+	double newPos = frameSync->tell();
+	if (newPos < position)
 	{
 		// Seeking backward
-		nav_seek(nav, position);
+		nav_seek(nav, newPos);
 		backBuffer->set();
 	}
 
-	while (backBuffer->pts < position)
+	while (newPos > backBuffer->pts)
 	{
 		if (!stepToBackbuffer())
 			// Yeah it's not worth it.
 			return;
 	}
-}
 
-void NAVVideoStream::threadedFillBackBuffer(double dt)
-{
-	frameSync->update(dt);
-	return fillBackBuffer();
+	position = newPos;
 }
 
 bool NAVVideoStream::swapBuffers()
@@ -121,7 +129,7 @@ bool NAVVideoStream::swapBuffers()
 
 	double position = frameSync->tell();
 
-	if (position >= backBuffer->pts && hasNewFrame)
+	if (hasNewFrame)
 	{
 		frontBuffer.swap(backBuffer);
 		hasNewFrame = false;
@@ -198,7 +206,7 @@ void NAVVideoStream::NAVFrame::set(nav_frame_t *frame)
 	if (frame)
 	{
 		nav_streaminfo_t *streamInfo = nav_frame_streaminfo(frame);
-		assert(nav_streaminfo_type(streamInfo) != NAV_STREAMTYPE_VIDEO);
+		assert(nav_streaminfo_type(streamInfo) == NAV_STREAMTYPE_VIDEO);
 
 		uint32_t width, height;
 		nav_video_dimensions(streamInfo, &width, &height);

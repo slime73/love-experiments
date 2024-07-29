@@ -51,6 +51,7 @@ private:
 	nav_t *nav;
 	nav_streaminfo_t *streamInfo;
 	size_t streamIndex;
+	double position;
 	bool hasNewFrame;
 
 	std::string filename;
