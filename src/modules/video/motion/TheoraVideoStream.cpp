@@ -130,6 +130,7 @@ inline void scaleFormat(th_pixel_fmt fmt, T &x, T &y)
 	{
 	case TH_PF_420:
 		y /= 2;
+		[[fallthrough]];
 	case TH_PF_422:
 		x /= 2;
 		break;
