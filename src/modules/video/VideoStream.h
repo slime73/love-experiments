@@ -44,6 +44,12 @@ public:
 	virtual void fillBackBuffer() {}
 
 	/**
+	 * Same as fillBackBuffer() but can be called on any thread.
+	 * @param dt Last elapsed time since update.
+	 **/
+	virtual void threadedFillBackBuffer(double dt) {}
+
+	/**
 	 * Get the front buffer, Streams are supposed to be (at least) double-buffered
 	 **/
 	virtual const void* getFrontBuffer() const = 0;

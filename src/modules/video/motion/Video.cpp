@@ -63,7 +63,7 @@ Worker::~Worker()
 	stop();
 }
 
-void Worker::addStream(TheoraVideoStream *stream)
+void Worker::addStream(VideoStream *stream)
 {
 	love::thread::Lock l(mutex);
 	streams.push_back(stream);
@@ -106,7 +106,7 @@ void Worker::threadFunction()
 
 		for (auto it = streams.begin(); it != streams.end(); ++it)
 		{
-			TheoraVideoStream *stream = *it;
+			VideoStream *stream = *it;
 			if (stream->getReferenceCount() == 1)
 			{
 				// We're the only ones left

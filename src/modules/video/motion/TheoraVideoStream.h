@@ -45,22 +45,22 @@ class TheoraVideoStream : public love::video::VideoStream
 {
 public:
 	TheoraVideoStream(love::filesystem::File *file);
-	~TheoraVideoStream();
+	~TheoraVideoStream() override;
 
-	const void *getFrontBuffer() const;
-	size_t getSize() const;
-	void fillBackBuffer();
-	bool swapBuffers();
+	const void *getFrontBuffer() const override;
+	size_t getSize() const override;
+	void fillBackBuffer() override;
+	void threadedFillBackBuffer(double dt) override;
+	bool swapBuffers() override;
 
-	int getWidth() const;
-	int getHeight() const;
-	const std::string &getFilename() const;
+	int getWidth() const override;
+	int getHeight() const override;
+	const std::string &getFilename() const override;
 	double getDuration() const override;
-	void setSync(FrameSync *frameSync);
+	void setSync(FrameSync *frameSync) override;
 
-	bool isPlaying() const;
+	bool isPlaying() const override;
 
-	void threadedFillBackBuffer(double dt);
 
 private:
 	OggDemuxer demuxer;

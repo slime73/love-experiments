@@ -61,13 +61,13 @@ public:
 	// Implements Threadable
 	void threadFunction();
 
-	void addStream(TheoraVideoStream *stream);
+	void addStream(VideoStream *stream);
 	// Frees itself!
 	void stop();
 
 private:
 
-	std::vector<StrongRef<TheoraVideoStream>> streams;
+	std::vector<StrongRef<VideoStream>> streams;
 
 	love::thread::MutexRef mutex;
 	love::thread::ConditionalRef cond;
