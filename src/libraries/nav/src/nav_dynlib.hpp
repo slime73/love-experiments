@@ -18,14 +18,14 @@ public:
 
 	template<typename T> bool get(const std::string &name, T* dest)
 	{
-		bool err = false;
-		void *result = _get(name, err);
+		bool success = false;
+		void *result = _get(name, success);
 		*dest = (T) result;
-		return err;
+		return success;
 	}
 
 private:
-	void *_get(const std::string &name, bool &err);
+	void *_get(const std::string &name, bool &success);
 	void close();
 
 	void *mod;

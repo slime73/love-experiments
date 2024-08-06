@@ -47,18 +47,18 @@ DynLib::~DynLib()
 	close();
 }
 
-void *DynLib::_get(const std::string &name, bool &err)
+void *DynLib::_get(const std::string &name, bool &success)
 {
 	void *result = nullptr;
 
 #ifdef _WIN32
 	SetLastError(0);
 	result = GetProcAddress((HMODULE) mod, name.c_str());
-	err = GetLastError() == 0;
+	success = GetLastError() == 0;
 #else
 	dlerror();
 	result = dlsym(mod, name.c_str());
-	err = dlerror() != nullptr;
+	success = dlerror() == nullptr;
 #endif
 
 	return result;

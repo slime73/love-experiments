@@ -879,12 +879,16 @@ const char *MediaFoundationBackend::getInfo()
 
 Backend *create()
 {
+	if (checkBackendDisabled("MEDIAFOUNDATION"))
+		return nullptr;
+
 	try
 	{
 		return new MediaFoundationBackend();
 	}
-	catch(const std::exception&)
+	catch(const std::exception &e)
 	{
+		nav::error::set(e);
 		return nullptr;
 	}
 }

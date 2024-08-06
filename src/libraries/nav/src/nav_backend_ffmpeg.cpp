@@ -933,6 +933,9 @@ const char *FFmpegBackend::getInfo()
 
 Backend *create()
 {
+	if (checkBackendDisabled("FFMPEG"))
+		return nullptr;
+
 	try
 	{
 		return new FFmpegBackend();

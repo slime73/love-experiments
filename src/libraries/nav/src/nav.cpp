@@ -5,7 +5,9 @@
 
 #include "nav_internal.hpp"
 #include "nav_backend.hpp"
+#include "nav_backend_androidndk.hpp"
 #include "nav_backend_ffmpeg.hpp"
+#include "nav_backend_gstreamer.hpp"
 #include "nav_backend_mediafoundation.hpp"
 #include "nav_error.hpp"
 #include "nav_input_file.hpp"
@@ -117,8 +119,14 @@ private:
 	std::vector<size_t> defaultOrder;
 	std::mutex mutex;
 } backendContainer({
+#ifdef NAV_BACKEND_ANDROIDNDK
+	&nav::androidndk::create,
+#endif
 #if defined(NAV_BACKEND_FFMPEG) && (NAV_BACKEND_FFMPEG_OK)
 	&nav::ffmpeg::create,
+#endif
+#ifdef NAV_BACKEND_GSTREAMER
+	&nav::gstreamer::create,
 #endif
 #ifdef NAV_BACKEND_MEDIAFOUNDATION
 	&nav::mediafoundation::create,

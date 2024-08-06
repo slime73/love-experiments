@@ -5,6 +5,12 @@
 #define __ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__ 1
 #endif
 
+// We really want this to be 1 though!
+#if __ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__ != 1
+#undef __ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__
+#define __ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__ 1
+#endif
+
 #include "nav_backend_androidndk.hpp"
 
 #ifdef NAV_BACKEND_ANDROIDNDK
@@ -16,6 +22,9 @@
 #include "nav_common.hpp"
 
 #define NAV_FFCALL(n) f->ptr_##n
+
+constexpr int64_t MICROSECOND = 1000000;
+constexpr int64_t DEFAULT_TIMEOUT = 500000LL; // 0.5 seconds
 
 const char *getMediaStatusText(media_status_t code)
 {
@@ -113,6 +122,7 @@ inline nav_audioformat audioFormatFromPCMEncoding(int encoding)
 	switch (encoding)
 	{
 		case 2:
+		default: // Eh what could go wrong
 			return nav::makeAudioFormat(16, false, true);
 		case 3:
 			return nav::makeAudioFormat(8, false, false);
@@ -200,13 +210,15 @@ ssize_t MediaSourceWrapper::getAvailableSize(void *userdata, off64_t offset)
 AndroidNDKState::AndroidNDKState(AndroidNDKBackend *backend, UniqueMediaExtractor &ext, MediaSourceWrapper &ds)
 : f(backend)
 , activeStream()
+, hasEOS()
 , streamInfo()
 , decoders()
 , extractor(std::move(ext))
 , dataSource(std::move(ds))
 {
 	size_t tracks = NAV_FFCALL(AMediaExtractor_getTrackCount)(extractor.get());
-	activeStream.resize(tracks, false);
+	activeStream.resize(tracks);
+	hasEOS.resize(tracks);
 	streamInfo.resize(tracks);
 	decoders.reserve(tracks);
 
@@ -233,7 +245,7 @@ AndroidNDKState::AndroidNDKState(AndroidNDKBackend *backend, UniqueMediaExtracto
 		UniqueMediaCodec codec(nullptr, NAV_FFCALL(AMediaCodec_delete));
 		if (r && streamType != NAV_STREAMTYPE_UNKNOWN)
 		{
-			codec.reset(AMediaCodec_createDecoderByType(mime));
+			codec.reset(NAV_FFCALL(AMediaCodec_createDecoderByType)(mime));
 			r = codec.get();
 		}
 
@@ -265,7 +277,7 @@ AndroidNDKState::AndroidNDKState(AndroidNDKBackend *backend, UniqueMediaExtracto
 		int64_t val64 = 0;
 		float valf = 0.0;
 
-		// Ensure the output formt is something NAV currently understood
+		// Ensure the output format is something NAV currently understood
 		if (streamType == NAV_STREAMTYPE_VIDEO)
 		{
 			nav_pixelformat outputPixFmt = NAV_PIXELFORMAT_UNKNOWN;
@@ -345,6 +357,17 @@ size_t AndroidNDKState::getStreamCount() noexcept
 	return activeStream.size();
 }
 
+nav_streaminfo_t *AndroidNDKState::getStreamInfo(size_t index) noexcept
+{
+	if (index >= streamInfo.size())
+	{
+		nav::error::set("Stream index out of range");
+		return nullptr;
+	}
+
+	return &streamInfo[index];
+}
+
 bool AndroidNDKState::isStreamEnabled(size_t i) noexcept
 {
 	if (i >= activeStream.size())
@@ -373,25 +396,28 @@ bool AndroidNDKState::setStreamEnabled(size_t i, bool enabled)
 
 double AndroidNDKState::getDuration() noexcept
 {
-	return derationalize<int64_t>(durationUs, 1000000);
+	return derationalize<int64_t>(durationUs, MICROSECOND);
 }
 
 double AndroidNDKState::getPosition() noexcept
 {
-	return derationalize<int64_t>(positionUs, 1000000);
+	return derationalize<int64_t>(positionUs, MICROSECOND);
 }
 
 double AndroidNDKState::setPosition(double off)
 {
 	int64_t targetPosUs = (int64_t) (off * 1000000.0);
-	media_status_t result = NAV_FFCALL(AMediaExtractor_seekTo)(extractor.get(), targetPosUs, AMEDIAEXTRACTOR_SEEK_CLOSEST_SYNC);
+	media_status_t result = NAV_FFCALL(AMediaExtractor_seekTo)(extractor.get(), targetPosUs, AMEDIAEXTRACTOR_SEEK_PREVIOUS_SYNC);
 	THROW_IF_ERROR(result);
 
 	for (const UniqueMediaCodec &codec: decoders)
 	{
 		if (codec)
-			AMediaCodec_flush(codec.get());
+			NAV_FFCALL(AMediaCodec_flush)(codec.get());
 	}
+
+	for (std::vector<bool>::reference v: hasEOS)
+		v = false;
 
 	positionUs = targetPosUs;
 	return off;
@@ -399,9 +425,94 @@ double AndroidNDKState::setPosition(double off)
 
 nav_frame_t *AndroidNDKState::read()
 {
+	ssize_t bufferIndex = -1;
+	nav::error::set("");
+
 	while (true)
 	{
-		return nullptr;
+		int index = NAV_FFCALL(AMediaExtractor_getSampleTrackIndex)(extractor.get());
+		if (index == -1)
+		{
+			// EOF
+			nav::error::set("");
+			return nullptr;
+		}
+
+		UniqueMediaCodec &codec = decoders[index];
+		if (codec && !hasEOS[index])
+		{
+			// Step 1: Pull decoded data from codec.
+			AMediaCodecBufferInfo bufferInfo = {};
+			bufferIndex = NAV_FFCALL(AMediaCodec_dequeueOutputBuffer)(codec.get(), &bufferInfo, DEFAULT_TIMEOUT);
+
+			if (bufferIndex != AMEDIACODEC_INFO_TRY_AGAIN_LATER)
+			{
+				if (bufferIndex < 0)
+				{
+					CHECK_IF_ERROR_AND_SET((media_status_t) bufferIndex);
+					return nullptr;
+				}
+
+				hasEOS[index] = bufferInfo.flags & AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM;
+
+				// Pull buffer
+				size_t bufferSize = 0;
+				uint8_t *buffer = NAV_FFCALL(AMediaCodec_getOutputBuffer)(codec.get(), bufferIndex, &bufferSize);
+				FrameVector *result = nullptr;
+				try
+				{
+					result = new FrameVector(
+						&streamInfo[index],
+						index,
+						derationalize(bufferInfo.presentationTimeUs, MICROSECOND),
+						buffer,
+						bufferSize
+					);
+				} catch (const std::exception &e)
+				{
+					nav::error::set(e);
+				}
+
+				NAV_FFCALL(AMediaCodec_releaseOutputBuffer)(codec.get(), bufferIndex, false);
+				return result;
+			}
+
+			NAV_FFCALL(AMediaExtractor_advance)(extractor.get());
+			index = NAV_FFCALL(AMediaExtractor_getSampleTrackIndex)(extractor.get());
+			if (index == -1)
+			{
+				// EOF
+				nav::error::set("");
+				return nullptr;
+			}
+
+			// Step 2: Push encoded data to codec.
+			if (!hasEOS[index])
+			{
+				bufferIndex = NAV_FFCALL(AMediaCodec_dequeueInputBuffer)(codec.get(), DEFAULT_TIMEOUT);
+				if (bufferIndex < 0)
+				{
+					nav::error::set("Error during AMediaCodec_dequeueInputBuffer");
+					return nullptr;
+				}
+
+				size_t bufferSize = 0;
+				uint8_t *bufferData = NAV_FFCALL(AMediaCodec_getInputBuffer)(codec.get(), bufferIndex, &bufferSize);
+				ssize_t sampleSize = NAV_FFCALL(AMediaExtractor_readSampleData)(extractor.get(), bufferData, bufferSize);
+				int64_t presentationTimeUs = NAV_FFCALL(AMediaExtractor_getSampleTime)(extractor.get());
+				bool eos = sampleSize < 0;
+				sampleSize = std::max<ssize_t>(sampleSize, 0);
+
+				NAV_FFCALL(AMediaCodec_queueInputBuffer)(
+					codec.get(),
+					bufferIndex,
+					0,
+					sampleSize,
+					presentationTimeUs,
+					eos * AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM
+				);
+			}
+		}
 	}
 }
 
@@ -455,12 +566,16 @@ const char *AndroidNDKBackend::getInfo()
 
 Backend *create()
 {
+	if (checkBackendDisabled("ANDROIDNDK"))
+		return nullptr;
+
 	try
 	{
 		return new AndroidNDKBackend();
 	}
 	catch(const std::exception& e)
 	{
+		nav::error::set(e);
 		return nullptr;
 	}
 }

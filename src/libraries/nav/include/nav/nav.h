@@ -308,6 +308,11 @@ NAV_API size_t nav_frame_size(nav_frame_t *frame);
 
 /**
  * @brief Get decoded data buffer.
+ * 
+ * For video frame, this will contain the picture, laid out depending on the stream nav_pixelformat.
+ * 
+ * For audio frame, this will contain the audio samples depending on the nav_audioformat, interleaved.
+ * 
  * @param frame Pointer to the NAV frame instance.
  * @return Decoded data buffer.
  */

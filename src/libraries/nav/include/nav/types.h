@@ -4,8 +4,23 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/**
+ * @brief Opaque structure that contains a loaded instance of media file.
+ * @sa nav_open
+ */
 typedef struct nav_t nav_t;
+
+/**
+ * @brief Opaque structure that contains stream information.
+ * @sa nav_stream_info
+ * @sa nav_frame_streaminfo
+ */
 typedef struct nav_streaminfo_t nav_streaminfo_t;
+
+/**
+ * @brief Opaque structure that contains decoded stream data.
+ * @sa nav_read
+ */
 typedef struct nav_frame_t nav_frame_t;
 
 #ifdef __cplusplus
@@ -15,6 +30,10 @@ typedef bool nav_bool;
 typedef _Bool nav_bool;
 #endif
 
+/**
+ * @brief Possible pixel format of decoded video frames.
+ * @sa nav_streaminfo_t
+ */
 typedef enum nav_pixelformat
 {
 	/* Unknown pixel format (may denote errors) */
@@ -29,6 +48,10 @@ typedef enum nav_pixelformat
 	NAV_PIXELFORMAT_NV12
 } nav_pixelformat;
 
+/**
+ * @brief Possible stream type.
+ * @sa nav_streaminfo_t
+ */
 typedef enum nav_streamtype
 {
 	/* Unknown stream type */

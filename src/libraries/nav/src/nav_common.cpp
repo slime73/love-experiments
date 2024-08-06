@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cstring>
 #include <stdexcept>
 
 #ifdef _WIN32
@@ -46,6 +47,27 @@ size_t FrameVector::size() const noexcept
 void *FrameVector::data() noexcept
 {
 	return buffer.data();
+}
+
+bool FrameVector::operator<(const FrameVector &rhs) const noexcept
+{
+	return position < rhs.position;
+}
+
+bool checkBackendDisabled(const std::string &backendNameUppercase)
+{
+	std::string name = "NAV_DISABLE_" + backendNameUppercase;
+	const char *value = getenv(name.c_str());
+
+	return value != nullptr && (
+		strcmp(value, "1") == 0 ||
+		strcmp(value, "ON") == 0 ||
+		strcmp(value, "on") == 0 ||
+		strcmp(value, "On") == 0 ||
+		strcmp(value, "YES") == 0 ||
+		strcmp(value, "yes") == 0 ||
+		strcmp(value, "Yes") == 0
+	);
 }
 
 #ifdef _WIN32
