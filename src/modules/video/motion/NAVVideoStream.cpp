@@ -106,11 +106,12 @@ void NAVVideoStream::threadedFillBackBuffer(double dt)
 	frameSync->update(dt);
 
 	double newPos = frameSync->tell();
-	if (newPos < position)
+	if (newPos < position || (newPos - position) >= 3.0)
 	{
-		// Seeking backward
+		// Seeking backward/forward
 		nav_seek(nav, newPos);
 		backBuffer->set();
+		frontBuffer->pts = -1.0;
 	}
 
 	while (newPos > backBuffer->pts)
