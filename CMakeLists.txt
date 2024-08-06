@@ -1705,49 +1705,11 @@ add_library(love_3p_lz4
 # nav
 #
 
-add_library(love_3p_nav
-	src/libraries/nav/include/nav/audioformat.h
-	src/libraries/nav/include/nav/input.h
-	src/libraries/nav/include/nav/nav.h
-	src/libraries/nav/include/nav/types.h
-	src/libraries/nav/src/nav.cpp
-	src/libraries/nav/src/nav_backend.cpp
-	src/libraries/nav/src/nav_backend.hpp
-	src/libraries/nav/src/nav_backend_androidndk.cpp
-	src/libraries/nav/src/nav_backend_androidndk.hpp
-	src/libraries/nav/src/nav_backend_androidndk_funcptr.h
-	src/libraries/nav/src/nav_backend_androidndk_internal.hpp
-	src/libraries/nav/src/nav_backend_ffmpeg.cpp
-	src/libraries/nav/src/nav_backend_ffmpeg.hpp
-	src/libraries/nav/src/nav_backend_ffmpeg_funcptr.h
-	src/libraries/nav/src/nav_backend_ffmpeg_internal.hpp
-	src/libraries/nav/src/nav_backend_mediafoundation.cpp
-	src/libraries/nav/src/nav_backend_mediafoundation.hpp
-	src/libraries/nav/src/nav_backend_mediafoundation_internal.hpp
-	src/libraries/nav/src/nav_common.cpp
-	src/libraries/nav/src/nav_common.hpp
-	src/libraries/nav/src/nav_config.hpp
-	src/libraries/nav/src/nav_dynlib.cpp
-	src/libraries/nav/src/nav_dynlib.hpp
-	src/libraries/nav/src/nav_error.cpp
-	src/libraries/nav/src/nav_error.hpp
-	src/libraries/nav/src/nav_input_file.cpp
-	src/libraries/nav/src/nav_input_file.hpp
-	src/libraries/nav/src/nav_input_memory.cpp
-	src/libraries/nav/src/nav_input_memory.hpp
-	src/libraries/nav/src/nav_internal.cpp
-	src/libraries/nav/src/nav_internal.hpp
-)
-target_include_directories(love_3p_nav PUBLIC src/libraries/nav/include)
-if(DEFINED ENV{FFMPEG_DIR})
-	set(FFMPEG_DIR $ENV{FFMPEG_DIR})
-endif()
-if(FFMPEG_DIR)
-	target_include_directories(love_3p_nav PRIVATE ${FFMPEG_DIR})
-endif()
-target_link_libraries(love_common PUBLIC love_3p_nav)
-target_link_libraries(love_sound_lullaby PUBLIC love_3p_nav)
-target_link_libraries(love_video_motion PUBLIC love_3p_nav)
+set(NAV_SHARED 0)
+add_subdirectory(src/libraries/nav)
+target_link_libraries(love_common PUBLIC nav)
+target_link_libraries(love_sound_lullaby PUBLIC nav)
+target_link_libraries(love_video_motion PUBLIC nav)
 
 #
 # noise1234
@@ -2019,7 +1981,6 @@ set(LIBLOVE_LIBRARIES
 	love_3p_lua53
 	love_3p_luahttps
 	love_3p_lz4
-	love_3p_nav
 	love_3p_noise1234
 	love_3p_physfs
 	love_3p_spirv_cross
