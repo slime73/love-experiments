@@ -339,7 +339,7 @@ double GStreamerState::setPosition(double off)
 
 nav_frame_t *GStreamerState::read()
 {
-	while (!eos)
+	while (!eos || !queuedFrames.empty())
 	{
 		size_t neos = 0;
 
