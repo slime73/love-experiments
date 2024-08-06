@@ -97,6 +97,11 @@ if(NAV_SHARED)
 	endif()
 endif()
 
+# Silence C4996
+if(MSVC)
+	target_compile_definitions(nav PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+
 # Find FFmpeg
 if(FFMPEG_DIR)
 	# Ok I trusted you
