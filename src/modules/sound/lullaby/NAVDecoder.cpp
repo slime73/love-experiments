@@ -171,11 +171,16 @@ bool NAVDecoder::refillBuffers(int64 target)
 			if ((startSample + navFrameCount) < target)
 				// Need to seek more
 				continue;
-
-			int64 offFrame = startSample + navFrameCount - target;
-			size_t offSizeBytes = (startSample + navFrameCount - target) * frameSizeBytes;
-			navFrameBuffer += offSizeBytes;
-			navFrameSize -= offSizeBytes;
+			else if (target < startSample)
+				// Inject silence
+				queuedBuffers.emplace_back((size_t) ((startSample - target) * frameSizeBytes), '\0');
+			else
+			{
+				int64 offFrame = startSample + navFrameCount - target;
+				size_t offSizeBytes = (startSample + navFrameCount - target) * frameSizeBytes;
+				navFrameBuffer += offSizeBytes;
+				navFrameSize -= offSizeBytes;
+			}
 		}
 
 		if (bitDepth <= 16)
