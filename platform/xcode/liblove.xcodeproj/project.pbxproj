@@ -76,6 +76,93 @@
 		D9DB6E402B4B41580037A1F6 /* GLSL.ext.ARM.h in Headers */ = {isa = PBXBuildFile; fileRef = D9DB6E3A2B4B41570037A1F6 /* GLSL.ext.ARM.h */; };
 		D9DB6E412B4B41580037A1F6 /* GLSL.ext.QCOM.h in Headers */ = {isa = PBXBuildFile; fileRef = D9DB6E3B2B4B41580037A1F6 /* GLSL.ext.QCOM.h */; };
 		D9DB6E452B4B80E80037A1F6 /* build_info.h in Headers */ = {isa = PBXBuildFile; fileRef = D9DB6E442B4B80E80037A1F6 /* build_info.h */; };
+		D9F0C2332C66DDDE00BB2D25 /* wrap_SourceSync.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C21D2C66DDDD00BB2D25 /* wrap_SourceSync.cpp */; };
+		D9F0C2342C66DDDE00BB2D25 /* wrap_SourceSync.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C21D2C66DDDD00BB2D25 /* wrap_SourceSync.cpp */; };
+		D9F0C2352C66DDDE00BB2D25 /* FrameSync.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C21E2C66DDDD00BB2D25 /* FrameSync.h */; };
+		D9F0C2362C66DDDE00BB2D25 /* DeltaSync.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C21F2C66DDDD00BB2D25 /* DeltaSync.h */; };
+		D9F0C2372C66DDDE00BB2D25 /* SourceSync.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2202C66DDDD00BB2D25 /* SourceSync.cpp */; };
+		D9F0C2382C66DDDE00BB2D25 /* SourceSync.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2202C66DDDD00BB2D25 /* SourceSync.cpp */; };
+		D9F0C2392C66DDDE00BB2D25 /* wrap_SourceSync.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2212C66DDDD00BB2D25 /* wrap_SourceSync.h */; };
+		D9F0C23A2C66DDDE00BB2D25 /* DeltaSync.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2222C66DDDE00BB2D25 /* DeltaSync.cpp */; };
+		D9F0C23B2C66DDDE00BB2D25 /* DeltaSync.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2222C66DDDE00BB2D25 /* DeltaSync.cpp */; };
+		D9F0C23C2C66DDDE00BB2D25 /* wrap_DeltaSync.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2232C66DDDE00BB2D25 /* wrap_DeltaSync.h */; };
+		D9F0C23D2C66DDDE00BB2D25 /* Video.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2242C66DDDE00BB2D25 /* Video.cpp */; };
+		D9F0C23E2C66DDDE00BB2D25 /* Video.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2242C66DDDE00BB2D25 /* Video.cpp */; };
+		D9F0C23F2C66DDDE00BB2D25 /* FrameSync.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2252C66DDDE00BB2D25 /* FrameSync.cpp */; };
+		D9F0C2402C66DDDE00BB2D25 /* FrameSync.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2252C66DDDE00BB2D25 /* FrameSync.cpp */; };
+		D9F0C2412C66DDDE00BB2D25 /* wrap_FrameSync.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2262C66DDDE00BB2D25 /* wrap_FrameSync.h */; };
+		D9F0C2422C66DDDE00BB2D25 /* wrap_DeltaSync.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2272C66DDDE00BB2D25 /* wrap_DeltaSync.cpp */; };
+		D9F0C2432C66DDDE00BB2D25 /* wrap_DeltaSync.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2272C66DDDE00BB2D25 /* wrap_DeltaSync.cpp */; };
+		D9F0C2442C66DDDE00BB2D25 /* NAVVideoStream.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2282C66DDDE00BB2D25 /* NAVVideoStream.cpp */; };
+		D9F0C2452C66DDDE00BB2D25 /* NAVVideoStream.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2282C66DDDE00BB2D25 /* NAVVideoStream.cpp */; };
+		D9F0C2462C66DDDE00BB2D25 /* NAVVideoStream.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2292C66DDDE00BB2D25 /* NAVVideoStream.h */; };
+		D9F0C2472C66DDDE00BB2D25 /* OggDemuxer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C22A2C66DDDE00BB2D25 /* OggDemuxer.cpp */; };
+		D9F0C2482C66DDDE00BB2D25 /* OggDemuxer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C22A2C66DDDE00BB2D25 /* OggDemuxer.cpp */; };
+		D9F0C2492C66DDDE00BB2D25 /* OggDemuxer.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C22B2C66DDDE00BB2D25 /* OggDemuxer.h */; };
+		D9F0C24A2C66DDDE00BB2D25 /* TheoraVideoStream.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C22C2C66DDDE00BB2D25 /* TheoraVideoStream.cpp */; };
+		D9F0C24B2C66DDDE00BB2D25 /* TheoraVideoStream.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C22C2C66DDDE00BB2D25 /* TheoraVideoStream.cpp */; };
+		D9F0C24C2C66DDDE00BB2D25 /* TheoraVideoStream.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C22D2C66DDDE00BB2D25 /* TheoraVideoStream.h */; };
+		D9F0C24D2C66DDDE00BB2D25 /* Video.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C22E2C66DDDE00BB2D25 /* Video.cpp */; };
+		D9F0C24E2C66DDDE00BB2D25 /* Video.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C22E2C66DDDE00BB2D25 /* Video.cpp */; };
+		D9F0C24F2C66DDDE00BB2D25 /* Video.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C22F2C66DDDE00BB2D25 /* Video.h */; };
+		D9F0C2502C66DDDE00BB2D25 /* wrap_FrameSync.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2312C66DDDE00BB2D25 /* wrap_FrameSync.cpp */; };
+		D9F0C2512C66DDDE00BB2D25 /* wrap_FrameSync.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2312C66DDDE00BB2D25 /* wrap_FrameSync.cpp */; };
+		D9F0C2522C66DDDE00BB2D25 /* SourceSync.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2322C66DDDE00BB2D25 /* SourceSync.h */; };
+		D9F0C2552C66DE0100BB2D25 /* NAVDecoder.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2532C66DE0100BB2D25 /* NAVDecoder.cpp */; };
+		D9F0C2562C66DE0100BB2D25 /* NAVDecoder.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2532C66DE0100BB2D25 /* NAVDecoder.cpp */; };
+		D9F0C2572C66DE0100BB2D25 /* NAVDecoder.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2542C66DE0100BB2D25 /* NAVDecoder.h */; };
+		D9F0C28F2C66DE1800BB2D25 /* audioformat.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C25E2C66DE1800BB2D25 /* audioformat.h */; };
+		D9F0C2902C66DE1800BB2D25 /* input.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C25F2C66DE1800BB2D25 /* input.h */; };
+		D9F0C2912C66DE1800BB2D25 /* nav.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2602C66DE1800BB2D25 /* nav.h */; };
+		D9F0C2922C66DE1800BB2D25 /* types.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2612C66DE1800BB2D25 /* types.h */; };
+		D9F0C2942C66DE1800BB2D25 /* nav_backend_androidndk_funcptr.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2652C66DE1800BB2D25 /* nav_backend_androidndk_funcptr.h */; };
+		D9F0C2952C66DE1800BB2D25 /* nav_backend_androidndk_internal.hpp in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2662C66DE1800BB2D25 /* nav_backend_androidndk_internal.hpp */; };
+		D9F0C2962C66DE1800BB2D25 /* nav_backend_androidndk.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2672C66DE1800BB2D25 /* nav_backend_androidndk.cpp */; };
+		D9F0C2972C66DE1800BB2D25 /* nav_backend_androidndk.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2672C66DE1800BB2D25 /* nav_backend_androidndk.cpp */; };
+		D9F0C2982C66DE1800BB2D25 /* nav_backend_androidndk.hpp in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2682C66DE1800BB2D25 /* nav_backend_androidndk.hpp */; };
+		D9F0C2992C66DE1800BB2D25 /* nav_backend_ffmpeg_funcptr.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2692C66DE1800BB2D25 /* nav_backend_ffmpeg_funcptr.h */; };
+		D9F0C29A2C66DE1800BB2D25 /* nav_backend_ffmpeg_internal.hpp in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C26A2C66DE1800BB2D25 /* nav_backend_ffmpeg_internal.hpp */; };
+		D9F0C29B2C66DE1800BB2D25 /* nav_backend_ffmpeg.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C26B2C66DE1800BB2D25 /* nav_backend_ffmpeg.cpp */; };
+		D9F0C29C2C66DE1800BB2D25 /* nav_backend_ffmpeg.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C26B2C66DE1800BB2D25 /* nav_backend_ffmpeg.cpp */; };
+		D9F0C29D2C66DE1800BB2D25 /* nav_backend_ffmpeg.hpp in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C26C2C66DE1800BB2D25 /* nav_backend_ffmpeg.hpp */; };
+		D9F0C29E2C66DE1800BB2D25 /* nav_backend_gstreamer_funcptr.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C26D2C66DE1800BB2D25 /* nav_backend_gstreamer_funcptr.h */; };
+		D9F0C29F2C66DE1800BB2D25 /* nav_backend_gstreamer_internal.hpp in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C26E2C66DE1800BB2D25 /* nav_backend_gstreamer_internal.hpp */; };
+		D9F0C2A02C66DE1800BB2D25 /* nav_backend_gstreamer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C26F2C66DE1800BB2D25 /* nav_backend_gstreamer.cpp */; };
+		D9F0C2A12C66DE1800BB2D25 /* nav_backend_gstreamer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C26F2C66DE1800BB2D25 /* nav_backend_gstreamer.cpp */; };
+		D9F0C2A22C66DE1800BB2D25 /* nav_backend_gstreamer.hpp in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2702C66DE1800BB2D25 /* nav_backend_gstreamer.hpp */; };
+		D9F0C2A32C66DE1800BB2D25 /* nav_backend_mediafoundation_internal.hpp in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2712C66DE1800BB2D25 /* nav_backend_mediafoundation_internal.hpp */; };
+		D9F0C2A42C66DE1800BB2D25 /* nav_backend_mediafoundation.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2722C66DE1800BB2D25 /* nav_backend_mediafoundation.cpp */; };
+		D9F0C2A52C66DE1800BB2D25 /* nav_backend_mediafoundation.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2722C66DE1800BB2D25 /* nav_backend_mediafoundation.cpp */; };
+		D9F0C2A62C66DE1800BB2D25 /* nav_backend_mediafoundation.hpp in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2732C66DE1800BB2D25 /* nav_backend_mediafoundation.hpp */; };
+		D9F0C2A72C66DE1800BB2D25 /* nav_backend.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2742C66DE1800BB2D25 /* nav_backend.cpp */; };
+		D9F0C2A82C66DE1800BB2D25 /* nav_backend.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2742C66DE1800BB2D25 /* nav_backend.cpp */; };
+		D9F0C2A92C66DE1800BB2D25 /* nav_backend.hpp in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2752C66DE1800BB2D25 /* nav_backend.hpp */; };
+		D9F0C2AA2C66DE1800BB2D25 /* nav_common.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2762C66DE1800BB2D25 /* nav_common.cpp */; };
+		D9F0C2AB2C66DE1800BB2D25 /* nav_common.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2762C66DE1800BB2D25 /* nav_common.cpp */; };
+		D9F0C2AC2C66DE1800BB2D25 /* nav_common.hpp in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2772C66DE1800BB2D25 /* nav_common.hpp */; };
+		D9F0C2AD2C66DE1800BB2D25 /* nav_config.hpp in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2782C66DE1800BB2D25 /* nav_config.hpp */; };
+		D9F0C2AE2C66DE1800BB2D25 /* nav_dynlib.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2792C66DE1800BB2D25 /* nav_dynlib.cpp */; };
+		D9F0C2AF2C66DE1800BB2D25 /* nav_dynlib.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2792C66DE1800BB2D25 /* nav_dynlib.cpp */; };
+		D9F0C2B02C66DE1800BB2D25 /* nav_dynlib.hpp in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C27A2C66DE1800BB2D25 /* nav_dynlib.hpp */; };
+		D9F0C2B12C66DE1800BB2D25 /* nav_error.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C27B2C66DE1800BB2D25 /* nav_error.cpp */; };
+		D9F0C2B22C66DE1800BB2D25 /* nav_error.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C27B2C66DE1800BB2D25 /* nav_error.cpp */; };
+		D9F0C2B32C66DE1800BB2D25 /* nav_error.hpp in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C27C2C66DE1800BB2D25 /* nav_error.hpp */; };
+		D9F0C2B42C66DE1800BB2D25 /* nav_input_file_android.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C27D2C66DE1800BB2D25 /* nav_input_file_android.cpp */; };
+		D9F0C2B52C66DE1800BB2D25 /* nav_input_file_android.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C27D2C66DE1800BB2D25 /* nav_input_file_android.cpp */; };
+		D9F0C2B62C66DE1800BB2D25 /* nav_input_file.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C27E2C66DE1800BB2D25 /* nav_input_file.cpp */; };
+		D9F0C2B72C66DE1800BB2D25 /* nav_input_file.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C27E2C66DE1800BB2D25 /* nav_input_file.cpp */; };
+		D9F0C2B82C66DE1800BB2D25 /* nav_input_file.hpp in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C27F2C66DE1800BB2D25 /* nav_input_file.hpp */; };
+		D9F0C2B92C66DE1800BB2D25 /* nav_input_memory.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2802C66DE1800BB2D25 /* nav_input_memory.cpp */; };
+		D9F0C2BA2C66DE1800BB2D25 /* nav_input_memory.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2802C66DE1800BB2D25 /* nav_input_memory.cpp */; };
+		D9F0C2BB2C66DE1800BB2D25 /* nav_input_memory.hpp in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2812C66DE1800BB2D25 /* nav_input_memory.hpp */; };
+		D9F0C2BC2C66DE1800BB2D25 /* nav_internal.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2822C66DE1800BB2D25 /* nav_internal.cpp */; };
+		D9F0C2BD2C66DE1800BB2D25 /* nav_internal.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2822C66DE1800BB2D25 /* nav_internal.cpp */; };
+		D9F0C2BE2C66DE1800BB2D25 /* nav_internal.hpp in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2832C66DE1800BB2D25 /* nav_internal.hpp */; };
+		D9F0C2BF2C66DE1800BB2D25 /* nav.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2842C66DE1800BB2D25 /* nav.cpp */; };
+		D9F0C2C02C66DE1800BB2D25 /* nav.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2842C66DE1800BB2D25 /* nav.cpp */; };
+		D9F0C2C82C66DEF800BB2D25 /* navinput.h in Headers */ = {isa = PBXBuildFile; fileRef = D9F0C2C62C66DEF800BB2D25 /* navinput.h */; };
+		D9F0C2C92C66DEF800BB2D25 /* navinput.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2C72C66DEF800BB2D25 /* navinput.cpp */; };
+		D9F0C2CA2C66DEF800BB2D25 /* navinput.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D9F0C2C72C66DEF800BB2D25 /* navinput.cpp */; };
 		FA0A3A5F23366CE9001C269E /* floattypes.h in Headers */ = {isa = PBXBuildFile; fileRef = FA0A3A5D23366CE9001C269E /* floattypes.h */; };
 		FA0A3A6023366CE9001C269E /* floattypes.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA0A3A5E23366CE9001C269E /* floattypes.cpp */; };
 		FA0A3A6123366CE9001C269E /* floattypes.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA0A3A5E23366CE9001C269E /* floattypes.cpp */; };
@@ -637,8 +724,6 @@
 		FA15DFAE1F9B8D360042AB22 /* lutf8lib.c in Sources */ = {isa = PBXBuildFile; fileRef = FAAA3FD61F64B3AD00F89E99 /* lutf8lib.c */; };
 		FA15DFAF1F9B8D390042AB22 /* lstrlib.c in Sources */ = {isa = PBXBuildFile; fileRef = FAAA3FD41F64B3AD00F89E99 /* lstrlib.c */; };
 		FA15DFB01F9B8D6A0042AB22 /* wrap_Data.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA6A2B651F5F7B6B0074C308 /* wrap_Data.cpp */; };
-		FA15DFB11F9B8D820042AB22 /* OggDemuxer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FAA54AC91F91660400A8FA7B /* OggDemuxer.cpp */; };
-		FA15DFB21F9B8D840042AB22 /* TheoraVideoStream.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FAA54AC81F91660400A8FA7B /* TheoraVideoStream.cpp */; };
 		FA18CEC523D3AE6700263725 /* wrap_Buffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA18CEC323D3AE6700263725 /* wrap_Buffer.cpp */; };
 		FA18CEC623D3AE6800263725 /* wrap_Buffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA18CEC323D3AE6700263725 /* wrap_Buffer.cpp */; };
 		FA18CEC723D3AE6800263725 /* wrap_Buffer.h in Headers */ = {isa = PBXBuildFile; fileRef = FA18CEC423D3AE6700263725 /* wrap_Buffer.h */; };
@@ -723,9 +808,6 @@
 		FA24348721D401CB00B8918A /* attribute.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA24348221D401CB00B8918A /* attribute.cpp */; };
 		FA24348821D401CB00B8918A /* attribute.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA24348221D401CB00B8918A /* attribute.cpp */; };
 		FA24348921D401CB00B8918A /* pch.h in Headers */ = {isa = PBXBuildFile; fileRef = FA24348321D401CB00B8918A /* pch.h */; };
-		FA27B39D1B498151008A9DCE /* Video.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA27B38A1B498151008A9DCE /* Video.cpp */; };
-		FA27B39E1B498151008A9DCE /* Video.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA27B38A1B498151008A9DCE /* Video.cpp */; };
-		FA27B39F1B498151008A9DCE /* Video.h in Headers */ = {isa = PBXBuildFile; fileRef = FA27B38B1B498151008A9DCE /* Video.h */; };
 		FA27B3A91B498151008A9DCE /* Video.h in Headers */ = {isa = PBXBuildFile; fileRef = FA27B3931B498151008A9DCE /* Video.h */; };
 		FA27B3AA1B498151008A9DCE /* VideoStream.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA27B3941B498151008A9DCE /* VideoStream.cpp */; };
 		FA27B3AB1B498151008A9DCE /* VideoStream.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FA27B3941B498151008A9DCE /* VideoStream.cpp */; };
@@ -903,10 +985,6 @@
 		FAA3A9AE1B7D465A00CED060 /* android.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FAA3A9AC1B7D465A00CED060 /* android.cpp */; };
 		FAA3A9AF1B7D465A00CED060 /* android.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FAA3A9AC1B7D465A00CED060 /* android.cpp */; };
 		FAA3A9B01B7D465A00CED060 /* android.h in Headers */ = {isa = PBXBuildFile; fileRef = FAA3A9AD1B7D465A00CED060 /* android.h */; };
-		FAA54ACA1F91660400A8FA7B /* OggDemuxer.h in Headers */ = {isa = PBXBuildFile; fileRef = FAA54AC61F91660400A8FA7B /* OggDemuxer.h */; };
-		FAA54ACB1F91660400A8FA7B /* TheoraVideoStream.h in Headers */ = {isa = PBXBuildFile; fileRef = FAA54AC71F91660400A8FA7B /* TheoraVideoStream.h */; };
-		FAA54ACC1F91660400A8FA7B /* TheoraVideoStream.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FAA54AC81F91660400A8FA7B /* TheoraVideoStream.cpp */; };
-		FAA54ACD1F91660400A8FA7B /* OggDemuxer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = FAA54AC91F91660400A8FA7B /* OggDemuxer.cpp */; };
 		FAA627CE18E7E1560080752D /* CoreServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FAA627CD18E7E1560080752D /* CoreServices.framework */; };
 		FAAA3FD81F64B3AD00F89E99 /* lprefix.h in Headers */ = {isa = PBXBuildFile; fileRef = FAAA3FD31F64B3AD00F89E99 /* lprefix.h */; };
 		FAAA3FD91F64B3AD00F89E99 /* lstrlib.c in Sources */ = {isa = PBXBuildFile; fileRef = FAAA3FD41F64B3AD00F89E99 /* lstrlib.c */; };
@@ -1424,6 +1502,67 @@
 		D9DB6E3A2B4B41570037A1F6 /* GLSL.ext.ARM.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GLSL.ext.ARM.h; sourceTree = "<group>"; };
 		D9DB6E3B2B4B41580037A1F6 /* GLSL.ext.QCOM.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GLSL.ext.QCOM.h; sourceTree = "<group>"; };
 		D9DB6E442B4B80E80037A1F6 /* build_info.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = build_info.h; sourceTree = "<group>"; };
+		D9F0C21D2C66DDDD00BB2D25 /* wrap_SourceSync.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = wrap_SourceSync.cpp; sourceTree = "<group>"; };
+		D9F0C21E2C66DDDD00BB2D25 /* FrameSync.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = FrameSync.h; sourceTree = "<group>"; };
+		D9F0C21F2C66DDDD00BB2D25 /* DeltaSync.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DeltaSync.h; sourceTree = "<group>"; };
+		D9F0C2202C66DDDD00BB2D25 /* SourceSync.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = SourceSync.cpp; sourceTree = "<group>"; };
+		D9F0C2212C66DDDD00BB2D25 /* wrap_SourceSync.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = wrap_SourceSync.h; sourceTree = "<group>"; };
+		D9F0C2222C66DDDE00BB2D25 /* DeltaSync.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = DeltaSync.cpp; sourceTree = "<group>"; };
+		D9F0C2232C66DDDE00BB2D25 /* wrap_DeltaSync.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = wrap_DeltaSync.h; sourceTree = "<group>"; };
+		D9F0C2242C66DDDE00BB2D25 /* Video.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Video.cpp; sourceTree = "<group>"; };
+		D9F0C2252C66DDDE00BB2D25 /* FrameSync.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = FrameSync.cpp; sourceTree = "<group>"; };
+		D9F0C2262C66DDDE00BB2D25 /* wrap_FrameSync.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = wrap_FrameSync.h; sourceTree = "<group>"; };
+		D9F0C2272C66DDDE00BB2D25 /* wrap_DeltaSync.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = wrap_DeltaSync.cpp; sourceTree = "<group>"; };
+		D9F0C2282C66DDDE00BB2D25 /* NAVVideoStream.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = NAVVideoStream.cpp; sourceTree = "<group>"; };
+		D9F0C2292C66DDDE00BB2D25 /* NAVVideoStream.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = NAVVideoStream.h; sourceTree = "<group>"; };
+		D9F0C22A2C66DDDE00BB2D25 /* OggDemuxer.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = OggDemuxer.cpp; sourceTree = "<group>"; };
+		D9F0C22B2C66DDDE00BB2D25 /* OggDemuxer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OggDemuxer.h; sourceTree = "<group>"; };
+		D9F0C22C2C66DDDE00BB2D25 /* TheoraVideoStream.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = TheoraVideoStream.cpp; sourceTree = "<group>"; };
+		D9F0C22D2C66DDDE00BB2D25 /* TheoraVideoStream.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TheoraVideoStream.h; sourceTree = "<group>"; };
+		D9F0C22E2C66DDDE00BB2D25 /* Video.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Video.cpp; sourceTree = "<group>"; };
+		D9F0C22F2C66DDDE00BB2D25 /* Video.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Video.h; sourceTree = "<group>"; };
+		D9F0C2312C66DDDE00BB2D25 /* wrap_FrameSync.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = wrap_FrameSync.cpp; sourceTree = "<group>"; };
+		D9F0C2322C66DDDE00BB2D25 /* SourceSync.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SourceSync.h; sourceTree = "<group>"; };
+		D9F0C2532C66DE0100BB2D25 /* NAVDecoder.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = NAVDecoder.cpp; sourceTree = "<group>"; };
+		D9F0C2542C66DE0100BB2D25 /* NAVDecoder.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = NAVDecoder.h; sourceTree = "<group>"; };
+		D9F0C25E2C66DE1800BB2D25 /* audioformat.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = audioformat.h; sourceTree = "<group>"; };
+		D9F0C25F2C66DE1800BB2D25 /* input.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = input.h; sourceTree = "<group>"; };
+		D9F0C2602C66DE1800BB2D25 /* nav.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = nav.h; sourceTree = "<group>"; };
+		D9F0C2612C66DE1800BB2D25 /* types.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = types.h; sourceTree = "<group>"; };
+		D9F0C2652C66DE1800BB2D25 /* nav_backend_androidndk_funcptr.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = nav_backend_androidndk_funcptr.h; sourceTree = "<group>"; };
+		D9F0C2662C66DE1800BB2D25 /* nav_backend_androidndk_internal.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = nav_backend_androidndk_internal.hpp; sourceTree = "<group>"; };
+		D9F0C2672C66DE1800BB2D25 /* nav_backend_androidndk.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = nav_backend_androidndk.cpp; sourceTree = "<group>"; };
+		D9F0C2682C66DE1800BB2D25 /* nav_backend_androidndk.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = nav_backend_androidndk.hpp; sourceTree = "<group>"; };
+		D9F0C2692C66DE1800BB2D25 /* nav_backend_ffmpeg_funcptr.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = nav_backend_ffmpeg_funcptr.h; sourceTree = "<group>"; };
+		D9F0C26A2C66DE1800BB2D25 /* nav_backend_ffmpeg_internal.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = nav_backend_ffmpeg_internal.hpp; sourceTree = "<group>"; };
+		D9F0C26B2C66DE1800BB2D25 /* nav_backend_ffmpeg.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = nav_backend_ffmpeg.cpp; sourceTree = "<group>"; };
+		D9F0C26C2C66DE1800BB2D25 /* nav_backend_ffmpeg.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = nav_backend_ffmpeg.hpp; sourceTree = "<group>"; };
+		D9F0C26D2C66DE1800BB2D25 /* nav_backend_gstreamer_funcptr.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = nav_backend_gstreamer_funcptr.h; sourceTree = "<group>"; };
+		D9F0C26E2C66DE1800BB2D25 /* nav_backend_gstreamer_internal.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = nav_backend_gstreamer_internal.hpp; sourceTree = "<group>"; };
+		D9F0C26F2C66DE1800BB2D25 /* nav_backend_gstreamer.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = nav_backend_gstreamer.cpp; sourceTree = "<group>"; };
+		D9F0C2702C66DE1800BB2D25 /* nav_backend_gstreamer.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = nav_backend_gstreamer.hpp; sourceTree = "<group>"; };
+		D9F0C2712C66DE1800BB2D25 /* nav_backend_mediafoundation_internal.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = nav_backend_mediafoundation_internal.hpp; sourceTree = "<group>"; };
+		D9F0C2722C66DE1800BB2D25 /* nav_backend_mediafoundation.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = nav_backend_mediafoundation.cpp; sourceTree = "<group>"; };
+		D9F0C2732C66DE1800BB2D25 /* nav_backend_mediafoundation.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = nav_backend_mediafoundation.hpp; sourceTree = "<group>"; };
+		D9F0C2742C66DE1800BB2D25 /* nav_backend.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = nav_backend.cpp; sourceTree = "<group>"; };
+		D9F0C2752C66DE1800BB2D25 /* nav_backend.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = nav_backend.hpp; sourceTree = "<group>"; };
+		D9F0C2762C66DE1800BB2D25 /* nav_common.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = nav_common.cpp; sourceTree = "<group>"; };
+		D9F0C2772C66DE1800BB2D25 /* nav_common.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = nav_common.hpp; sourceTree = "<group>"; };
+		D9F0C2782C66DE1800BB2D25 /* nav_config.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = nav_config.hpp; sourceTree = "<group>"; };
+		D9F0C2792C66DE1800BB2D25 /* nav_dynlib.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = nav_dynlib.cpp; sourceTree = "<group>"; };
+		D9F0C27A2C66DE1800BB2D25 /* nav_dynlib.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = nav_dynlib.hpp; sourceTree = "<group>"; };
+		D9F0C27B2C66DE1800BB2D25 /* nav_error.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = nav_error.cpp; sourceTree = "<group>"; };
+		D9F0C27C2C66DE1800BB2D25 /* nav_error.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = nav_error.hpp; sourceTree = "<group>"; };
+		D9F0C27D2C66DE1800BB2D25 /* nav_input_file_android.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = nav_input_file_android.cpp; sourceTree = "<group>"; };
+		D9F0C27E2C66DE1800BB2D25 /* nav_input_file.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = nav_input_file.cpp; sourceTree = "<group>"; };
+		D9F0C27F2C66DE1800BB2D25 /* nav_input_file.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = nav_input_file.hpp; sourceTree = "<group>"; };
+		D9F0C2802C66DE1800BB2D25 /* nav_input_memory.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = nav_input_memory.cpp; sourceTree = "<group>"; };
+		D9F0C2812C66DE1800BB2D25 /* nav_input_memory.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = nav_input_memory.hpp; sourceTree = "<group>"; };
+		D9F0C2822C66DE1800BB2D25 /* nav_internal.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = nav_internal.cpp; sourceTree = "<group>"; };
+		D9F0C2832C66DE1800BB2D25 /* nav_internal.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = nav_internal.hpp; sourceTree = "<group>"; };
+		D9F0C2842C66DE1800BB2D25 /* nav.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = nav.cpp; sourceTree = "<group>"; };
+		D9F0C2C62C66DEF800BB2D25 /* navinput.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = navinput.h; sourceTree = "<group>"; };
+		D9F0C2C72C66DEF800BB2D25 /* navinput.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = navinput.cpp; sourceTree = "<group>"; };
 		FA08F5AE16C7525600F007B5 /* liblove-macosx.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = "liblove-macosx.plist"; path = "macosx/liblove-macosx.plist"; sourceTree = "<group>"; };
 		FA0A3A5D23366CE9001C269E /* floattypes.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = floattypes.h; sourceTree = "<group>"; };
 		FA0A3A5E23366CE9001C269E /* floattypes.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = floattypes.cpp; sourceTree = "<group>"; };
@@ -1872,8 +2011,6 @@
 		FA24348121D401CB00B8918A /* attribute.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = attribute.h; sourceTree = "<group>"; };
 		FA24348221D401CB00B8918A /* attribute.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = attribute.cpp; sourceTree = "<group>"; };
 		FA24348321D401CB00B8918A /* pch.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = pch.h; sourceTree = "<group>"; };
-		FA27B38A1B498151008A9DCE /* Video.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Video.cpp; sourceTree = "<group>"; };
-		FA27B38B1B498151008A9DCE /* Video.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Video.h; sourceTree = "<group>"; };
 		FA27B3931B498151008A9DCE /* Video.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Video.h; sourceTree = "<group>"; };
 		FA27B3941B498151008A9DCE /* VideoStream.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = VideoStream.cpp; sourceTree = "<group>"; };
 		FA27B3951B498151008A9DCE /* VideoStream.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = VideoStream.h; sourceTree = "<group>"; };
@@ -2000,10 +2137,6 @@
 		FA9D8DDF1DEF843D002CD881 /* Image.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Image.cpp; sourceTree = "<group>"; };
 		FAA3A9AC1B7D465A00CED060 /* android.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; lineEnding = 0; path = android.cpp; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.cpp; };
 		FAA3A9AD1B7D465A00CED060 /* android.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; lineEnding = 0; path = android.h; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.objcpp; };
-		FAA54AC61F91660400A8FA7B /* OggDemuxer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OggDemuxer.h; sourceTree = "<group>"; };
-		FAA54AC71F91660400A8FA7B /* TheoraVideoStream.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TheoraVideoStream.h; sourceTree = "<group>"; };
-		FAA54AC81F91660400A8FA7B /* TheoraVideoStream.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = TheoraVideoStream.cpp; sourceTree = "<group>"; };
-		FAA54AC91F91660400A8FA7B /* OggDemuxer.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = OggDemuxer.cpp; sourceTree = "<group>"; };
 		FAA627CD18E7E1560080752D /* CoreServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreServices.framework; path = System/Library/Frameworks/CoreServices.framework; sourceTree = SDKROOT; };
 		FAAA3FD31F64B3AD00F89E99 /* lprefix.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = lprefix.h; sourceTree = "<group>"; };
 		FAAA3FD41F64B3AD00F89E99 /* lstrlib.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = lstrlib.c; sourceTree = "<group>"; };
@@ -2386,6 +2519,88 @@
 			path = ResourceLimits;
 			sourceTree = "<group>";
 		};
+		D9F0C2302C66DDDE00BB2D25 /* motion */ = {
+			isa = PBXGroup;
+			children = (
+				D9F0C2282C66DDDE00BB2D25 /* NAVVideoStream.cpp */,
+				D9F0C2292C66DDDE00BB2D25 /* NAVVideoStream.h */,
+				D9F0C22A2C66DDDE00BB2D25 /* OggDemuxer.cpp */,
+				D9F0C22B2C66DDDE00BB2D25 /* OggDemuxer.h */,
+				D9F0C22C2C66DDDE00BB2D25 /* TheoraVideoStream.cpp */,
+				D9F0C22D2C66DDDE00BB2D25 /* TheoraVideoStream.h */,
+				D9F0C22E2C66DDDE00BB2D25 /* Video.cpp */,
+				D9F0C22F2C66DDDE00BB2D25 /* Video.h */,
+			);
+			path = motion;
+			sourceTree = "<group>";
+		};
+		D9F0C2622C66DE1800BB2D25 /* nav */ = {
+			isa = PBXGroup;
+			children = (
+				D9F0C25E2C66DE1800BB2D25 /* audioformat.h */,
+				D9F0C25F2C66DE1800BB2D25 /* input.h */,
+				D9F0C2602C66DE1800BB2D25 /* nav.h */,
+				D9F0C2612C66DE1800BB2D25 /* types.h */,
+			);
+			path = nav;
+			sourceTree = "<group>";
+		};
+		D9F0C2632C66DE1800BB2D25 /* include */ = {
+			isa = PBXGroup;
+			children = (
+				D9F0C2622C66DE1800BB2D25 /* nav */,
+			);
+			path = include;
+			sourceTree = "<group>";
+		};
+		D9F0C2852C66DE1800BB2D25 /* src */ = {
+			isa = PBXGroup;
+			children = (
+				D9F0C2652C66DE1800BB2D25 /* nav_backend_androidndk_funcptr.h */,
+				D9F0C2662C66DE1800BB2D25 /* nav_backend_androidndk_internal.hpp */,
+				D9F0C2672C66DE1800BB2D25 /* nav_backend_androidndk.cpp */,
+				D9F0C2682C66DE1800BB2D25 /* nav_backend_androidndk.hpp */,
+				D9F0C2692C66DE1800BB2D25 /* nav_backend_ffmpeg_funcptr.h */,
+				D9F0C26A2C66DE1800BB2D25 /* nav_backend_ffmpeg_internal.hpp */,
+				D9F0C26B2C66DE1800BB2D25 /* nav_backend_ffmpeg.cpp */,
+				D9F0C26C2C66DE1800BB2D25 /* nav_backend_ffmpeg.hpp */,
+				D9F0C26D2C66DE1800BB2D25 /* nav_backend_gstreamer_funcptr.h */,
+				D9F0C26E2C66DE1800BB2D25 /* nav_backend_gstreamer_internal.hpp */,
+				D9F0C26F2C66DE1800BB2D25 /* nav_backend_gstreamer.cpp */,
+				D9F0C2702C66DE1800BB2D25 /* nav_backend_gstreamer.hpp */,
+				D9F0C2712C66DE1800BB2D25 /* nav_backend_mediafoundation_internal.hpp */,
+				D9F0C2722C66DE1800BB2D25 /* nav_backend_mediafoundation.cpp */,
+				D9F0C2732C66DE1800BB2D25 /* nav_backend_mediafoundation.hpp */,
+				D9F0C2742C66DE1800BB2D25 /* nav_backend.cpp */,
+				D9F0C2752C66DE1800BB2D25 /* nav_backend.hpp */,
+				D9F0C2762C66DE1800BB2D25 /* nav_common.cpp */,
+				D9F0C2772C66DE1800BB2D25 /* nav_common.hpp */,
+				D9F0C2782C66DE1800BB2D25 /* nav_config.hpp */,
+				D9F0C2792C66DE1800BB2D25 /* nav_dynlib.cpp */,
+				D9F0C27A2C66DE1800BB2D25 /* nav_dynlib.hpp */,
+				D9F0C27B2C66DE1800BB2D25 /* nav_error.cpp */,
+				D9F0C27C2C66DE1800BB2D25 /* nav_error.hpp */,
+				D9F0C27D2C66DE1800BB2D25 /* nav_input_file_android.cpp */,
+				D9F0C27E2C66DE1800BB2D25 /* nav_input_file.cpp */,
+				D9F0C27F2C66DE1800BB2D25 /* nav_input_file.hpp */,
+				D9F0C2802C66DE1800BB2D25 /* nav_input_memory.cpp */,
+				D9F0C2812C66DE1800BB2D25 /* nav_input_memory.hpp */,
+				D9F0C2822C66DE1800BB2D25 /* nav_internal.cpp */,
+				D9F0C2832C66DE1800BB2D25 /* nav_internal.hpp */,
+				D9F0C2842C66DE1800BB2D25 /* nav.cpp */,
+			);
+			path = src;
+			sourceTree = "<group>";
+		};
+		D9F0C28B2C66DE1800BB2D25 /* nav */ = {
+			isa = PBXGroup;
+			children = (
+				D9F0C2632C66DE1800BB2D25 /* include */,
+				D9F0C2852C66DE1800BB2D25 /* src */,
+			);
+			path = nav;
+			sourceTree = "<group>";
+		};
 		FA08F5AC16C751BA00F007B5 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
@@ -2428,6 +2643,8 @@
 				FA56AA371FAFF02000A43D5F /* memory.h */,
 				FA0B79061A958E3B000E1D17 /* Module.cpp */,
 				FA0B79071A958E3B000E1D17 /* Module.h */,
+				D9F0C2C72C66DEF800BB2D25 /* navinput.cpp */,
+				D9F0C2C62C66DEF800BB2D25 /* navinput.h */,
 				FA0B79081A958E3B000E1D17 /* Object.cpp */,
 				FA0B79091A958E3B000E1D17 /* Object.h */,
 				FAF1889C1E9DA834008C1479 /* Optional.h */,
@@ -2459,6 +2676,7 @@
 		FA0B794D1A958EA3000E1D17 /* libraries */ = {
 			isa = PBXGroup;
 			children = (
+				D9F0C28B2C66DE1800BB2D25 /* nav */,
 				FABDA9102552448200B5C523 /* box2d */,
 				FA0B79B41A958EA3000E1D17 /* ddsparse */,
 				FA522D5023F9FF2A0059EE3C /* dr */,
@@ -3280,6 +3498,8 @@
 				FA0B7C871A95902C000E1D17 /* ModPlugDecoder.h */,
 				FA522D4B23F9FE370059EE3C /* MP3Decoder.cpp */,
 				FA522D4C23F9FE380059EE3C /* MP3Decoder.h */,
+				D9F0C2532C66DE0100BB2D25 /* NAVDecoder.cpp */,
+				D9F0C2542C66DE0100BB2D25 /* NAVDecoder.h */,
 				FA0B7C8A1A95902C000E1D17 /* Sound.cpp */,
 				FA0B7C8B1A95902C000E1D17 /* Sound.h */,
 				FA0B7C8C1A95902C000E1D17 /* VorbisDecoder.cpp */,
@@ -3505,29 +3725,29 @@
 		FA27B3881B498151008A9DCE /* video */ = {
 			isa = PBXGroup;
 			children = (
-				FA27B3891B498151008A9DCE /* theora */,
+				D9F0C2222C66DDDE00BB2D25 /* DeltaSync.cpp */,
+				D9F0C21F2C66DDDD00BB2D25 /* DeltaSync.h */,
+				D9F0C2252C66DDDE00BB2D25 /* FrameSync.cpp */,
+				D9F0C21E2C66DDDD00BB2D25 /* FrameSync.h */,
+				D9F0C2302C66DDDE00BB2D25 /* motion */,
+				D9F0C2202C66DDDD00BB2D25 /* SourceSync.cpp */,
+				D9F0C2322C66DDDE00BB2D25 /* SourceSync.h */,
+				D9F0C2242C66DDDE00BB2D25 /* Video.cpp */,
 				FA27B3931B498151008A9DCE /* Video.h */,
 				FA27B3941B498151008A9DCE /* VideoStream.cpp */,
 				FA27B3951B498151008A9DCE /* VideoStream.h */,
+				D9F0C2272C66DDDE00BB2D25 /* wrap_DeltaSync.cpp */,
+				D9F0C2232C66DDDE00BB2D25 /* wrap_DeltaSync.h */,
+				D9F0C2312C66DDDE00BB2D25 /* wrap_FrameSync.cpp */,
+				D9F0C2262C66DDDE00BB2D25 /* wrap_FrameSync.h */,
+				D9F0C21D2C66DDDD00BB2D25 /* wrap_SourceSync.cpp */,
+				D9F0C2212C66DDDD00BB2D25 /* wrap_SourceSync.h */,
 				FA27B39B1B498151008A9DCE /* wrap_Video.cpp */,
 				FA27B39C1B498151008A9DCE /* wrap_Video.h */,
 				FA27B3B91B4985BF008A9DCE /* wrap_VideoStream.cpp */,
 				FA27B3BA1B4985BF008A9DCE /* wrap_VideoStream.h */,
 			);
 			path = video;
-			sourceTree = "<group>";
-		};
-		FA27B3891B498151008A9DCE /* theora */ = {
-			isa = PBXGroup;
-			children = (
-				FAA54AC91F91660400A8FA7B /* OggDemuxer.cpp */,
-				FAA54AC61F91660400A8FA7B /* OggDemuxer.h */,
-				FAA54AC81F91660400A8FA7B /* TheoraVideoStream.cpp */,
-				FAA54AC71F91660400A8FA7B /* TheoraVideoStream.h */,
-				FA27B38A1B498151008A9DCE /* Video.cpp */,
-				FA27B38B1B498151008A9DCE /* Video.h */,
-			);
-			path = theora;
 			sourceTree = "<group>";
 		};
 		FA4F2B761DE0125B00CA37D7 /* xxHash */ = {
@@ -4065,6 +4285,7 @@
 			files = (
 				FAF6C9F623C2DE2900D7B5BC /* hex_float.h in Headers */,
 				FADF54221E3DA52C00012CC0 /* wrap_ParticleSystem.h in Headers */,
+				D9F0C2922C66DE1800BB2D25 /* types.h in Headers */,
 				FAF6C9EE23C2DE2900D7B5BC /* bitutils.h in Headers */,
 				217DFC0A1D9F6D490055D849 /* unix.h in Headers */,
 				FA0B7D7E1A95902C000E1D17 /* Texture.h in Headers */,
@@ -4110,9 +4331,11 @@
 				FA76344C1E28722A0066EF9E /* StreamBuffer.h in Headers */,
 				FA6A2B761F60B6710074C308 /* ByteData.h in Headers */,
 				217DFBF31D9F6D490055D849 /* mime.h in Headers */,
+				D9F0C23C2C66DDDE00BB2D25 /* wrap_DeltaSync.h in Headers */,
 				FA0B7B361A958EA3000E1D17 /* wuff_convert.h in Headers */,
 				FA0B7CDE1A95902C000E1D17 /* Source.h in Headers */,
 				FA0B7E141A95902C000E1D17 /* GearJoint.h in Headers */,
+				D9F0C2942C66DE1800BB2D25 /* nav_backend_androidndk_funcptr.h in Headers */,
 				FAAA3FDA1F64B3AD00F89E99 /* lstrlib.h in Headers */,
 				FABDA98C2552448300B5C523 /* b2_contact_solver.h in Headers */,
 				FA0B7E9F1A95902C000E1D17 /* WaveDecoder.h in Headers */,
@@ -4138,6 +4361,7 @@
 				FAB2D5AC1AABDD8A008224A4 /* TrueTypeRasterizer.h in Headers */,
 				FABDAA042552448300B5C523 /* b2_edge_shape.h in Headers */,
 				FAF140C41E20934C00F898D2 /* ShaderLang.h in Headers */,
+				D9F0C2AD2C66DE1800BB2D25 /* nav_config.hpp in Headers */,
 				FA1E887F1DF363CD00E808AA /* Filter.h in Headers */,
 				FA27B3C21B4985BF008A9DCE /* wrap_VideoStream.h in Headers */,
 				FAF140621E20934C00F898D2 /* ShHandle.h in Headers */,
@@ -4151,6 +4375,7 @@
 				FA0B7D571A95902C000E1D17 /* Buffer.h in Headers */,
 				FAF140AB1E20934C00F898D2 /* SymbolTable.h in Headers */,
 				FA18CF1E23DCF67900263725 /* external_interface.h in Headers */,
+				D9F0C2BB2C66DE1800BB2D25 /* nav_input_memory.hpp in Headers */,
 				FA0B7ED71A95902D000E1D17 /* Timer.h in Headers */,
 				FA0B7AC31A958EA3000E1D17 /* list.h in Headers */,
 				FA0B7B2D1A958EA3000E1D17 /* core.h in Headers */,
@@ -4170,22 +4395,24 @@
 				FA0B7EDD1A95902D000E1D17 /* Touch.h in Headers */,
 				FA0B7EDE1A95902D000E1D17 /* Touch.h in Headers */,
 				FAC7CD861FE35E95006A60C7 /* physfs.h in Headers */,
+				D9F0C29D2C66DE1800BB2D25 /* nav_backend_ffmpeg.hpp in Headers */,
 				D9DAB92C2961F10000C64820 /* TextShaper.h in Headers */,
 				FAF6C9E523C2DE2900D7B5BC /* spirv.hpp in Headers */,
 				FA522D4F23F9FE380059EE3C /* MP3Decoder.h in Headers */,
 				217DFBEE1D9F6D490055D849 /* luasocket.h in Headers */,
 				FACA02F31F5E396B0084B28F /* HashFunction.h in Headers */,
+				D9F0C2492C66DDDE00BB2D25 /* OggDemuxer.h in Headers */,
 				FA0B7ED01A95902C000E1D17 /* wrap_LuaThread.h in Headers */,
 				FAF6C9E923C2DE2900D7B5BC /* GLSL.ext.KHR.h in Headers */,
 				FA0B7CE41A95902C000E1D17 /* wrap_Audio.h in Headers */,
 				FADF540F1E3D7CDD00012CC0 /* wrap_Video.h in Headers */,
-				FAA54ACA1F91660400A8FA7B /* OggDemuxer.h in Headers */,
 				FA0B79491A958E3B000E1D17 /* version.h in Headers */,
 				FAF140581E20934C00F898D2 /* BaseTypes.h in Headers */,
 				FA18CED723DBC6E000263725 /* Shader.h in Headers */,
 				FABDA9E32552448300B5C523 /* b2_draw.h in Headers */,
 				FA0B7B2B1A958EA3000E1D17 /* stb_image.h in Headers */,
 				FAF140AE1E20934C00F898D2 /* Versions.h in Headers */,
+				D9F0C2BE2C66DE1800BB2D25 /* nav_internal.hpp in Headers */,
 				FA0B7CD21A95902C000E1D17 /* Audio.h in Headers */,
 				FA0B79421A958E3B000E1D17 /* utf8.h in Headers */,
 				FA0B7D171A95902C000E1D17 /* Font.h in Headers */,
@@ -4197,6 +4424,7 @@
 				FA0B7DD21A95902C000E1D17 /* love.h in Headers */,
 				FAC8E54523AC832A007B07C8 /* NativeFile.h in Headers */,
 				FA6A2B6F1F5F845F0074C308 /* wrap_DataView.h in Headers */,
+				D9F0C2B82C66DE1800BB2D25 /* nav_input_file.hpp in Headers */,
 				FA18CF3D23DCF67900263725 /* GLSL.std.450.h in Headers */,
 				FA18CF3E23DCF67900263725 /* spirv_cross_containers.hpp in Headers */,
 				FA18CF1B23DCF67900263725 /* thread_group.hpp in Headers */,
@@ -4239,11 +4467,14 @@
 				FA0B7DE11A95902C000E1D17 /* wrap_Math.h in Headers */,
 				FA0B7D1A1A95902C000E1D17 /* TrueTypeRasterizer.h in Headers */,
 				FA0B7EA81A95902C000E1D17 /* wrap_Decoder.h in Headers */,
+				D9F0C2522C66DDDE00BB2D25 /* SourceSync.h in Headers */,
 				FA0B7AC51A958EA3000E1D17 /* time.h in Headers */,
 				FA0B793E1A958E3B000E1D17 /* StringMap.h in Headers */,
 				FA18CF1623DCF67900263725 /* spirv_parser.hpp in Headers */,
 				FA0B793A1A958E3B000E1D17 /* Reference.h in Headers */,
+				D9F0C29F2C66DE1800BB2D25 /* nav_backend_gstreamer_internal.hpp in Headers */,
 				FACA02F51F5E396B0084B28F /* wrap_CompressedData.h in Headers */,
+				D9F0C2B02C66DE1800BB2D25 /* nav_dynlib.hpp in Headers */,
 				FABDA9DF2552448300B5C523 /* b2_world.h in Headers */,
 				FA0B7DCC1A95902C000E1D17 /* Keyboard.h in Headers */,
 				FA620A341AA2F8DB005DB4C2 /* wrap_Quad.h in Headers */,
@@ -4262,8 +4493,11 @@
 				FA18CEC723D3AE6800263725 /* wrap_Buffer.h in Headers */,
 				FA0B7E291A95902C000E1D17 /* PulleyJoint.h in Headers */,
 				FA6BDE5C1F31725300786805 /* Color.h in Headers */,
+				D9F0C2902C66DE1800BB2D25 /* input.h in Headers */,
+				D9F0C2412C66DDDE00BB2D25 /* wrap_FrameSync.h in Headers */,
 				FA0B7E231A95902C000E1D17 /* PolygonShape.h in Headers */,
 				FA0B791E1A958E3B000E1D17 /* config.h in Headers */,
+				D9F0C2982C66DE1800BB2D25 /* nav_backend_androidndk.hpp in Headers */,
 				FAB17BE81ABFAA9000F9BA27 /* lz4.h in Headers */,
 				FA0B7E6B1A95902C000E1D17 /* wrap_PulleyJoint.h in Headers */,
 				FAFEB29B28F210550025D7D0 /* unixdgram.h in Headers */,
@@ -4272,11 +4506,13 @@
 				FA6A2B661F5F7B6B0074C308 /* wrap_Data.h in Headers */,
 				FA18CEE423DBC6E000263725 /* Graphics.h in Headers */,
 				217DFBE81D9F6D490055D849 /* inet.h in Headers */,
+				D9F0C2AC2C66DE1800BB2D25 /* nav_common.hpp in Headers */,
 				FADF53FA1E3C7ACD00012CC0 /* Buffer.h in Headers */,
 				FA18CF4223DCF67900263725 /* spirv_glsl.hpp in Headers */,
 				FA18CF1C23DCF67900263725 /* internal_interface.hpp in Headers */,
 				FA18CF2523DCF67900263725 /* spirv_cross_parsed_ir.hpp in Headers */,
 				FA0B7EEA1A95902D000E1D17 /* wrap_Window.h in Headers */,
+				D9F0C2A22C66DE1800BB2D25 /* nav_backend_gstreamer.hpp in Headers */,
 				FA1557C01CE90A2C00AFF582 /* tinyexr.h in Headers */,
 				FA0B7E381A95902C000E1D17 /* WheelJoint.h in Headers */,
 				D943E5902A24D56000D80361 /* PhysfsIo.h in Headers */,
@@ -4291,16 +4527,17 @@
 				FA0B7CD51A95902C000E1D17 /* Source.h in Headers */,
 				217DFBFD1D9F6D490055D849 /* smtp.lua.h in Headers */,
 				FABDA9772552448200B5C523 /* b2_shape.h in Headers */,
-				FA27B39F1B498151008A9DCE /* Video.h in Headers */,
 				FA94727A27A6EE1B00817677 /* Connection.h in Headers */,
 				FA18CF3223DCF67900263725 /* spirv_cfg.hpp in Headers */,
 				FA94727F27A6EE1B00817677 /* config.h in Headers */,
 				217DFC041D9F6D490055D849 /* timeout.h in Headers */,
+				D9F0C28F2C66DE1800BB2D25 /* audioformat.h in Headers */,
 				FA0B7E7A1A95902C000E1D17 /* wrap_WheelJoint.h in Headers */,
 				FA0B7DD81A95902C000E1D17 /* MathModule.h in Headers */,
 				217DFBDA1D9F6D490055D849 /* auxiliar.h in Headers */,
 				FA0B7EC71A95902C000E1D17 /* ThreadModule.h in Headers */,
 				FA4F2BAD1DE1E37000CA37D7 /* RecordingDevice.h in Headers */,
+				D9F0C29A2C66DE1800BB2D25 /* nav_backend_ffmpeg_internal.hpp in Headers */,
 				FABDA9CE2552448300B5C523 /* b2_time_of_impact.h in Headers */,
 				FA0B792B1A958E3B000E1D17 /* Matrix.h in Headers */,
 				FA0B7DA41A95902C000E1D17 /* PKMHandler.h in Headers */,
@@ -4327,12 +4564,12 @@
 				FA18CF2123DCF67900263725 /* spirv.hpp in Headers */,
 				FA0A3A5F23366CE9001C269E /* floattypes.h in Headers */,
 				FADF54091E3D78F700012CC0 /* Video.h in Headers */,
-				FAA54ACB1F91660400A8FA7B /* TheoraVideoStream.h in Headers */,
 				FA0B7DD51A95902C000E1D17 /* BezierCurve.h in Headers */,
 				FA0B79271A958E3B000E1D17 /* int.h in Headers */,
 				FA0B7E531A95902C000E1D17 /* wrap_FrictionJoint.h in Headers */,
 				FA0B7EB71A95902C000E1D17 /* wrap_System.h in Headers */,
 				FA18CF1923DCF67900263725 /* spirv_cross_error_handling.hpp in Headers */,
+				D9F0C2352C66DDDE00BB2D25 /* FrameSync.h in Headers */,
 				FABDAA032552448300B5C523 /* b2_contact_manager.h in Headers */,
 				FA27B3A91B498151008A9DCE /* Video.h in Headers */,
 				FAAA3FD81F64B3AD00F89E99 /* lprefix.h in Headers */,
@@ -4350,6 +4587,7 @@
 				FA0B7DFF1A95902C000E1D17 /* ChainShape.h in Headers */,
 				FA18CEE023DBC6E000263725 /* StreamBuffer.h in Headers */,
 				FA0B7E4D1A95902C000E1D17 /* wrap_EdgeShape.h in Headers */,
+				D9F0C2B32C66DE1800BB2D25 /* nav_error.hpp in Headers */,
 				FA522D5423F9FF2A0059EE3C /* dr_flac.h in Headers */,
 				FAF1405F1E20934C00F898D2 /* ResourceLimits.h in Headers */,
 				FA0B7DDB1A95902C000E1D17 /* RandomGenerator.h in Headers */,
@@ -4370,6 +4608,7 @@
 				FAF1406B1E20934C00F898D2 /* glslang_tab.cpp.h in Headers */,
 				217DFBF71D9F6D490055D849 /* options.h in Headers */,
 				FA94728327A6EE1B00817677 /* HTTPRequest.h in Headers */,
+				D9F0C2C82C66DEF800BB2D25 /* navinput.h in Headers */,
 				FAF6C9ED23C2DE2900D7B5BC /* spvIR.h in Headers */,
 				FA0B7E3B1A95902C000E1D17 /* World.h in Headers */,
 				FA0B7DC31A95902C000E1D17 /* wrap_Joystick.h in Headers */,
@@ -4379,9 +4618,11 @@
 				FACA06AF293EE5CD001A2557 /* Sensor.h in Headers */,
 				FA4F2BE61DE6650600CA37D7 /* wrap_Transform.h in Headers */,
 				FA0B7EE71A95902D000E1D17 /* Window.h in Headers */,
+				D9F0C2362C66DDDE00BB2D25 /* DeltaSync.h in Headers */,
 				FA0B7E651A95902C000E1D17 /* wrap_PolygonShape.h in Headers */,
 				FA18CEE323DBC6E000263725 /* Metal.h in Headers */,
 				FABDA9952552448300B5C523 /* b2_edge_polygon_contact.h in Headers */,
+				D9F0C2392C66DDDE00BB2D25 /* wrap_SourceSync.h in Headers */,
 				FA94729D27A6F9AD00817677 /* NSURLClient.h in Headers */,
 				FA0B7AC91A958EA3000E1D17 /* win32.h in Headers */,
 				FABDA9B92552448300B5C523 /* b2_common.h in Headers */,
@@ -4405,6 +4646,7 @@
 				FA0B7D841A95902C000E1D17 /* CompressedImageData.h in Headers */,
 				FACA02ED1F5E396B0084B28F /* CompressedData.h in Headers */,
 				FAF1407E1E20934C00F898D2 /* LiveTraverser.h in Headers */,
+				D9F0C2A62C66DE1800BB2D25 /* nav_backend_mediafoundation.hpp in Headers */,
 				FA0B7D231A95902C000E1D17 /* Rasterizer.h in Headers */,
 				FABDA9B72552448300B5C523 /* b2_island.h in Headers */,
 				FAD19A191DFF8CA200D5398A /* ImageDataBase.h in Headers */,
@@ -4412,9 +4654,12 @@
 				FA0B7CDB1A95902C000E1D17 /* Pool.h in Headers */,
 				FA0B7D0B1A95902C000E1D17 /* wrap_FileData.h in Headers */,
 				FA0B7DF91A95902C000E1D17 /* Body.h in Headers */,
+				D9F0C2A32C66DE1800BB2D25 /* nav_backend_mediafoundation_internal.hpp in Headers */,
 				FA0B7DB91A95902C000E1D17 /* Joystick.h in Headers */,
 				FA4F2BB11DE1E37B00CA37D7 /* RecordingDevice.h in Headers */,
+				D9F0C2462C66DDDE00BB2D25 /* NAVVideoStream.h in Headers */,
 				FA0B7E2C1A95902C000E1D17 /* RevoluteJoint.h in Headers */,
+				D9F0C2572C66DE0100BB2D25 /* NAVDecoder.h in Headers */,
 				FA8951A41AA2EDF300EC385A /* wrap_Event.h in Headers */,
 				FA0B7B2A1A958EA3000E1D17 /* simplexnoise1234.h in Headers */,
 				FA9D53AE1F5307E900125C6B /* Deprecations.h in Headers */,
@@ -4423,6 +4668,8 @@
 				FA0B7CF91A95902C000E1D17 /* FileData.h in Headers */,
 				FA0B7DA71A95902C000E1D17 /* PNGHandler.h in Headers */,
 				FA0B7AC41A958EA3000E1D17 /* protocol.h in Headers */,
+				D9F0C2992C66DE1800BB2D25 /* nav_backend_ffmpeg_funcptr.h in Headers */,
+				D9F0C29E2C66DE1800BB2D25 /* nav_backend_gstreamer_funcptr.h in Headers */,
 				FABDA97F2552448200B5C523 /* b2_polygon_circle_contact.h in Headers */,
 				FAF140A21E20934C00F898D2 /* RemoveTree.h in Headers */,
 				FAF6C9DE23C2DE2900D7B5BC /* SpvTools.h in Headers */,
@@ -4456,6 +4703,7 @@
 				FA57FB9A1AE1993600F2AD6D /* noise1234.h in Headers */,
 				FACA02EF1F5E396B0084B28F /* Compressor.h in Headers */,
 				FA0B7CED1A95902C000E1D17 /* Event.h in Headers */,
+				D9F0C24C2C66DDDE00BB2D25 /* TheoraVideoStream.h in Headers */,
 				FA0B7D811A95902C000E1D17 /* Volatile.h in Headers */,
 				FA0B7B2E1A958EA3000E1D17 /* unchecked.h in Headers */,
 				FA0B7D081A95902C000E1D17 /* wrap_File.h in Headers */,
@@ -4492,8 +4740,10 @@
 				FAF1409C1E20934C00F898D2 /* propagateNoContraction.h in Headers */,
 				FA0B7D2D1A95902C000E1D17 /* wrap_Rasterizer.h in Headers */,
 				FA0B7AB71A958EA3000E1D17 /* ddsparse.h in Headers */,
+				D9F0C2A92C66DE1800BB2D25 /* nav_backend.hpp in Headers */,
 				FA0B7DA11A95902C000E1D17 /* KTXHandler.h in Headers */,
 				217DFBE01D9F6D490055D849 /* except.h in Headers */,
+				D9F0C2952C66DE1800BB2D25 /* nav_backend_androidndk_internal.hpp in Headers */,
 				FA0B79311A958E3B000E1D17 /* Module.h in Headers */,
 				217DFBF51D9F6D490055D849 /* mime.lua.h in Headers */,
 				FAC7CD961FE755B4006A60C7 /* lz4opt.h in Headers */,
@@ -4516,6 +4766,7 @@
 				FA18CF1A23DCF67900263725 /* barrier.hpp in Headers */,
 				FA0B7E171A95902C000E1D17 /* Joint.h in Headers */,
 				FA94727E27A6EE1B00817677 /* PlaintextConnection.h in Headers */,
+				D9F0C2912C66DE1800BB2D25 /* nav.h in Headers */,
 				FA0B793F1A958E3B000E1D17 /* types.h in Headers */,
 				FABDA9BD2552448300B5C523 /* b2_stack_allocator.h in Headers */,
 				FABDA9CF2552448300B5C523 /* b2_mouse_joint.h in Headers */,
@@ -4526,6 +4777,7 @@
 				FAB922C6257D99EF0035DAD6 /* Range.h in Headers */,
 				FAC756F61E4F99B400B91289 /* Effect.h in Headers */,
 				FA0B7ADD1A958EA3000E1D17 /* gladfuncs.hpp in Headers */,
+				D9F0C24F2C66DDDE00BB2D25 /* Video.h in Headers */,
 				FAF1405D1E20934C00F898D2 /* intermediate.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -4623,6 +4875,7 @@
 				FADF54081E3D78F700012CC0 /* Video.cpp in Sources */,
 				FA9D8DD81DEF8411002CD881 /* Data.cpp in Sources */,
 				FABDA9992552448300B5C523 /* b2_contact_manager.cpp in Sources */,
+				D9F0C2C02C66DE1800BB2D25 /* nav.cpp in Sources */,
 				FADF542B1E3DAADA00012CC0 /* wrap_Mesh.cpp in Sources */,
 				FA0B7CD71A95902C000E1D17 /* Audio.cpp in Sources */,
 				FA0B7AC01A958EA3000E1D17 /* host.c in Sources */,
@@ -4662,9 +4915,9 @@
 				FA0B7E731A95902C000E1D17 /* wrap_Shape.cpp in Sources */,
 				FA0B7CFE1A95902C000E1D17 /* File.cpp in Sources */,
 				FA3C5E481F8D80CA0003C579 /* ShaderStage.cpp in Sources */,
-				FA27B39E1B498151008A9DCE /* Video.cpp in Sources */,
 				FA0B7E6A1A95902C000E1D17 /* wrap_PulleyJoint.cpp in Sources */,
 				FA0B7DB81A95902C000E1D17 /* Joystick.cpp in Sources */,
+				D9F0C2B22C66DE1800BB2D25 /* nav_error.cpp in Sources */,
 				FA91DA8C1F377C3900C80E33 /* deprecation.cpp in Sources */,
 				FABDA9B02552448300B5C523 /* b2_mouse_joint.cpp in Sources */,
 				FA6A2B6B1F5F7F560074C308 /* DataView.cpp in Sources */,
@@ -4675,6 +4928,7 @@
 				FA0B7D871A95902C000E1D17 /* ImageData.cpp in Sources */,
 				FA18CF3123DCF67900263725 /* spirv_hlsl.cpp in Sources */,
 				FA0B7E101A95902C000E1D17 /* FrictionJoint.cpp in Sources */,
+				D9F0C2A82C66DE1800BB2D25 /* nav_backend.cpp in Sources */,
 				FABDA9902552448300B5C523 /* b2_world_callbacks.cpp in Sources */,
 				FABDA9A52552448300B5C523 /* b2_wheel_joint.cpp in Sources */,
 				FAF140741E20934C00F898D2 /* intermOut.cpp in Sources */,
@@ -4686,6 +4940,7 @@
 				FA4F2C141DE936FE00CA37D7 /* usocket.c in Sources */,
 				FAF140831E20934C00F898D2 /* ParseContextBase.cpp in Sources */,
 				FA0B7AD21A958EA3000E1D17 /* protocol.c in Sources */,
+				D9F0C2CA2C66DEF800BB2D25 /* navinput.cpp in Sources */,
 				FAF140A41E20934C00F898D2 /* Scan.cpp in Sources */,
 				FA0B7D1F1A95902C000E1D17 /* ImageRasterizer.cpp in Sources */,
 				FABDA9C22552448300B5C523 /* b2_rope.cpp in Sources */,
@@ -4698,12 +4953,15 @@
 				FA8951A31AA2EDF300EC385A /* wrap_Event.cpp in Sources */,
 				FADF540E1E3D7CDD00012CC0 /* wrap_Video.cpp in Sources */,
 				FA0B7D4C1A95902C000E1D17 /* Shader.cpp in Sources */,
+				D9F0C23E2C66DDDE00BB2D25 /* Video.cpp in Sources */,
 				FA0B792A1A958E3B000E1D17 /* Matrix.cpp in Sources */,
 				D9DAB92B2961F10000C64820 /* GenericShaper.cpp in Sources */,
 				FAF140981E20934C00F898D2 /* PpTokens.cpp in Sources */,
 				FAF140AA1E20934C00F898D2 /* SymbolTable.cpp in Sources */,
 				FABDA9892552448300B5C523 /* b2_contact.cpp in Sources */,
+				D9F0C2482C66DDDE00BB2D25 /* OggDemuxer.cpp in Sources */,
 				FA3C5E431F8C368C0003C579 /* ShaderStage.cpp in Sources */,
+				D9F0C2562C66DE0100BB2D25 /* NAVDecoder.cpp in Sources */,
 				FA0B7E191A95902C000E1D17 /* MotorJoint.cpp in Sources */,
 				FAF1406F1E20934C00F898D2 /* Initialize.cpp in Sources */,
 				FA0B7EBF1A95902C000E1D17 /* Thread.cpp in Sources */,
@@ -4731,9 +4989,11 @@
 				FABDA9F82552448300B5C523 /* b2_dynamic_tree.cpp in Sources */,
 				FABDA98B2552448300B5C523 /* b2_revolute_joint.cpp in Sources */,
 				FA0B7D3D1A95902C000E1D17 /* Texture.cpp in Sources */,
+				D9F0C2382C66DDDE00BB2D25 /* SourceSync.cpp in Sources */,
 				FA0B7B351A958EA3000E1D17 /* wuff_convert.c in Sources */,
 				FAF140941E20934C00F898D2 /* PpScanner.cpp in Sources */,
 				FABDA9EC2552448300B5C523 /* b2_collide_circle.cpp in Sources */,
+				D9F0C2512C66DDDE00BB2D25 /* wrap_FrameSync.cpp in Sources */,
 				FA9D53AD1F5307E900125C6B /* Deprecations.cpp in Sources */,
 				FA84DE622778D7F3002674C6 /* SpirvIntrinsics.cpp in Sources */,
 				FA0B7E431A95902C000E1D17 /* wrap_CircleShape.cpp in Sources */,
@@ -4800,6 +5060,7 @@
 				FAF1409B1E20934C00F898D2 /* propagateNoContraction.cpp in Sources */,
 				FA0B7DDA1A95902C000E1D17 /* RandomGenerator.cpp in Sources */,
 				FA2AF6751DAD64970032B62C /* vertex.cpp in Sources */,
+				D9F0C2AF2C66DE1800BB2D25 /* nav_dynlib.cpp in Sources */,
 				FAF140561E20934C00F898D2 /* Link.cpp in Sources */,
 				FAF140851E20934C00F898D2 /* ParseHelper.cpp in Sources */,
 				FA0B7D801A95902C000E1D17 /* Volatile.cpp in Sources */,
@@ -4812,6 +5073,7 @@
 				FA4F2BB21DE1E4B400CA37D7 /* RecordingDevice.cpp in Sources */,
 				FAE64A922071364B00BC7981 /* physfs_platform_winrt.cpp in Sources */,
 				FABDA97A2552448200B5C523 /* b2_joint.cpp in Sources */,
+				D9F0C2452C66DDDE00BB2D25 /* NAVVideoStream.cpp in Sources */,
 				FA4F2C0F1DE936FE00CA37D7 /* timeout.c in Sources */,
 				FA6BDF8F281219E900240F2A /* DataStream.cpp in Sources */,
 				FA59A2D31C06481400328DBA /* ParticleSystem.cpp in Sources */,
@@ -4833,13 +5095,18 @@
 				FAF140721E20934C00F898D2 /* Intermediate.cpp in Sources */,
 				FA41A3C91C0A1F950084430C /* ASTCHandler.cpp in Sources */,
 				FA0B7E551A95902C000E1D17 /* wrap_GearJoint.cpp in Sources */,
+				D9F0C2A52C66DE1800BB2D25 /* nav_backend_mediafoundation.cpp in Sources */,
 				FA0B7E791A95902C000E1D17 /* wrap_WheelJoint.cpp in Sources */,
+				D9F0C2342C66DDDE00BB2D25 /* wrap_SourceSync.cpp in Sources */,
+				D9F0C2402C66DDDE00BB2D25 /* FrameSync.cpp in Sources */,
 				FABDA9AC2552448300B5C523 /* b2_world.cpp in Sources */,
+				D9F0C2972C66DE1800BB2D25 /* nav_backend_androidndk.cpp in Sources */,
 				FA0B7DDD1A95902C000E1D17 /* wrap_BezierCurve.cpp in Sources */,
 				FA0A3A6123366CE9001C269E /* floattypes.cpp in Sources */,
 				FA0B7D071A95902C000E1D17 /* wrap_File.cpp in Sources */,
 				FA18CF3423DCF67900263725 /* spirv_cpp.cpp in Sources */,
 				FABDA9D52552448300B5C523 /* b2_block_allocator.cpp in Sources */,
+				D9F0C2B52C66DE1800BB2D25 /* nav_input_file_android.cpp in Sources */,
 				FA6A2B751F60B6710074C308 /* ByteData.cpp in Sources */,
 				FABDA9F02552448300B5C523 /* b2_collision.cpp in Sources */,
 				FAD19A181DFF8CA200D5398A /* ImageDataBase.cpp in Sources */,
@@ -4848,6 +5115,7 @@
 				FADF54211E3DA52C00012CC0 /* wrap_ParticleSystem.cpp in Sources */,
 				FA0B791C1A958E3B000E1D17 /* b64.cpp in Sources */,
 				FA1E88851DF363E100E808AA /* Filter.cpp in Sources */,
+				D9F0C23B2C66DDDE00BB2D25 /* DeltaSync.cpp in Sources */,
 				FABDA9DB2552448300B5C523 /* b2_math.cpp in Sources */,
 				FA0B7DA01A95902C000E1D17 /* KTXHandler.cpp in Sources */,
 				FA0B7CEC1A95902C000E1D17 /* Event.cpp in Sources */,
@@ -4888,21 +5156,24 @@
 				FA0B7DFE1A95902C000E1D17 /* ChainShape.cpp in Sources */,
 				FAFEB29A28F210550025D7D0 /* unixdgram.c in Sources */,
 				FAE64A892071363100BC7981 /* physfs_archiver_vdf.c in Sources */,
-				FA15DFB21F9B8D840042AB22 /* TheoraVideoStream.cpp in Sources */,
 				FAF1406D1E20934C00F898D2 /* InfoSink.cpp in Sources */,
 				FAF1407B1E20934C00F898D2 /* limits.cpp in Sources */,
 				FA0B7ABB1A958EA3000E1D17 /* callbacks.c in Sources */,
 				FA0B7EAA1A95902C000E1D17 /* wrap_Sound.cpp in Sources */,
+				D9F0C24B2C66DDDE00BB2D25 /* TheoraVideoStream.cpp in Sources */,
 				FA0B79391A958E3B000E1D17 /* Reference.cpp in Sources */,
 				FA620A331AA2F8DB005DB4C2 /* wrap_Quad.cpp in Sources */,
 				FA0B7E071A95902C000E1D17 /* DistanceJoint.cpp in Sources */,
 				FA18CEEA23DBC8D400263725 /* Buffer.mm in Sources */,
 				FADF543C1E3DAFF700012CC0 /* wrap_Graphics.cpp in Sources */,
+				D9F0C2AB2C66DE1800BB2D25 /* nav_common.cpp in Sources */,
+				D9F0C2A12C66DE1800BB2D25 /* nav_backend_gstreamer.cpp in Sources */,
 				FAE64A942071365100BC7981 /* physfs_platform_os2.c in Sources */,
 				FA0B7E5E1A95902C000E1D17 /* wrap_MouseJoint.cpp in Sources */,
 				FA0B7B3B1A958EA3000E1D17 /* wuff_memory.c in Sources */,
 				FA0B79411A958E3B000E1D17 /* utf8.cpp in Sources */,
 				FAE64A862071363100BC7981 /* physfs_archiver_qpak.c in Sources */,
+				D9F0C2BA2C66DE1800BB2D25 /* nav_input_memory.cpp in Sources */,
 				FA0B7ADF1A958EA3000E1D17 /* lodepng.cpp in Sources */,
 				FAF140761E20934C00F898D2 /* IntermTraverse.cpp in Sources */,
 				FA0B7E8C1A95902C000E1D17 /* FLACDecoder.cpp in Sources */,
@@ -4947,6 +5218,7 @@
 				FABDA9B22552448300B5C523 /* b2_circle_contact.cpp in Sources */,
 				FABDA9822552448200B5C523 /* b2_weld_joint.cpp in Sources */,
 				FA15DFB01F9B8D6A0042AB22 /* wrap_Data.cpp in Sources */,
+				D9F0C29C2C66DE1800BB2D25 /* nav_backend_ffmpeg.cpp in Sources */,
 				FA0B7E671A95902C000E1D17 /* wrap_PrismaticJoint.cpp in Sources */,
 				FA0B7DCE1A95902C000E1D17 /* wrap_Keyboard.cpp in Sources */,
 				FABDA9D32552448300B5C523 /* b2_timer.cpp in Sources */,
@@ -4966,6 +5238,7 @@
 				FABDA9FE2552448300B5C523 /* b2_edge_shape.cpp in Sources */,
 				FA0B7D7A1A95902C000E1D17 /* Quad.cpp in Sources */,
 				FA620A3B1AA305F6005DB4C2 /* types.cpp in Sources */,
+				D9F0C2432C66DDDE00BB2D25 /* wrap_DeltaSync.cpp in Sources */,
 				D9DAB92E2961F10000C64820 /* TextShaper.cpp in Sources */,
 				FA0B7DD41A95902C000E1D17 /* BezierCurve.cpp in Sources */,
 				FA0B7E7C1A95902C000E1D17 /* wrap_World.cpp in Sources */,
@@ -4984,6 +5257,7 @@
 				FA0B7E5B1A95902C000E1D17 /* wrap_MotorJoint.cpp in Sources */,
 				FA18CF2723DCF67900263725 /* spirv_reflect.cpp in Sources */,
 				FA0B79441A958E3B000E1D17 /* Variant.cpp in Sources */,
+				D9F0C24E2C66DDDE00BB2D25 /* Video.cpp in Sources */,
 				FA9D8DDA1DEF8411002CD881 /* Stream.cpp in Sources */,
 				FA0B7DD71A95902C000E1D17 /* MathModule.cpp in Sources */,
 				FAC756FC1E4F99DB00B91289 /* Effect.cpp in Sources */,
@@ -5030,9 +5304,10 @@
 				FA0B79251A958E3B000E1D17 /* Exception.cpp in Sources */,
 				FA0B7D291A95902C000E1D17 /* wrap_GlyphData.cpp in Sources */,
 				FA0B7DE31A95902C000E1D17 /* wrap_RandomGenerator.cpp in Sources */,
+				D9F0C2BD2C66DE1800BB2D25 /* nav_internal.cpp in Sources */,
 				FAE64A8E2071363A00BC7981 /* physfs_platform_posix.c in Sources */,
 				FA0B7AD71A958EA3000E1D17 /* win32.c in Sources */,
-				FA15DFB11F9B8D820042AB22 /* OggDemuxer.cpp in Sources */,
+				D9F0C2B72C66DE1800BB2D25 /* nav_input_file.cpp in Sources */,
 				FA0B7D0D1A95902C000E1D17 /* wrap_Filesystem.cpp in Sources */,
 				FA0B79211A958E3B000E1D17 /* delay.cpp in Sources */,
 				FA0B7DB51A95902C000E1D17 /* wrap_ImageData.cpp in Sources */,
@@ -5052,6 +5327,7 @@
 				217DFC031D9F6D490055D849 /* timeout.c in Sources */,
 				FA18CF2623DCF67900263725 /* spirv_reflect.cpp in Sources */,
 				FA9D8DD71DEF8411002CD881 /* Data.cpp in Sources */,
+				D9F0C2BF2C66DE1800BB2D25 /* nav.cpp in Sources */,
 				FABDA9982552448300B5C523 /* b2_contact_manager.cpp in Sources */,
 				FADF542A1E3DAADA00012CC0 /* wrap_Mesh.cpp in Sources */,
 				FA0B7D2B1A95902C000E1D17 /* wrap_Rasterizer.cpp in Sources */,
@@ -5093,8 +5369,8 @@
 				FA0B7E721A95902C000E1D17 /* wrap_Shape.cpp in Sources */,
 				FA0B7CFD1A95902C000E1D17 /* File.cpp in Sources */,
 				FA4F2BB01DE1E37B00CA37D7 /* RecordingDevice.cpp in Sources */,
+				D9F0C2B12C66DE1800BB2D25 /* nav_error.cpp in Sources */,
 				FAC7CD911FE35E95006A60C7 /* physfs_archiver_grp.c in Sources */,
-				FA27B39D1B498151008A9DCE /* Video.cpp in Sources */,
 				FA15DFAC1F9B8C850042AB22 /* StringMap.cpp in Sources */,
 				FABDA9AF2552448300B5C523 /* b2_mouse_joint.cpp in Sources */,
 				FA4F2BAC1DE1E37000CA37D7 /* RecordingDevice.cpp in Sources */,
@@ -5104,6 +5380,7 @@
 				FA0B7DB71A95902C000E1D17 /* Joystick.cpp in Sources */,
 				FA91DA8B1F377C3900C80E33 /* deprecation.cpp in Sources */,
 				FA0B7E3F1A95902C000E1D17 /* wrap_ChainShape.cpp in Sources */,
+				D9F0C2A72C66DE1800BB2D25 /* nav_backend.cpp in Sources */,
 				FA18CF3023DCF67900263725 /* spirv_hlsl.cpp in Sources */,
 				FABDA98F2552448300B5C523 /* b2_world_callbacks.cpp in Sources */,
 				FABDA9A42552448300B5C523 /* b2_wheel_joint.cpp in Sources */,
@@ -5115,6 +5392,7 @@
 				FABDA9AD2552448300B5C523 /* b2_island.cpp in Sources */,
 				FAF140771E20934C00F898D2 /* iomapper.cpp in Sources */,
 				FA0B7D091A95902C000E1D17 /* wrap_FileData.cpp in Sources */,
+				D9F0C2C92C66DEF800BB2D25 /* navinput.cpp in Sources */,
 				FA18CEDC23DBC6E000263725 /* Metal.mm in Sources */,
 				FA0B7B341A958EA3000E1D17 /* wuff_convert.c in Sources */,
 				FAF140821E20934C00F898D2 /* ParseContextBase.cpp in Sources */,
@@ -5127,12 +5405,15 @@
 				FAF140A31E20934C00F898D2 /* Scan.cpp in Sources */,
 				FA0B7EA31A95902C000E1D17 /* SoundData.cpp in Sources */,
 				FA0B79291A958E3B000E1D17 /* Matrix.cpp in Sources */,
+				D9F0C23D2C66DDDE00BB2D25 /* Video.cpp in Sources */,
 				FA8951A21AA2EDF300EC385A /* wrap_Event.cpp in Sources */,
 				D9DAB92A2961F10000C64820 /* GenericShaper.cpp in Sources */,
 				FAF140691E20934C00F898D2 /* glslang_tab.cpp in Sources */,
 				FA0B7ABF1A958EA3000E1D17 /* host.c in Sources */,
 				FA0B7D4B1A95902C000E1D17 /* Shader.cpp in Sources */,
+				D9F0C2472C66DDDE00BB2D25 /* OggDemuxer.cpp in Sources */,
 				FADF540D1E3D7CDD00012CC0 /* wrap_Video.cpp in Sources */,
+				D9F0C2552C66DE0100BB2D25 /* NAVDecoder.cpp in Sources */,
 				FABDA9882552448300B5C523 /* b2_contact.cpp in Sources */,
 				FAF140971E20934C00F898D2 /* PpTokens.cpp in Sources */,
 				FAF140A91E20934C00F898D2 /* SymbolTable.cpp in Sources */,
@@ -5160,9 +5441,11 @@
 				FA0B7CFA1A95902C000E1D17 /* Filesystem.cpp in Sources */,
 				FABDA9F72552448300B5C523 /* b2_dynamic_tree.cpp in Sources */,
 				FABDA98A2552448300B5C523 /* b2_revolute_joint.cpp in Sources */,
+				D9F0C2372C66DDDE00BB2D25 /* SourceSync.cpp in Sources */,
 				FA1BA0A21E16D97500AA2803 /* wrap_Font.cpp in Sources */,
 				FAC7CD781FE35E95006A60C7 /* physfs_platform_qnx.c in Sources */,
 				FA0B7D3C1A95902C000E1D17 /* Texture.cpp in Sources */,
+				D9F0C2502C66DDDE00BB2D25 /* wrap_FrameSync.cpp in Sources */,
 				FABDA9EB2552448300B5C523 /* b2_collide_circle.cpp in Sources */,
 				FADF53FD1E3D74F200012CC0 /* TextBatch.cpp in Sources */,
 				FA84DE612778D7F3002674C6 /* SpirvIntrinsics.cpp in Sources */,
@@ -5229,6 +5512,7 @@
 				FA0B7E001A95902C000E1D17 /* CircleShape.cpp in Sources */,
 				FA0B7E451A95902C000E1D17 /* wrap_Contact.cpp in Sources */,
 				217DFBE71D9F6D490055D849 /* inet.c in Sources */,
+				D9F0C2AE2C66DE1800BB2D25 /* nav_dynlib.cpp in Sources */,
 				FA0B7D151A95902C000E1D17 /* Font.cpp in Sources */,
 				FA0B7EB51A95902C000E1D17 /* wrap_System.cpp in Sources */,
 				FAC8E55123B01C0D007B07C8 /* macos.mm in Sources */,
@@ -5241,6 +5525,7 @@
 				FA2AF6741DAD64970032B62C /* vertex.cpp in Sources */,
 				FABDA9932552448300B5C523 /* b2_polygon_circle_contact.cpp in Sources */,
 				FAC7CD851FE35E95006A60C7 /* physfs_unicode.c in Sources */,
+				D9F0C2442C66DDDE00BB2D25 /* NAVVideoStream.cpp in Sources */,
 				FA6A2B7A1F60B8250074C308 /* wrap_ByteData.cpp in Sources */,
 				FA6BDF8E281219E900240F2A /* DataStream.cpp in Sources */,
 				FAF140551E20934C00F898D2 /* Link.cpp in Sources */,
@@ -5262,13 +5547,18 @@
 				FA0B7DC11A95902C000E1D17 /* wrap_Joystick.cpp in Sources */,
 				FA18CF3523DCF67900263725 /* spirv_cross_parsed_ir.cpp in Sources */,
 				FABDA99C2552448300B5C523 /* b2_edge_polygon_contact.cpp in Sources */,
+				D9F0C2A42C66DE1800BB2D25 /* nav_backend_mediafoundation.cpp in Sources */,
 				FA0B7CD31A95902C000E1D17 /* Source.cpp in Sources */,
+				D9F0C2332C66DDDE00BB2D25 /* wrap_SourceSync.cpp in Sources */,
+				D9F0C23F2C66DDDE00BB2D25 /* FrameSync.cpp in Sources */,
 				FA0B7CD01A95902C000E1D17 /* Audio.cpp in Sources */,
+				D9F0C2962C66DE1800BB2D25 /* nav_backend_androidndk.cpp in Sources */,
 				FAA3A9AE1B7D465A00CED060 /* android.cpp in Sources */,
 				FA0B7D121A95902C000E1D17 /* Font.cpp in Sources */,
 				FABDA9AB2552448300B5C523 /* b2_world.cpp in Sources */,
 				FA0B7EC81A95902C000E1D17 /* threads.cpp in Sources */,
 				FAC7CD8B1FE35E95006A60C7 /* physfs_archiver_iso9660.c in Sources */,
+				D9F0C2B42C66DE1800BB2D25 /* nav_input_file_android.cpp in Sources */,
 				217DFBF91D9F6D490055D849 /* select.c in Sources */,
 				FABDA9D42552448300B5C523 /* b2_block_allocator.cpp in Sources */,
 				FAF1408C1E20934C00F898D2 /* PpAtom.cpp in Sources */,
@@ -5277,6 +5567,7 @@
 				FAF6C9F823C2DE2900D7B5BC /* doc.cpp in Sources */,
 				FAC7CD7D1FE35E95006A60C7 /* physfs_platform_winrt.cpp in Sources */,
 				FA0B7E541A95902C000E1D17 /* wrap_GearJoint.cpp in Sources */,
+				D9F0C23A2C66DDDE00BB2D25 /* DeltaSync.cpp in Sources */,
 				FA0A3A6023366CE9001C269E /* floattypes.cpp in Sources */,
 				FA41A3C81C0A1F950084430C /* ASTCHandler.cpp in Sources */,
 				FABDA9DA2552448300B5C523 /* b2_math.cpp in Sources */,
@@ -5321,16 +5612,20 @@
 				FA0B7DFD1A95902C000E1D17 /* ChainShape.cpp in Sources */,
 				FA0B79201A958E3B000E1D17 /* delay.cpp in Sources */,
 				FA18CF1723DCF67900263725 /* spirv_glsl.cpp in Sources */,
+				D9F0C24A2C66DDDE00BB2D25 /* TheoraVideoStream.cpp in Sources */,
 				FA0B7EA91A95902C000E1D17 /* wrap_Sound.cpp in Sources */,
 				FA6A2B671F5F7B6B0074C308 /* wrap_Data.cpp in Sources */,
 				FA18CF3323DCF67900263725 /* spirv_cpp.cpp in Sources */,
 				FA0B7E061A95902C000E1D17 /* DistanceJoint.cpp in Sources */,
 				FA620A321AA2F8DB005DB4C2 /* wrap_Quad.cpp in Sources */,
+				D9F0C2AA2C66DE1800BB2D25 /* nav_common.cpp in Sources */,
+				D9F0C2A02C66DE1800BB2D25 /* nav_backend_gstreamer.cpp in Sources */,
 				FA4F2BA61DE1E36400CA37D7 /* RecordingDevice.cpp in Sources */,
 				FA18CF4623DD1A8100263725 /* ShaderStage.mm in Sources */,
 				FAF1406C1E20934C00F898D2 /* InfoSink.cpp in Sources */,
 				FAF1407A1E20934C00F898D2 /* limits.cpp in Sources */,
 				FAC7CD7E1FE35E95006A60C7 /* physfs_archiver_mvl.c in Sources */,
+				D9F0C2B92C66DE1800BB2D25 /* nav_input_memory.cpp in Sources */,
 				FA0B793B1A958E3B000E1D17 /* runtime.cpp in Sources */,
 				FA0B7E5D1A95902C000E1D17 /* wrap_MouseJoint.cpp in Sources */,
 				FA0B7AD41A958EA3000E1D17 /* unix.c in Sources */,
@@ -5375,6 +5670,7 @@
 				FA0B7AD11A958EA3000E1D17 /* protocol.c in Sources */,
 				FA522D4D23F9FE380059EE3C /* MP3Decoder.cpp in Sources */,
 				FA9D8DD11DEB56C3002CD881 /* pixelformat.cpp in Sources */,
+				D9F0C29B2C66DE1800BB2D25 /* nav_backend_ffmpeg.cpp in Sources */,
 				FA0B7E661A95902C000E1D17 /* wrap_PrismaticJoint.cpp in Sources */,
 				FABDA9B12552448300B5C523 /* b2_circle_contact.cpp in Sources */,
 				FABDA9812552448200B5C523 /* b2_weld_joint.cpp in Sources */,
@@ -5394,6 +5690,7 @@
 				FA0B7E881A95902C000E1D17 /* Decoder.cpp in Sources */,
 				FA0B7E3C1A95902C000E1D17 /* wrap_Body.cpp in Sources */,
 				FA0B7D791A95902C000E1D17 /* Quad.cpp in Sources */,
+				D9F0C2422C66DDDE00BB2D25 /* wrap_DeltaSync.cpp in Sources */,
 				D9DAB92D2961F10000C64820 /* TextShaper.cpp in Sources */,
 				FABDA9FD2552448300B5C523 /* b2_edge_shape.cpp in Sources */,
 				FAC756F51E4F99B400B91289 /* Effect.cpp in Sources */,
@@ -5412,6 +5709,7 @@
 				FA0B7E9A1A95902C000E1D17 /* VorbisDecoder.cpp in Sources */,
 				FA0B7E4B1A95902C000E1D17 /* wrap_EdgeShape.cpp in Sources */,
 				FA9D8DD91DEF8411002CD881 /* Stream.cpp in Sources */,
+				D9F0C24D2C66DDDE00BB2D25 /* Video.cpp in Sources */,
 				FA0B7E241A95902C000E1D17 /* PrismaticJoint.cpp in Sources */,
 				FAC7CD791FE35E95006A60C7 /* physfs.c in Sources */,
 				FAC756FA1E4F99D200B91289 /* Effect.cpp in Sources */,
@@ -5443,7 +5741,6 @@
 				FAF140881E20934C00F898D2 /* PoolAlloc.cpp in Sources */,
 				FA0B7DEE1A95902C000E1D17 /* Mouse.cpp in Sources */,
 				FAAC2F79251A9D2200BCB81B /* apple.mm in Sources */,
-				FAA54ACC1F91660400A8FA7B /* TheoraVideoStream.cpp in Sources */,
 				FA1E887E1DF363CD00E808AA /* Filter.cpp in Sources */,
 				FABDA9862552448200B5C523 /* b2_body.cpp in Sources */,
 				FA0B7D281A95902C000E1D17 /* wrap_GlyphData.cpp in Sources */,
@@ -5459,9 +5756,10 @@
 				FA0B7D0C1A95902C000E1D17 /* wrap_Filesystem.cpp in Sources */,
 				FA0B7AD91A958EA3000E1D17 /* glad.cpp in Sources */,
 				FAC7CD841FE35E95006A60C7 /* physfs_archiver_unpacked.c in Sources */,
+				D9F0C2BC2C66DE1800BB2D25 /* nav_internal.cpp in Sources */,
 				217DFBF61D9F6D490055D849 /* options.c in Sources */,
-				FAA54ACD1F91660400A8FA7B /* OggDemuxer.cpp in Sources */,
 				FAC7CD821FE35E95006A60C7 /* physfs_platform_haiku.cpp in Sources */,
+				D9F0C2B62C66DE1800BB2D25 /* nav_input_file.cpp in Sources */,
 				217DFBD91D9F6D490055D849 /* auxiliar.c in Sources */,
 				217DFBDB1D9F6D490055D849 /* buffer.c in Sources */,
 				FA0B7DB41A95902C000E1D17 /* wrap_ImageData.cpp in Sources */,
@@ -5522,6 +5820,7 @@
 					"\"$(SRCROOT)/../../src/libraries\"",
 					"\"$(SRCROOT)/../../src/modules\"",
 					"\"$(SRCROOT)/../../src/libraries/enet/libenet/include\"",
+					"\"$(SRCROOT)/../../src/libraries/nav/include\"",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
 				LIBRARY_SEARCH_PATHS = "";
@@ -5588,6 +5887,7 @@
 					"\"$(SRCROOT)/../../src/libraries\"",
 					"\"$(SRCROOT)/../../src/modules\"",
 					"\"$(SRCROOT)/../../src/libraries/enet/libenet/include\"",
+					"\"$(SRCROOT)/../../src/libraries/nav/include\"",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
 				LIBRARY_SEARCH_PATHS = "";
@@ -5726,6 +6026,7 @@
 					"\"$(SRCROOT)/../../src/libraries\"",
 					"\"$(SRCROOT)/../../src/modules\"",
 					"\"$(SRCROOT)/../../src/libraries/enet/libenet/include\"",
+					"\"$(SRCROOT)/../../src/libraries/nav/include\"",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
 				LIBRARY_SEARCH_PATHS = "";
