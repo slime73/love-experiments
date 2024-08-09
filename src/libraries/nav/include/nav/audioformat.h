@@ -1,6 +1,8 @@
 #ifndef _NAV_AUDIOFORMAT_H_
 #define _NAV_AUDIOFORMAT_H_
 
+#include <stdint.h>
+
 /**
  * @brief Audio format flags.
  *

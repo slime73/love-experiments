@@ -28,18 +28,6 @@ using UniqueGstElement = UniqueGstObject<GstElement>;
 
 class GStreamerBackend;
 
-struct GstMemoryMapLock: GstMapInfo
-{
-	GstMemoryMapLock(const GstMemoryMapLock &) = delete;
-	GstMemoryMapLock(const GstMemoryMapLock &&) = delete;
-	GstMemoryMapLock(GStreamerBackend *f, GstMemory *mem, GstMapFlags flags, bool throwOnFail);
-	~GstMemoryMapLock();
-
-	GStreamerBackend *f;
-	GstMemory *memory;
-	bool success;
-};
-
 class GStreamerState: public State
 {
 public:
@@ -94,6 +82,7 @@ private:
 	GstCaps *newAudioCapsForNAV();
 	void clearQueuedFrames();
 	void pollBus(bool noexception = false);
+	FrameVector *dispatchDecode(GstBuffer *buffer, size_t streamIndex);
 	static void padAdded(GstElement *element, GstPad *newPad, GStreamerState *self);
 	static void noMorePads(GstElement *element, GStreamerState *self);
 	static void needData(GstElement *element, guint length, GStreamerState *self);
@@ -111,7 +100,7 @@ public:
 	State *open(nav_input *input, const char *filename) override;
 
 private:
-	DynLib glib, gobject, gstreamer;
+	DynLib glib, gobject, gstreamer, gstvideo;
 	std::string version;
 
 public:

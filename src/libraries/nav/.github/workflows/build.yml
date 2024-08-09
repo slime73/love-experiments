@@ -38,8 +38,8 @@ jobs:
   Ubuntu:
     runs-on: ubuntu-24.04
     steps:
-    - name: Install FFmpeg Development Libraries
-      run: sudo apt-get install libavcodec-dev libavformat-dev libavutil-dev libswresample-dev libswscale-dev
+    - name: Install Needed Development Libraries
+      run: sudo apt-get install libavcodec-dev libavformat-dev libavutil-dev libswresample-dev libswscale-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
     - name: Checkout
       uses: actions/checkout@v4
     - name: Configure
@@ -49,6 +49,24 @@ jobs:
     - name: Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: nav-so-x86_64
+        name: nav-linux-x86_64
+        path: install/
+        compression-level: 9
+  Android:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        abi: [armeabi-v7a, arm64-v8a, x86, x86_64]
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Configure
+      run: cmake -Bbuild -S. -DCMAKE_SYSTEM_NAME=Android -DCMAKE_ANDROID_ARCH_ABI=${{ matrix.abi }} -DCMAKE_BUILD_TYPE=RelWithDebInfo --install-prefix $PWD/install -DBUILD_SHARED_LIBS=1
+    - name: Install
+      run: cmake --build build --target install -j$(nproc)
+    - name: Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: nav-android-${{ matrix.abi }}
         path: install/
         compression-level: 9

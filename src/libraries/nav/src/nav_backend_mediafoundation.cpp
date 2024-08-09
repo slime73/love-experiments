@@ -80,6 +80,13 @@ struct WrappedPropVariant: public PROPVARIANT
 		this->uhVal.QuadPart = v;
 	}
 
+	WrappedPropVariant(int64_t v)
+	: WrappedPropVariant()
+	{
+		this->vt = VT_I8;
+		this->uhVal.QuadPart = v;
+	}
+
 	~WrappedPropVariant()
 	{
 		PropVariantClear(this);
@@ -649,7 +656,7 @@ double MediaFoundationState::getPosition() noexcept
 
 double MediaFoundationState::setPosition(double position)
 {
-	UINT64 newPos = (UINT64) (position * 1e7);
+	INT64 newPos = (INT64) (position * MF_100NS_UNIT);
 	WrappedPropVariant pvar = newPos;
 
 	if (FAILED(mfSourceReader->SetCurrentPosition(NULL_GUID, pvar)))
@@ -658,7 +665,7 @@ double MediaFoundationState::setPosition(double position)
 		return -1.0;
 	}
 
-	currentPosition = newPos;
+	currentPosition = (UINT64) newPos;
 	return position;
 }
 
@@ -724,8 +731,7 @@ nav_frame_t *MediaFoundationState::decode2D(ComPtr<IMF2DBuffer> &buf2d, size_t s
 {
 	BYTE *source = nullptr;
 	nav_streaminfo_t *streamInfo = &streamInfoList[streamIndex];
-	size_t dstStride = streamInfo->video.stride();
-	LONG stride = (LONG) dstStride;
+	LONG stride = 0;
 	DWORD contSize = 0;
 
 	if (FAILED(buf2d->GetContiguousLength(&contSize)))
@@ -734,58 +740,75 @@ nav_frame_t *MediaFoundationState::decode2D(ComPtr<IMF2DBuffer> &buf2d, size_t s
 	if (FAILED(buf2d->Lock2D(&source, &stride)))
 		throw std::runtime_error("IMF2DBuffer::Lock2D failed");
 
-	nav::FrameVector *frame = new (std::nothrow) nav::FrameVector(
-		streamInfo,
-		streamIndex,
-		derationalize(timestamp, (int64_t) MF_100NS_UNIT),
-		source,
-		streamInfo->video.size()
-	);
-	if (frame == nullptr)
+	nav::FrameVector *frame = nullptr;
+	try
+	{
+		frame = new nav::FrameVector(
+			streamInfo,
+			streamIndex,
+			derationalize(timestamp, (int64_t) MF_100NS_UNIT),
+			nullptr,
+			streamInfo->video.size()
+		);
+	}
+	catch (...)
 	{
 		buf2d->Unlock2D();
-		throw std::runtime_error("Cannot create nav_frame_t");
+		throw;
 	}
 
 	uint8_t *frameData = (uint8_t*) frame->data();
-
-	for (size_t y = 0; y < streamInfo->video.height; y++)
-		std::copy(source + y * stride, source + (y + 1) * stride, frameData + y * dstStride);
 	
 	// HACK: Some pixel format doesn't provide a way to know additional padding at height.
 	size_t extraHeight = bruteForceExtraHeight((uint32_t) stride, streamInfo->video.height, contSize, streamInfo->video.format);
 
-	LONG chromaStride = stride;
-	size_t chromaDstStride = dstStride;
-	uint32_t chromaHeight = streamInfo->video.height;
-	size_t chromaRealHeight = chromaHeight + extraHeight;
+	int nplanes = 1;
+	size_t planeWidth[3] = {streamInfo->video.width, 0, 0};
+	size_t planeHeight[3] = {streamInfo->video.height, 0, 0};
+	size_t sourceExtraHeight[3] = {extraHeight, 0, 0};
+	ptrdiff_t sourceStrides[3] = {stride, 0, 0};
 
 	switch (streamInfo->video.format)
 	{
 		case NAV_PIXELFORMAT_RGB8:
-			buf2d->Unlock2D();
-			return frame; // We're done
-		case NAV_PIXELFORMAT_YUV420:
-			chromaStride = (chromaStride + 1) / 2;
-			chromaDstStride = (chromaDstStride + 1) / 2;
+			planeWidth[0] *= 3;
 			[[fallthrough]];
+		case NAV_PIXELFORMAT_UNKNOWN:
+		default:
+			break;
 		case NAV_PIXELFORMAT_NV12:
-			chromaHeight = (chromaHeight + 1) / 2;
-			chromaRealHeight = (chromaRealHeight + 1) / 2;
+			planeWidth[1] = ((planeWidth[0] + 1) / 2) * 2;
+			planeHeight[1] = (planeHeight[0] + 1) / 2;
+			sourceStrides[1] = ((sourceStrides[0] + 1) / 2) * 2;
+			sourceExtraHeight[1] = (sourceExtraHeight[0] + 1) / 2;
+			nplanes = 2;
+			break;
+		case NAV_PIXELFORMAT_YUV420:
+			planeWidth[1] = planeWidth[2] = (planeWidth[0] + 1) / 2;
+			planeHeight[1] = planeHeight[2] = (planeHeight[0] + 1) / 2;
+			sourceStrides[1] = sourceStrides[2] = (sourceStrides[0] + 1) / 2;
+			sourceExtraHeight[1] = sourceExtraHeight[2] = (sourceExtraHeight[0] + 1) / 2;
+			nplanes = 3;
+			break;
+		case NAV_PIXELFORMAT_YUV444:
+			planeWidth[1] = planeWidth[2] = planeWidth[0];
+			planeHeight[1] = planeHeight[2] = planeHeight[0];
+			sourceStrides[1] = sourceStrides[2] = sourceStrides[0];
+			sourceExtraHeight[1] = sourceExtraHeight[2] = sourceExtraHeight[0];
+			nplanes = 3;
 			break;
 	}
 
-	BYTE *uvSource = source + (streamInfo->video.height + extraHeight) * stride;
-	BYTE *uvDest = frameData + streamInfo->video.height * dstStride;
-
-	for (int i = 0; i < (streamInfo->video.format == NAV_PIXELFORMAT_NV12 ? 1 : 2); i++)
+	for (int i = 0; i < nplanes; i++)
 	{
-		// Copy U plane (or UV for NV12)
-		for (size_t y = 0; y < chromaHeight; y++)
-			std::copy(uvSource + y * chromaStride, uvSource + (y + 1) * chromaStride, uvDest + y * chromaDstStride);
+		for (int y = 0; y < planeHeight[i]; y++)
+		{
+			std::copy(source, source + planeWidth[i], frameData);
+			frameData += planeWidth[i];
+			source += sourceStrides[i];
+		}
 
-		uvSource += chromaRealHeight * chromaStride;
-		uvDest += chromaHeight * chromaDstStride;
+		source += sourceStrides[i] * ((ptrdiff_t) sourceExtraHeight[i]);
 	}
 
 	buf2d->Unlock2D();

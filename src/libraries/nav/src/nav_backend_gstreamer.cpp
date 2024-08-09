@@ -5,6 +5,8 @@
 #include <sstream>
 #include <stdexcept>
 
+#include <gst/video/video.h>
+
 #include "nav_backend_gstreamer_internal.hpp"
 #include "nav_error.hpp"
 
@@ -67,23 +69,56 @@ inline std::string G_TOSTRCALL(GStreamerBackend *f, gchar*(*func)())
 	return result;
 }
 
-GstMemoryMapLock::GstMemoryMapLock(GStreamerBackend *f, GstMemory *mem, GstMapFlags flags, bool throwOnFail)
-: GstMapInfo({})
-, f(f)
-, memory(mem)
-, success(false)
+struct GstMemoryMapLock: GstMapInfo
 {
-	success = NAV_FFCALL(gst_memory_map)(mem, this, flags);
+	GstMemoryMapLock(const GstMemoryMapLock &) = delete;
+	GstMemoryMapLock(const GstMemoryMapLock &&) = delete;
+	GstMemoryMapLock(GStreamerBackend *f, GstMemory *mem, GstMapFlags flags, bool throwOnFail)
+	: GstMapInfo({})
+	, f(f)
+	, memory(mem)
+	, success(false)
+	{
+		success = NAV_FFCALL(gst_memory_map)(mem, this, flags);
 
-	if (!success && throwOnFail)
-		throw std::runtime_error("Cannot map memory");
-}
+		if (!success && throwOnFail)
+			throw std::runtime_error("Cannot map memory");
+	}
 
-GstMemoryMapLock::~GstMemoryMapLock()
+	~GstMemoryMapLock()
+	{
+		if (success)
+			NAV_FFCALL(gst_memory_unmap)(memory, this);
+	}
+
+	GStreamerBackend *f;
+	GstMemory *memory;
+	bool success;
+};
+
+struct GstVideoFrameLock: GstVideoFrame
 {
-	if (success)
-		NAV_FFCALL(gst_memory_unmap)(memory, this);
-}
+	GstVideoFrameLock(const GstVideoFrameLock &) = delete;
+	GstVideoFrameLock(const GstVideoFrameLock &&) = delete;
+	GstVideoFrameLock(GStreamerBackend *f, const GstVideoInfo *info, GstBuffer *buffer, GstMapFlags flags)
+	: GstVideoFrame({})
+	, f(f)
+	, success(false)
+	{
+		success = NAV_FFCALL(gst_video_frame_map)(this, info, buffer, flags);
+
+		if (!success)
+			throw std::runtime_error("Cannot map video frame");
+	}
+
+	~GstVideoFrameLock()
+	{
+		NAV_FFCALL(gst_video_frame_unmap)(this);
+	}
+
+	GStreamerBackend *f;
+	bool success;
+};
 
 GStreamerState::GStreamerState(GStreamerBackend *backend, nav_input *input)
 : f(backend)
@@ -109,9 +144,9 @@ GStreamerState::GStreamerState(GStreamerBackend *backend, nav_input *input)
 	NAV_FFCALL(g_object_set)(sourceTemp.get(),
 		"emit-signals", 1,
 		"size", (gint64) input->sizef(),
-		"stream-type", 1, // GST_APP_STREAM_TYPE_SEEKABLE
 		nullptr
 	);
+	NAV_FFCALL(gst_util_set_object_arg)(G_CAST<GObject>(f, G_TYPE_OBJECT, sourceTemp.get()), "stream-type", "random-access");
 	NAV_FFCALL(g_signal_connect_data)(decoderTemp.get(), "pad-added", G_CALLBACK(padAdded), this, nullptr, (GConnectFlags) 0);
 	NAV_FFCALL(g_signal_connect_data)(decoderTemp.get(), "no-more-pads", G_CALLBACK(noMorePads), this, nullptr, (GConnectFlags) 0);
 
@@ -166,6 +201,12 @@ GStreamerState::GStreamerState(GStreamerBackend *backend, nav_input *input)
 			{
 				pollBus();
 				caps.reset(NAV_FFCALL(gst_pad_get_current_caps)(pad.get()));
+			}
+
+			{
+				gchar *dumpCaps = NAV_FFCALL(gst_caps_serialize)(caps.get(), GST_SERIALIZE_FLAG_BACKWARD_COMPAT);
+				fprintf(stderr, "got decoder caps: %s\n", dumpCaps);
+				NAV_FFCALL(g_free)(dumpCaps);
 			}
 
 			GstStructure *s = NAV_FFCALL(gst_caps_get_structure)(caps.get(), 0);
@@ -301,7 +342,7 @@ double GStreamerState::getDuration() noexcept
 	gint64 dur = 0;
 
 	if (NAV_FFCALL(gst_element_query_duration)(pipeline.get(), GST_FORMAT_TIME, &dur))
-		return derationalize<gint64>(dur, 1000000000LL);
+		return derationalize<gint64>(dur, GST_SECOND);
 	
 	nav::error::set("gst_element_query_duration failed");
 	return -1;
@@ -312,7 +353,7 @@ double GStreamerState::getPosition() noexcept
 	gint64 pos = 0;
 
 	if (NAV_FFCALL(gst_element_query_position)(pipeline.get(), GST_FORMAT_TIME, &pos))
-		return derationalize<gint64>(pos, 1000000000LL);
+		return derationalize<gint64>(pos, GST_SECOND);
 	
 	nav::error::set("gst_element_query_position failed");
 	return -1;
@@ -320,12 +361,12 @@ double GStreamerState::getPosition() noexcept
 
 double GStreamerState::setPosition(double off)
 {
-	gint64 pos = (gint64) (off * 1000000000.0);
+	gint64 pos = (gint64) (off * GST_SECOND);
 	if (!NAV_FFCALL(gst_element_seek_simple)(
 		pipeline.get(),
 		GST_FORMAT_TIME,
 		(GstSeekFlags) (GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT | GST_SEEK_FLAG_SNAP_BEFORE),
-		off
+		pos
 	))
 	{
 		nav::error::set("gst_element_seek_simple failed");
@@ -342,6 +383,7 @@ nav_frame_t *GStreamerState::read()
 	while (!eos || !queuedFrames.empty())
 	{
 		size_t neos = 0;
+		size_t nactive = 0;
 
 		// Pull queued frames.
 		if (!queuedFrames.empty())
@@ -354,43 +396,40 @@ nav_frame_t *GStreamerState::read()
 		// Pull samples from sinks
 		for (std::unique_ptr<AppSinkWrapper> &sw: streams)
 		{
-			if (sw->enabled && !sw->eos)
+			if (sw->enabled)
 			{
-				UniqueGst<GstSample> sample {nullptr, NAV_FFCALL(gst_sample_unref)};
-				gboolean eos = 0;
-				GstSample *sampleRaw = nullptr;
-				NAV_FFCALL(g_signal_emit_by_name)(sw->sink, "try-pull-sample", 500000, &sampleRaw); // wait 0.5ms
-				sample.reset(sampleRaw);
+				nactive++;
 
-				if (sample)
+				if (!sw->eos)
 				{
-					GstBuffer *buffer = NAV_FFCALL(gst_sample_get_buffer)(sample.get());
-					UniqueGst<GstMemory> memory {NAV_FFCALL(gst_buffer_get_all_memory)(buffer), NAV_FFCALL(gst_memory_unref)};
+					UniqueGst<GstSample> sample {nullptr, NAV_FFCALL(gst_sample_unref)};
+					gboolean eos = 0;
+					GstSample *sampleRaw = nullptr;
+					NAV_FFCALL(g_signal_emit_by_name)(sw->sink, "try-pull-sample", 500000, &sampleRaw); // wait 0.5ms
+					sample.reset(sampleRaw);
 
+					if (sample)
 					{
-						GstMemoryMapLock mapInfo(f, memory.get(), GST_MAP_READ, true);
-						queuedFrames.push(new FrameVector(
-							&sw->streamInfo,
-							sw->streamIndex,
-							derationalize<guint64>(buffer->pts, 1000000000ULL),
-							mapInfo.data,
-							mapInfo.size
-						));
+						GstBuffer *buffer = NAV_FFCALL(gst_sample_get_buffer)(sample.get());
+						queuedFrames.push(dispatchDecode(buffer, sw->streamIndex));
+					}
+					else
+					{
+						NAV_FFCALL(g_object_get)(sw->sink, "eos", &eos, nullptr);
+						if (eos)
+							sw->eos = true;
 					}
 				}
-				else
-				{
-					NAV_FFCALL(g_object_get)(sw->sink, "eos", &eos, nullptr);
-					if (eos)
-						sw->eos = true;
-				}
-			}
 
-			neos = neos + sw->eos;
+				neos = neos + sw->eos;
+			}
 		}
 
-		if (neos == streams.size())
+		if (neos == nactive)
+		{
+			eos = true;
 			return nullptr;
+		}
 
 		// Read buses
 		pollBus();
@@ -495,6 +534,83 @@ void GStreamerState::pollBus(bool noexc)
 			default:
 				break;
 		}
+	}
+}
+
+FrameVector *GStreamerState::dispatchDecode(GstBuffer *buffer, size_t streamIndex)
+{
+	std::unique_ptr<AppSinkWrapper> &sw = streams[streamIndex];
+
+	if (sw->streamInfo.type == NAV_STREAMTYPE_VIDEO)
+	{
+		UniqueGstObject<GstPad> pad {NAV_FFCALL(gst_element_get_static_pad)(sw->convert, "src"), NAV_FFCALL(gst_object_unref)};
+		UniqueGst<GstCaps> caps {NAV_FFCALL(gst_pad_get_current_caps)(pad.get()), NAV_FFCALL(gst_caps_unref)};
+		UniqueGst<GstVideoInfo> videoInfo{NAV_FFCALL(gst_video_info_new_from_caps)(caps.get()), NAV_FFCALL(gst_video_info_free)};
+
+		GstVideoFrameLock videoFrame(f, videoInfo.get(), buffer, GST_MAP_READ);
+		FrameVector *frame = new FrameVector(
+			&sw->streamInfo,
+			streamIndex,
+			derationalize<guint64>(buffer->pts, GST_SECOND),
+			nullptr,
+			sw->streamInfo.video.size()
+		);
+
+		int nplanes;
+		size_t planeWidth[8] = {sw->streamInfo.video.width, 0};
+		size_t planeHeight[8] = {sw->streamInfo.video.height, 0};
+		switch (sw->streamInfo.video.format)
+		{
+			case NAV_PIXELFORMAT_RGB8:
+				planeWidth[0] *= 3;
+				[[fallthrough]];
+			case NAV_PIXELFORMAT_UNKNOWN:
+			default:
+				nplanes = 1;
+				break;
+			case NAV_PIXELFORMAT_NV12:
+				nplanes = 2;
+				planeWidth[1] = ((planeWidth[0] + 1) / 2) * 2;
+				planeHeight[1] = (planeHeight[0] + 1) / 2;
+				break;
+			case NAV_PIXELFORMAT_YUV444:
+				planeWidth[1] = planeWidth[2] = planeWidth[0];
+				planeHeight[1] = planeHeight[2] = planeHeight[0];
+				nplanes = 3;
+				break;
+			case NAV_PIXELFORMAT_YUV420:
+				planeWidth[1] = planeWidth[2] = (planeWidth[0] + 1) / 2;
+				planeHeight[1] = planeHeight[2] = (planeHeight[0] + 1) / 2;
+				nplanes = 3;
+				break;
+		}
+
+		uint8_t *frameBuffer = (uint8_t*) frame->data();
+		for (int i = 0; i < nplanes; i++)
+		{
+			const guint8 *currentLine = GST_VIDEO_FRAME_COMP_DATA(&videoFrame, i);
+
+			for (size_t y = 0; y < planeHeight[i]; y++)
+			{
+				std::copy(currentLine, currentLine + planeWidth[i], frameBuffer);
+				frameBuffer += planeWidth[i];
+				currentLine += GST_VIDEO_FRAME_COMP_STRIDE(&videoFrame, i);
+			}
+		}
+
+		return frame;
+	}
+	else
+	{
+		UniqueGst<GstMemory> memory {NAV_FFCALL(gst_buffer_get_all_memory)(buffer), NAV_FFCALL(gst_memory_unref)};
+		GstMemoryMapLock mapInfo(f, memory.get(), GST_MAP_READ, true);
+		return new FrameVector(
+			&sw->streamInfo,
+			sw->streamIndex,
+			derationalize<guint64>(buffer->pts, GST_SECOND),
+			mapInfo.data,
+			mapInfo.size
+		);
 	}
 }
 
@@ -608,9 +724,14 @@ void GStreamerState::needData(GstElement *element, guint length, GStreamerState 
 		NAV_FFCALL(gst_memory_resize)(memory, 0, (gsize) readed);
 	}
 
+	uint64_t newpos = self->input.tellf();
+
 	// Allocate buffer
 	GstBuffer *buffer = NAV_FFCALL(gst_buffer_new)();
 	NAV_FFCALL(gst_buffer_append_memory)(buffer, memory);
+	GST_BUFFER_OFFSET_END(buffer) = newpos;
+	GST_BUFFER_OFFSET(buffer) = newpos - (uint64_t) readed;
+
 	NAV_FFCALL(g_signal_emit_by_name)(element, "push-buffer", buffer, &ret);
 	NAV_FFCALL(gst_buffer_unref)(buffer);
 }
@@ -651,6 +772,7 @@ GStreamerBackend::GStreamerBackend()
 : glib("libglib-2.0.so.0")
 , gobject("libgobject-2.0.so.0")
 , gstreamer("libgstreamer-1.0.so.0")
+, gstvideo("libgstvideo-1.0.so.0")
 , version("")
 #define _NAV_PROXY_FUNCTION_POINTER_GST(lib, n) , ptr_##n(nullptr)
 #include "nav_backend_gstreamer_funcptr.h"
