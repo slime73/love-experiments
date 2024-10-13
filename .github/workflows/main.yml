@@ -158,6 +158,7 @@ jobs:
       ALSOFT_CONF: megasource/libs/love/testing/resources/alsoft.conf
       VK_ICD_FILENAMES: ${{ github.workspace }}\mesa\x64\lvp_icd.x86_64.json
       VULKAN_SDK: C:/VulkanSDK/1.3.231.1
+      GALLIUM_DRIVER: llvmpipe
     strategy:
       matrix:
         platform: [x64, ARM64]
