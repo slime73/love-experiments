@@ -32,8 +32,8 @@ jobs:
     - name: Checkout love-appimage-source
       uses: actions/checkout@v4
       with:
-        repository: love2d/love-appimage-source
-        ref: main
+        repository: slime73/love-appimage-source
+        ref: SDL3
     - name: Checkout LÖVE
       uses: actions/checkout@v4
       with:
