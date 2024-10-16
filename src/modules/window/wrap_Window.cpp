@@ -329,7 +329,7 @@ int w_getFullscreen(lua_State *L)
 {
 	int w, h;
 	WindowSettings settings;
-	instance()->getWindow(w, h, settings);
+	luax_catchexcept(L, [&]() { instance()->getWindow(w, h, settings); });
 
 	const char *typestr;
 	if (!Window::getConstant(settings.fstype, typestr))
