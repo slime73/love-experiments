@@ -179,7 +179,7 @@ int w_getMode(lua_State *L)
 {
 	int w, h;
 	WindowSettings settings;
-	instance()->getWindow(w, h, settings);
+	luax_catchexcept(L, [&]() { instance()->getWindow(w, h, settings); });
 	lua_pushnumber(L, w);
 	lua_pushnumber(L, h);
 
@@ -384,7 +384,7 @@ int w_setPosition(lua_State *L)
 		instance()->getPosition(x_unused, y_unused, displayindex);
 	}
 
-	instance()->setPosition(x, y, displayindex);
+	luax_catchexcept(L, [&]() { instance()->setPosition(x, y, displayindex); });
 	return 0;
 }
 
@@ -540,27 +540,27 @@ int w_fromPixels(lua_State *L)
 	return 2;
 }
 
-int w_minimize(lua_State* /*L*/)
+int w_minimize(lua_State* L)
 {
-	instance()->minimize();
+	luax_catchexcept(L, [&]() { instance()->minimize(); });
 	return 0;
 }
 
-int w_maximize(lua_State *)
+int w_maximize(lua_State *L)
 {
-	instance()->maximize();
+	luax_catchexcept(L, [&]() { instance()->maximize(); });
 	return 0;
 }
 
-int w_restore(lua_State *)
+int w_restore(lua_State *L)
 {
-	instance()->restore();
+	luax_catchexcept(L, [&]() { instance()->restore(); });
 	return 0;
 }
 
-int w_focus(lua_State *)
+int w_focus(lua_State *L)
 {
-	instance()->focus();
+	luax_catchexcept(L, [&]() { instance()->focus(); });
 	return 0;
 }
 

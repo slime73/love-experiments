@@ -789,7 +789,8 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 #endif
 
 #if SDL_VERSION_ATLEAST(3, 0, 0)
-	SDL_SyncWindow(window);
+	if (!SDL_SyncWindow(window))
+		throw love::Exception("SDL_SyncWindow timed out in setMode.");
 #endif
 
 	return true;
@@ -841,7 +842,8 @@ bool Window::onSizeChanged(int width, int height)
 void Window::updateSettings(const WindowSettings &newsettings, bool updateGraphicsViewport)
 {
 #if SDL_VERSION_ATLEAST(3, 0, 0)
-	SDL_SyncWindow(window);
+	if (!SDL_SyncWindow(window))
+		throw love::Exception("SDL_SyncWindow timed out in updateSettings.");
 #endif
 
 	Uint32 wflags = SDL_GetWindowFlags(window);
@@ -1196,7 +1198,8 @@ void Window::setPosition(int x, int y, int displayindex)
 	SDL_SetWindowPosition(window, x, y);
 
 #if SDL_VERSION_ATLEAST(3, 0, 0)
-	SDL_SyncWindow(window);
+	if (!SDL_SyncWindow(window))
+		throw love::Exception("SDL_SyncWindow timed out in setPosition.");
 #endif
 
 	settings.useposition = true;
