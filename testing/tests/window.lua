@@ -68,6 +68,7 @@ love.test.window.getFullscreen = function(test)
   love.window.setFullscreen(true)
   -- check now fullscreen
   test:assertTrue(love.window.getFullscreen(), 'check now fullscreen')
+  test:waitFrames(10)
   love.window.setFullscreen(false) -- reset
 end
 
