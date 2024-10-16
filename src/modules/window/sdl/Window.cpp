@@ -112,6 +112,8 @@ Window::Window()
 #endif
 		throw love::Exception("Could not initialize SDL video subsystem (%s)", SDL_GetError());
 
+	::printf("SDL video backend: %s\n", SDL_GetCurrentVideoDriver());
+
 	// Make sure the screensaver doesn't activate by default.
 	setDisplaySleepEnabled(false);
 
