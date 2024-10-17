@@ -63,12 +63,15 @@ end
 
 -- love.window.getFullscreen
 love.test.window.getFullscreen = function(test)
+  if GITHUB_RUNNER and test:isOS('Linux') then
+    return test:skipTest("xvfb on Linux doesn't support fullscreen")
+  end
+
   -- check not fullscreen to start
   test:assertFalse(love.window.getFullscreen(), 'check not fullscreen')
   love.window.setFullscreen(true)
   -- check now fullscreen
   test:assertTrue(love.window.getFullscreen(), 'check now fullscreen')
-  test:waitFrames(10)
   love.window.setFullscreen(false) -- reset
 end
 
@@ -165,6 +168,10 @@ end
 
 -- love.window.isMaximized
 love.test.window.isMaximized = function(test)
+  if GITHUB_RUNNER and test:isOS('Linux') then
+    return test:skipTest("xvfb on Linux doesn't support window maximization")
+  end
+
   test:assertFalse(love.window.isMaximized(), 'check window not maximized')
   love.window.maximize()
   test:waitFrames(10)
@@ -176,6 +183,10 @@ end
 
 -- love.window.isMinimized
 love.test.window.isMinimized = function(test)
+  if GITHUB_RUNNER and test:isOS('Linux') then
+    return test:skipTest("xvfb on Linux doesn't support window minimization")
+  end
+
   -- check not minimized to start
   test:assertFalse(love.window.isMinimized(), 'check window not minimized')
   -- try to minimize
@@ -205,6 +216,10 @@ end
 
 -- love.window.maximize
 love.test.window.maximize = function(test)
+  if GITHUB_RUNNER and test:isOS('Linux') then
+    return test:skipTest("xvfb on Linux doesn't support window maximization")
+  end
+
   test:assertFalse(love.window.isMaximized(), 'check window not maximized')
   -- check maximizing is set
   love.window.maximize()
@@ -217,6 +232,10 @@ end
 
 -- love.window.minimize
 love.test.window.minimize = function(test)
+  if GITHUB_RUNNER and test:isOS('Linux') then
+    return test:skipTest("xvfb on Linux doesn't support window minimization")
+  end
+
   test:assertFalse(love.window.isMinimized(), 'check window not minimized')
   -- check minimizing is set
   love.window.minimize()
@@ -235,6 +254,10 @@ end
 
 -- love.window.restore
 love.test.window.restore = function(test)
+  if GITHUB_RUNNER and test:isOS('Linux') then
+    return test:skipTest("xvfb on Linux doesn't support window minimization")
+  end
+
   -- check minimized to start
   love.window.minimize()
   test:waitFrames(10)
@@ -258,6 +281,10 @@ end
 
 -- love.window.setFullscreen
 love.test.window.setFullscreen = function(test)
+  if GITHUB_RUNNER and test:isOS('Linux') then
+    return test:skipTest("xvfb on Linux doesn't support fullscreen")
+  end
+
   -- check fullscreen is set
   love.window.setFullscreen(true)
   test:assertTrue(love.window.getFullscreen(), 'check fullscreen')
