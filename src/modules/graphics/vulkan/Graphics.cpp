@@ -1911,6 +1911,8 @@ void Graphics::createSwapChain()
 			createInfo.pQueueFamilyIndices = nullptr;
 		}
 
+		::printf("setting present mode %d for swap chain\n", createInfo.presentMode);
+
 		createInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
 		createInfo.compositeAlpha = chooseCompositeAlpha(swapChainSupport.capabilities);
 		createInfo.presentMode = presentMode;
@@ -2000,14 +2002,27 @@ VkPresentModeKHR Graphics::chooseSwapPresentMode(const std::vector<VkPresentMode
 	const auto begin = availablePresentModes.begin();
 	const auto end = availablePresentModes.end();
 
+	std::string modestr = "available present modes: ";
+	for (auto m : availablePresentModes)
+		modestr += std::to_string((int)m) + ", ";
+	::printf("%s\n", modestr.c_str());
+
 	switch (vsync)
 	{
 	case -1:
+		::printf("Adaptive vsync (-1) requested\n");
 		if (std::find(begin, end, VK_PRESENT_MODE_FIFO_RELAXED_KHR) != end)
+		{
+			::printf("found VK_PRESENT_MODE_FIFO_RELAXED_KHR\n");
 			return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+		}
 		else
+		{
+			::printf("falling back to VK_PRESENT_MODE_FIFO_KHR\n");
 			return VK_PRESENT_MODE_FIFO_KHR;
+		}
 	case 0:
+		::printf("vsync off (0) requested\n");
 		// Mailbox mode might be better than immediate mode for a lot of people.
 		// But on at least some systems it acts as if vsync is enabled
 		// https://github.com/love2d/love/issues/1852
@@ -2015,12 +2030,22 @@ VkPresentModeKHR Graphics::chooseSwapPresentMode(const std::vector<VkPresentMode
 		// Should love expose mailbox mode in an API to users in some manner,
 		// instead of trying to guess what to do?
 		if (std::find(begin, end, VK_PRESENT_MODE_IMMEDIATE_KHR) != end)
+		{
+			::printf("found VK_PRESENT_MODE_IMMEDIATE_KHR\n");
 			return VK_PRESENT_MODE_IMMEDIATE_KHR;
+		}
 		else if (std::find(begin, end, VK_PRESENT_MODE_MAILBOX_KHR) != end)
+		{
+			::printf("didn't find VK_PRESENT_MODE_IMMEDIATE_KHR but did find VK_PRESENT_MODE_MAILBOX_KHR\n");
 			return VK_PRESENT_MODE_MAILBOX_KHR;
+		}
 		else
+		{
+			::printf("falling back to VK_PRESENT_MODE_FIFO_KHR\n");
 			return VK_PRESENT_MODE_FIFO_KHR;
+		}
 	default:
+		::printf("vsync on (1) requested, using VK_PRESENT_MODE_FIFO_KHR\n");
 		// TODO: support for swap interval = 2, etc?
 		return VK_PRESENT_MODE_FIFO_KHR;
 	}
