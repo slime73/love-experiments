@@ -128,19 +128,20 @@ void SharedDescriptorPools::createDescriptorPool()
 		descs += std::string("type ") + std::to_string(size.type) + std::string(" with count: ") + std::to_string(size.descriptorCount) + std::string(", ");
 	}
 
-	::printf("Creating descriptor pool: %s\n", descs.c_str());
+	auto vgfx = (Graphics *)Module::getInstance<Graphics>(Module::M_GRAPHICS);
+
+	if (vgfx != nullptr)
+	{
+		auto stats = vgfx->getStats();
+		::printf("Creating descriptor pool (%d draw calls in frame %lld): %s\n", stats.drawCalls, vgfx->getRealFrameIndex(), descs.c_str());
+	}
 
 	VkDescriptorPool pool;
 	VkResult result = vkCreateDescriptorPool(device, &createInfo, nullptr, &pool);
 	if (result != VK_SUCCESS)
 	{
-		auto vgfx = (Graphics *)Module::getInstance<Graphics>(Module::M_GRAPHICS);
 		if (vgfx != nullptr)
-		{
 			vgfx->dumpMemoryStats();
-			auto stats = vgfx->getStats();
-			::printf("draw calls in this frame: %d, batched draws in this frame: %d\n", stats.drawCalls, stats.drawCallsBatched);
-		}
 		throw love::Exception("Failed to create Vulkan descriptor pool: %s", Vulkan::getErrorString(result));
 	}
 
