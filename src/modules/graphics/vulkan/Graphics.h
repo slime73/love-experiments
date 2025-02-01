@@ -287,6 +287,8 @@ public:
 
 	VkPipeline createGraphicsPipeline(Shader *shader, const GraphicsPipelineConfigurationCore &configuration, const GraphicsPipelineConfigurationNoDynamicState *noDynamicStateConfiguration);
 
+	void dumpMemoryStats();
+
 	uint32 getDeviceApiVersion() const { return deviceApiVersion; }
 
 	uint64 getRealFrameIndex() const { return realFrameIndex; }

@@ -37,6 +37,7 @@
 
 #include "joystick/sdl/Joystick.h"
 #include "window/sdl/Window.h"
+#include "graphics/vulkan/Graphics.h"
 
 namespace love
 {
@@ -217,6 +218,13 @@ Message *Event::convert(const SDL_Event &e)
 			auto kb = Module::getInstance<love::keyboard::Keyboard>(Module::M_KEYBOARD);
 			if (kb && !kb->hasKeyRepeat())
 				break;
+		}
+
+		if (e.key.key == SDLK_F10)
+		{
+			auto vgfx = dynamic_cast<love::graphics::vulkan::Graphics *>(Module::getInstance<love::graphics::Graphics>(M_GRAPHICS));
+			if (vgfx != nullptr)
+				vgfx->dumpMemoryStats();
 		}
 
 		love::keyboard::sdl::Keyboard::getConstant(e.key.key, key);

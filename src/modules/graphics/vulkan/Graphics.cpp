@@ -28,6 +28,7 @@
 #include "GraphicsReadback.h"
 #include "Shader.h"
 #include "Vulkan.h"
+#include "filesystem/Filesystem.h"
 
 #include <SDL3/SDL_vulkan.h>
 #include <SDL3/SDL_hints.h>
@@ -3067,6 +3068,23 @@ VkPipeline Graphics::createGraphicsPipeline(Shader *shader, const GraphicsPipeli
 	if (result != VK_SUCCESS)
 		throw love::Exception("Failed to create Vulkan graphics pipeline: %s", Vulkan::getErrorString(result));
 	return graphicsPipeline;
+}
+
+void Graphics::dumpMemoryStats()
+{
+	auto fs = Module::getInstance<filesystem::Filesystem>(M_FILESYSTEM);
+	if (fs == nullptr)
+		return;
+
+	char *stats = nullptr;
+	vmaBuildStatsString(vmaAllocator, &stats, VK_TRUE);
+	if (stats != nullptr)
+	{
+		fs->write("vulkan_memory_stats.json", stats, strlen(stats));
+		vmaFreeStatsString(vmaAllocator, stats);
+	}
+
+	::printf("memory stats saved to vulkan_memory_stats.json\n");
 }
 
 VkSampleCountFlagBits Graphics::getMsaaCount(int requestedMsaa) const

@@ -122,10 +122,23 @@ void SharedDescriptorPools::createDescriptorPool()
 	createInfo.poolSizeCount = static_cast<uint32_t>(descriptorPoolSizes.size());
 	createInfo.pPoolSizes = descriptorPoolSizes.data();
 
+	std::string descs;
+	for (const auto &size : descriptorPoolSizes)
+	{
+		descs += std::string("type ") + std::to_string(size.type) + std::string(" with count: ") + std::to_string(size.descriptorCount) + std::string(", ");
+	}
+
+	::printf("Creating descriptor pool: %s\n", descs.c_str());
+
 	VkDescriptorPool pool;
 	VkResult result = vkCreateDescriptorPool(device, &createInfo, nullptr, &pool);
 	if (result != VK_SUCCESS)
+	{
+		auto vgfx = (Graphics *)Module::getInstance<Graphics>(Module::M_GRAPHICS);
+		if (vgfx != nullptr)
+			vgfx->dumpMemoryStats();
 		throw love::Exception("Failed to create Vulkan descriptor pool: %s", Vulkan::getErrorString(result));
+	}
 
 	pools[currentFrame].push_back(pool);
 }
