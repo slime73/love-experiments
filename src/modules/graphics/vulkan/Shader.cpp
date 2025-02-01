@@ -136,7 +136,11 @@ void SharedDescriptorPools::createDescriptorPool()
 	{
 		auto vgfx = (Graphics *)Module::getInstance<Graphics>(Module::M_GRAPHICS);
 		if (vgfx != nullptr)
+		{
 			vgfx->dumpMemoryStats();
+			auto stats = vgfx->getStats();
+			::printf("draw calls in this frame: %d, batched draws in this frame: %d\n", stats.drawCalls, stats.drawCallsBatched);
+		}
 		throw love::Exception("Failed to create Vulkan descriptor pool: %s", Vulkan::getErrorString(result));
 	}
 
