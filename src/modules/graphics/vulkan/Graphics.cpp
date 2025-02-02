@@ -638,6 +638,16 @@ void Graphics::backbufferChanged(int width, int height, int pixelwidth, int pixe
 
 	if (swapChain != VK_NULL_HANDLE)
 		msaaSamples = getMsaaCount(requestedMsaa);
+
+	// Don't wait until the next frame starts to recreate the swapchain - doing so
+	// will cause a 1 frame delay in the backbuffer size on resize, and it can cause
+	// MSAA state to get out of sync for a frame.
+	if (swapChainRecreationRequested)
+	{
+		submitGpuCommands(SUBMIT_NOPRESENT);
+		recreateSwapChain();
+		beginSwapChainFrame();
+	}
 }
 
 bool Graphics::setMode(void *context, int width, int height, int pixelwidth, int pixelheight, bool backbufferstencil, bool backbufferdepth, int msaa)
@@ -1344,10 +1354,8 @@ void Graphics::initDynamicState()
 	}
 }
 
-void Graphics::beginFrame()
+void Graphics::beginSwapChainFrame()
 {
-	vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
-
 	if (swapChain != VK_NULL_HANDLE)
 	{
 		while (true)
@@ -1370,14 +1378,6 @@ void Graphics::beginFrame()
 	{
 		imageRequested = false;
 	}
-
-	for (auto &readbackCallback : readbackCallbacks.at(currentFrame))
-		readbackCallback();
-	readbackCallbacks.at(currentFrame).clear();
-
-	for (auto &cleanUpFn : cleanUpFunctions.at(currentFrame))
-		cleanUpFn();
-	cleanUpFunctions.at(currentFrame).clear();
 
 	startRecordingGraphicsCommands();
 
@@ -1411,6 +1411,21 @@ void Graphics::beginFrame()
 
 		transitionColorDepthLayouts = false;
 	}
+}
+
+void Graphics::beginFrame()
+{
+	vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+
+	for (auto &readbackCallback : readbackCallbacks.at(currentFrame))
+		readbackCallback();
+	readbackCallbacks.at(currentFrame).clear();
+
+	for (auto &cleanUpFn : cleanUpFunctions.at(currentFrame))
+		cleanUpFn();
+	cleanUpFunctions.at(currentFrame).clear();
+
+	beginSwapChainFrame();
 
 	Vulkan::resetShaderSwitches();
 
@@ -1562,6 +1577,13 @@ bool Graphics::checkValidationSupport()
 
 void Graphics::pickPhysicalDevice()
 {
+	struct DeviceRating
+	{
+		VkPhysicalDevice device;
+		size_t deviceIndex;
+		int rating;
+	};
+
 	uint32_t deviceCount = 0;
 	vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
 
@@ -1571,18 +1593,28 @@ void Graphics::pickPhysicalDevice()
 	std::vector<VkPhysicalDevice> devices(deviceCount);
 	vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
 
-	std::multimap<int, VkPhysicalDevice> candidates;
+	std::vector<DeviceRating> candidates;
 
-	for (const auto &device : devices)
+	for (size_t i = 0; i < devices.size(); i++)
 	{
-		int score = rateDeviceSuitability(device, true);
-		candidates.insert(std::make_pair(score, device));
+		DeviceRating r = {};
+		r.device = devices[i];
+		r.deviceIndex = i;
+		r.rating = rateDeviceSuitability(devices[i], true);
+		candidates.push_back(r);
 	}
 
-	if (candidates.rbegin()->first > 0)
-		physicalDevice = candidates.rbegin()->second;
+	std::sort(candidates.begin(), candidates.end(), [](const DeviceRating &a, const DeviceRating &b) -> bool
+	{
+		if (a.rating != b.rating)
+			return a.rating > b.rating;
+		return a.deviceIndex < b.deviceIndex;
+	});
+
+	if (!candidates.empty() && candidates[0].rating > 0)
+		physicalDevice = candidates[0].device;
 	else
-		throw love::Exception("failed to find a suitable gpu");
+		throw love::Exception("Vulkan: failed to find a suitable GPU.");
 
 	VkPhysicalDeviceProperties properties;
 	vkGetPhysicalDeviceProperties(physicalDevice, &properties);
@@ -1604,22 +1636,6 @@ void Graphics::pickPhysicalDevice()
 	}
 }
 
-bool Graphics::checkDeviceExtensionSupport(VkPhysicalDevice device)
-{
-	uint32_t extensionCount;
-	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
-
-	std::vector<VkExtensionProperties> availableExtensions(extensionCount);
-	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
-
-	std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
-
-	for (const auto &extension : availableExtensions)
-		requiredExtensions.erase(extension.extensionName);
-
-	return requiredExtensions.empty();
-}
-
 // if the score is nonzero then the device is suitable.
 // A higher rating means generally better performance
 // if the score is 0 the device is unsuitable
@@ -1630,7 +1646,37 @@ int Graphics::rateDeviceSuitability(VkPhysicalDevice device, bool querySwapChain
 	vkGetPhysicalDeviceProperties(device, &deviceProperties);
 	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
 
-	int score = 1;
+	uint32_t extensionCount = 0;
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+
+	std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+	bool hasMSFTLayeredDriver = false;
+	for (const auto &extension : availableExtensions)
+	{
+		if (strcmp(extension.extensionName, VK_MSFT_LAYERED_DRIVER_EXTENSION_NAME) == 0)
+		{
+			hasMSFTLayeredDriver = true;
+			break;
+		}
+	}
+
+	VkPhysicalDeviceProperties2 deviceProperties2{};
+	deviceProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+
+	VkPhysicalDeviceLayeredDriverPropertiesMSFT layeredDriverProperties{};
+	layeredDriverProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LAYERED_DRIVER_PROPERTIES_MSFT;
+
+	if (deviceProperties.apiVersion >= VK_API_VERSION_1_1)
+	{
+		if (hasMSFTLayeredDriver)
+			deviceProperties2.pNext = &layeredDriverProperties;
+
+		vkGetPhysicalDeviceProperties2(device, &deviceProperties2);
+	}
+
+	int score = 2;
 
 	// optional
 
@@ -1640,6 +1686,10 @@ int Graphics::rateDeviceSuitability(VkPhysicalDevice device, bool querySwapChain
 		score += isLowPowerPreferred() ? 1000 : 100;
 	if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU)
 		score += 10;
+
+	// Reduce the score if this is something like Vulkan-on-D3D12 rather than a native driver.
+	if (hasMSFTLayeredDriver && layeredDriverProperties.underlyingAPI != VK_LAYERED_DRIVER_UNDERLYING_API_NONE_MSFT)
+		score /= 2;
 
 	// definitely needed
 
@@ -1653,11 +1703,15 @@ int Graphics::rateDeviceSuitability(VkPhysicalDevice device, bool querySwapChain
 	if (!indices.isComplete() && (querySwapChain || !indices.graphicsFamily.hasValue))
 		score = 0;
 
-	bool extensionsSupported = checkDeviceExtensionSupport(device);
-	if (!extensionsSupported)
+	std::set<std::string> missingExtensions(deviceExtensions.begin(), deviceExtensions.end());
+
+	for (const auto &extension : availableExtensions)
+		missingExtensions.erase(extension.extensionName);
+
+	if (!missingExtensions.empty())
 		score = 0;
 
-	if (extensionsSupported && querySwapChain)
+	if (missingExtensions.empty() && querySwapChain)
 	{
 		auto swapChainSupport = querySwapChainSupport(device);
 		bool swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
