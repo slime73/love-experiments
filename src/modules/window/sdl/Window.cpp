@@ -686,7 +686,10 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 #endif
 
 	if (!SDL_SyncWindow(window))
+	{
 		::printf("SDL_SyncWindow timed out in setWindow\n");
+		SDL_SyncWindow(window);
+	}
 
 	return true;
 }
@@ -717,7 +720,10 @@ bool Window::onSizeChanged(int width, int height)
 void Window::updateSettings(const WindowSettings &newsettings, bool updateGraphicsViewport)
 {
 	if (!SDL_SyncWindow(window))
+	{
 		::printf("SDL_SyncWindow timed out in updateSettings\n");
+		SDL_SyncWindow(window);
+	}
 
 	Uint32 wflags = SDL_GetWindowFlags(window);
 
@@ -976,7 +982,10 @@ void Window::setPosition(int x, int y, int displayindex)
 
 	SDL_SetWindowPosition(window, x, y);
 	if (!SDL_SyncWindow(window))
+	{
 		::printf("SDL_SyncWindow timed out in setPosition\n");
+		SDL_SyncWindow(window);
+	}
 
 	settings.useposition = true;
 }
