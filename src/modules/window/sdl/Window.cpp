@@ -685,7 +685,8 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 	love::android::setImmersive(fullscreen);
 #endif
 
-	SDL_SyncWindow(window);
+	if (!SDL_SyncWindow(window))
+		::printf("SDL_SyncWindow timed out in setWindow\n");
 
 	return true;
 }
@@ -715,7 +716,8 @@ bool Window::onSizeChanged(int width, int height)
 
 void Window::updateSettings(const WindowSettings &newsettings, bool updateGraphicsViewport)
 {
-	SDL_SyncWindow(window);
+	if (!SDL_SyncWindow(window))
+		::printf("SDL_SyncWindow timed out in updateSettings\n");
 
 	Uint32 wflags = SDL_GetWindowFlags(window);
 
@@ -973,7 +975,8 @@ void Window::setPosition(int x, int y, int displayindex)
 	y += displaybounds.y;
 
 	SDL_SetWindowPosition(window, x, y);
-	SDL_SyncWindow(window);
+	if (!SDL_SyncWindow(window))
+		::printf("SDL_SyncWindow timed out in setPosition\n");
 
 	settings.useposition = true;
 }
