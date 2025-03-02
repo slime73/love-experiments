@@ -543,13 +543,10 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 			x = y = SDL_WINDOWPOS_UNDEFINED_DISPLAY(displays.ids[f.displayindex]);
 	}
 
-	Uint32 sdlflags = 0;
 	SDL_DisplayMode fsmode = {};
 
 	if (f.fullscreen)
 	{
-		sdlflags |= SDL_WINDOW_FULLSCREEN;
-
 		if (f.fstype == FULLSCREEN_EXCLUSIVE)
 		{
 			SDL_DisplayID display = displays.ids[f.displayindex];
@@ -581,8 +578,11 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 		else
 			SDL_SetWindowFullscreenMode(window, nullptr);
 
-		if (SDL_SetWindowFullscreen(window, (sdlflags & SDL_WINDOW_FULLSCREEN) != 0) && renderer == graphics::RENDERER_OPENGL)
-			SDL_GL_MakeCurrent(window, glcontext);
+		if (((SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0) != f.fullscreen)
+		{
+			if (SDL_SetWindowFullscreen(window, f.fullscreen) && renderer == graphics::RENDERER_OPENGL)
+				SDL_GL_MakeCurrent(window, glcontext);
+		}
 
 		// TODO: should we make this conditional, to avoid love.resize events when the size doesn't change?
 		SDL_SetWindowSize(window, width, height);
@@ -595,6 +595,8 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 	}
 	else
 	{
+		Uint32 sdlflags = 0;
+
 		if (renderer == graphics::RENDERER_OPENGL)
 			sdlflags |= SDL_WINDOW_OPENGL;
 	#ifdef LOVE_GRAPHICS_METAL
@@ -615,9 +617,7 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 		if (isHighDPIAllowed())
 			sdlflags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
 
-		Uint32 createflags = sdlflags & (~SDL_WINDOW_FULLSCREEN);
-
-		if (!createWindowAndContext(x, y, width, height, createflags, renderer))
+		if (!createWindowAndContext(x, y, width, height, sdlflags, renderer))
 			return false;
 
 		if (f.fullscreen)
