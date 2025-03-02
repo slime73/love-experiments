@@ -875,10 +875,13 @@ bool Window::setFullscreen(bool fullscreen, FullscreenType fstype)
 		if (glcontext)
 			SDL_GL_MakeCurrent(window, glcontext);
 
+		printf("SDL_SetWindowFullscreen succeeded\n");
 		updateSettings(newsettings, true);
 		return true;
 	}
 
+	printf("SDL_SetWindowFullscreen failed: %s\n", SDL_GetError());
+	updateSettings(newsettings, true);
 	return false;
 }
 
