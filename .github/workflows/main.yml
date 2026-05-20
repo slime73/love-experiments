@@ -162,7 +162,7 @@ jobs:
         exit 1
 
   Windows:
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     permissions:
       checks: write
       pull-requests: write
@@ -278,7 +278,7 @@ jobs:
         CFLAGS: /Zi
         CXXFLAGS: /Zi
         LDFLAGS: /DEBUG:FULL /OPT:REF /OPT:ICF
-      run: cmake -Bbuild -Smegasource -T v145 -A ${{ matrix.platform }},version=10.0.26100.0 --install-prefix %CD%\install -DCMAKE_PDB_OUTPUT_DIRECTORY=%CD%\pdb ${{ steps.vars.outputs.moredef }}
+      run: cmake -Bbuild -Smegasource -T v145 -A ${{ matrix.platform }} --install-prefix %CD%\install -DCMAKE_PDB_OUTPUT_DIRECTORY=%CD%\pdb ${{ steps.vars.outputs.moredef }}
     - name: Install
       run: cmake --build build --target PACKAGE --config Release -j2
     - name: Copy LuaJIT lua51.pdb
