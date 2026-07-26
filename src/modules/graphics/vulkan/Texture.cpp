@@ -117,7 +117,7 @@ bool Texture::loadVolatile()
 			}
 		}
 
-		if (texType == TEXTURE_CUBE || (texType == TEXTURE_2D_ARRAY && layerCount >= 6 && pixelWidth == pixelHeight))
+		if (texType == TEXTURE_CUBE)
 			createFlags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 
 		msaaSamples = vgfx->getMsaaCount(requestedMSAA);
